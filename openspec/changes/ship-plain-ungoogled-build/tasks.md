@@ -55,7 +55,7 @@ All Chromium fetching, patching and building runs on GitHub Actions (`build.yml`
 - [x] 6.2 Port Front Row's `append-appcast-item.sh`, `render-notes.sh` and their tests, and extend them for `<sparkle:deltas>` (up to three) and `sparkle:minimumSystemVersion` 15.6. Verify that the extended test script passes, including a case with three deltas.
 - [x] 6.3 Add the release validation script. It works out the version from the latest `v*` tag plus the bump, sets the build number to `rev-list --count HEAD` + 1, checks that this is greater than the newest appcast entry, and checks that `next.md` is present and edited and that `<version>.md` doesn't exist. Add tests. Verify that the tests cover `0.1.0` → `0.1.1` for a patch bump, `0.1.3` → `0.2.0` for a minor bump, and each refusal case.
 - [ ] 6.4 Add the delta script. It downloads the DMGs of up to three previous releases, runs `BinaryDelta create`, and signs each asset with `sign_update`, using tools from the pinned Sparkle release tarball, checked against its sha512. Verify with two local builds that the delta applies (`BinaryDelta apply`), and that the result passes `codesign --verify`.
-- [ ] 6.5 Add `ci.yml`, which runs the script tests and shellcheck on pushes and pull requests. Verify that a run is green.
+- [x] 6.5 Add `ci.yml`, which runs the script tests and shellcheck on pushes and pull requests. Verify that a run is green.
 
 ## 7. CI release workflow
 
