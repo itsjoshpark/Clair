@@ -1,0 +1,242 @@
+# Build Clair from source on GitHub-hosted runners.
+#
+# Runs on pull requests (to verify the build), manually, and as part of the
+# release workflow. A Chromium build takes longer than GitHub's 6-hour job
+# limit, so it is split into a fetch job and up to 20 chained compile phases,
+# following ungoogled-chromium-macos's approach. Phases after the one that
+# finishes are skipped.
+name: Build
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "openspec/**"
+      - ".sparkle/**"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fetch:
+    name: Fetch and patch source
+    runs-on: macos-26
+    timeout-minutes: 360
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Prepare runner
+        run: ./.github/scripts/prepare-runner.sh
+
+      - name: Fetch and patch (patch-only mode)
+        run: ./build.sh fetch prepare
+
+      - name: Remove download cache
+        run: rm -rf build/download_cache
+
+      - name: Pack build directory
+        run: ./.github/scripts/pack-build.sh upload_build
+
+      - name: Upload build directory
+        uses: actions/upload-artifact@v7
+        with:
+          name: clair-build-dir
+          path: upload_build/
+          retention-days: 2
+          compression-level: 0
+
+  phase-01:
+    name: Phase 1
+    needs: fetch
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 1
+      configure: true
+
+  phase-02:
+    name: Phase 2
+    needs: phase-01
+    if: ${{ needs.phase-01.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 2
+
+  phase-03:
+    name: Phase 3
+    needs: phase-02
+    if: ${{ needs.phase-02.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 3
+
+  phase-04:
+    name: Phase 4
+    needs: phase-03
+    if: ${{ needs.phase-03.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 4
+
+  phase-05:
+    name: Phase 5
+    needs: phase-04
+    if: ${{ needs.phase-04.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 5
+
+  phase-06:
+    name: Phase 6
+    needs: phase-05
+    if: ${{ needs.phase-05.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 6
+
+  phase-07:
+    name: Phase 7
+    needs: phase-06
+    if: ${{ needs.phase-06.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 7
+
+  phase-08:
+    name: Phase 8
+    needs: phase-07
+    if: ${{ needs.phase-07.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 8
+
+  phase-09:
+    name: Phase 9
+    needs: phase-08
+    if: ${{ needs.phase-08.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 9
+
+  phase-10:
+    name: Phase 10
+    needs: phase-09
+    if: ${{ needs.phase-09.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 10
+
+  phase-11:
+    name: Phase 11
+    needs: phase-10
+    if: ${{ needs.phase-10.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 11
+
+  phase-12:
+    name: Phase 12
+    needs: phase-11
+    if: ${{ needs.phase-11.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 12
+
+  phase-13:
+    name: Phase 13
+    needs: phase-12
+    if: ${{ needs.phase-12.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 13
+
+  phase-14:
+    name: Phase 14
+    needs: phase-13
+    if: ${{ needs.phase-13.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 14
+
+  phase-15:
+    name: Phase 15
+    needs: phase-14
+    if: ${{ needs.phase-14.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 15
+
+  phase-16:
+    name: Phase 16
+    needs: phase-15
+    if: ${{ needs.phase-15.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 16
+
+  phase-17:
+    name: Phase 17
+    needs: phase-16
+    if: ${{ needs.phase-16.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 17
+
+  phase-18:
+    name: Phase 18
+    needs: phase-17
+    if: ${{ needs.phase-17.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 18
+
+  phase-19:
+    name: Phase 19
+    needs: phase-18
+    if: ${{ needs.phase-18.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 19
+
+  phase-20:
+    name: Phase 20
+    needs: phase-19
+    if: ${{ needs.phase-19.outputs.status == 'running' }}
+    uses: ./.github/workflows/build-phase.yml
+    with:
+      phase: 20
+
+  result:
+    name: Build result
+    if: ${{ always() }}
+    needs: [fetch, phase-01, phase-02, phase-03, phase-04, phase-05, phase-06, phase-07, phase-08, phase-09, phase-10, phase-11, phase-12, phase-13, phase-14, phase-15, phase-16, phase-17, phase-18, phase-19, phase-20]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that a phase finished the build
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.result) \(.outputs.status // "")"'
+          if echo "$RESULTS" | jq -e '[.[] | .result] | any(. == "failure" or . == "cancelled")' >/dev/null; then
+            echo "::error::A build phase failed or was cancelled."
+            exit 1
+          fi
+          if ! echo "$RESULTS" | jq -e '[.[] | .outputs.status] | any(. == "finished")' >/dev/null; then
+            echo "::error::No phase finished the build. Add more phases or speed up the build."
+            exit 1
+          fi
