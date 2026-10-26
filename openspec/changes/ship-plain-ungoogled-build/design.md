@@ -220,6 +220,7 @@ Handling:
 ## Risks / Trade-offs
 
 - **[Risk] Runner disk:** 14 GB is listed for the runner, while a Chromium checkout plus a partial `out/` is far larger, so the build may run out of disk.
+  Measured on the first PR build (`macos-26`, 2026-10-26): the volume is 320 GB with 96 GB free at the start and 147 GB free after `prepare-runner.sh`. The fetched and patched build directory is 17.4 GB, which zstd compresses to a 6.0 GB artifact. The fetch job took 38 minutes.
   → Delete the preinstalled SDKs (Android, extra Xcodes, simulators) as ungoogled-macos does, and turn off Spotlight. Measure free space in the first dry run. Fallback: build `out/` on an external volume where it's available, or reduce `symbol_level`.
 - **[Risk] Partial `out/` artifacts:** these may run into artifact size or storage limits; storage for public repos isn't documented.
   → Use zstd compression and keep only one partial artifact at a time (`overwrite: true`). Watch the first runs. Fallback: split the artifact.
