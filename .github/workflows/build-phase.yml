@@ -88,6 +88,10 @@ jobs:
           retention-days: 2
           compression-level: 0
 
+      - name: Verify app identity
+        if: ${{ steps.compile.outputs.status == 'finished' }}
+        run: ./scripts/verify-app.sh build/src/out/Default/Clair.app
+
       - name: Smoke test
         if: ${{ steps.compile.outputs.status == 'finished' }}
         run: ./.github/scripts/smoke-test.sh upload_app

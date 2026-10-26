@@ -1,0 +1,6 @@
+# Clair's own GN arguments, appended after ungoogled-chromium's flags.gn and
+# flags.macos.gn.
+
+# LSMinimumSystemVersion: macOS releases before 15.6 refuse to launch Clair.
+# The compile-time deployment target stays at Chromium's default.
+mac_min_system_version = "15.6"
