@@ -60,7 +60,8 @@ jobs:
 
       - name: Configure
         if: ${{ inputs.configure }}
-        run: ./build.sh configure
+        # Pull request builds use the light settings in flags.pr.gn.
+        run: ./build.sh -l configure
 
       - name: Compile
         id: compile
@@ -68,7 +69,8 @@ jobs:
           # Leave about an hour for setup before this step and for packing and
           # uploading after it.
           remaining=$(( 360*60 - 60*60 - ($(date +%s) - JOB_START) ))
-          ./build.sh -t "$remaining" compile
+          # Three jobs, one per core, keep compiles within the runner's 7 GB.
+          ./build.sh -j 3 -t "$remaining" compile
           echo "status=$(cat build/compile_status)" >> "$GITHUB_OUTPUT"
           echo "Phase ${{ inputs.phase }}: $(cat build/compile_status)"
 

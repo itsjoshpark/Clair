@@ -7,7 +7,7 @@ Clair is ungoogled-chromium plus Clair's patches, built for Apple Silicon Macs. 
 Open a pull request. `.github/workflows/build.yml` then:
 
 1. **Fetch** fetches and patches the source with `./build.sh fetch prepare` (the patch-only mode). A patch that doesn't apply fails this job, and the log names the patch.
-2. **Phases 1–20** compile. Each phase runs `./build.sh -t <seconds> compile` until about an hour before GitHub's 6-hour job limit, then hands the build directory to the next phase as an artifact. Phase 1 also runs `./build.sh configure`. Phases after the one that finishes are skipped.
+2. **Phases 1–20** compile. Each phase runs `./build.sh -j 3 -t <seconds> compile` until about an hour before GitHub's 6-hour job limit, then hands the build directory to the next phase as an artifact. Phase 1 also runs `./build.sh -l configure`, which appends `flags.pr.gn`: hosted runners have 3 cores and 7 GB of memory, so pull request builds skip ThinLTO, debug symbols and dSYMs and link one binary at a time. Release builds use the full settings. Phases after the one that finishes are skipped.
 3. **The finishing phase** runs a headless smoke test, checks that the work tree is clean, and uploads `clair-unsigned-app`, a zip of the unsigned app. You can download it from the run's summary page.
 4. **Build result** fails the run if any phase failed, or if 20 phases weren't enough.
 

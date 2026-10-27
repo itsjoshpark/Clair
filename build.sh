@@ -9,7 +9,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ./build.sh [-d] [-s SDK_PATH] [-t SECONDS] [STAGE...]
+Usage: ./build.sh [-d] [-l] [-j JOBS] [-s SDK_PATH] [-t SECONDS] [STAGE...]
 
 Stages (run in the order given; default: all):
   fetch      Retrieve the Chromium source into build/src
@@ -22,6 +22,9 @@ Stages (run in the order given; default: all):
 
 Options:
   -d           Use the Chromium source archive instead of cloning
+  -l           Light build for pull request checks: configure appends
+               flags.pr.gn (no ThinLTO, no symbols, one link at a time)
+  -j JOBS      Run at most JOBS ninja jobs in parallel during compile
   -s SDK_PATH  Use this macOS SDK instead of the Xcode default
   -t SECONDS   Time limit for the compile stage
   -h           Show this help
@@ -38,9 +41,19 @@ _prepared_stamp="$_src_dir/.clair_prepared"
 _clone=true
 _sdk_path=""
 _time_limit=""
-while getopts ':ds:t:h' option; do
+_light=false
+_ninja_jobs=()
+while getopts ':dlj:s:t:h' option; do
   case "$option" in
     d) _clone=false ;;
+    l) _light=true ;;
+    j)
+      if [[ ! "$OPTARG" =~ ^[1-9][0-9]*$ ]]; then
+        echo "Invalid job count: $OPTARG" >&2
+        exit 1
+      fi
+      _ninja_jobs=(-j "$OPTARG")
+      ;;
     s)
       if [[ ! -d "$OPTARG" || ! -f "$OPTARG/SDKSettings.json" ]]; then
         echo "Invalid macOS SDK directory: $OPTARG" >&2
@@ -109,6 +122,9 @@ stage_configure() {
   mkdir -p "$_out_dir"
   {
     cat "$_main_repo/flags.gn" "$_root_dir/flags.macos.gn"
+    if [[ "$_light" == true ]]; then
+      cat "$_root_dir/flags.pr.gn"
+    fi
     echo 'target_cpu = "arm64"'
   } > "$_out_dir/args.gn"
 
@@ -143,14 +159,14 @@ stage_compile() {
   echo running > "$_status_file"
 
   if [[ -z "$_time_limit" ]]; then
-    ninja -C out/Default chrome chromedriver
+    ninja ${_ninja_jobs[@]+"${_ninja_jobs[@]}"} -C out/Default chrome chromedriver
   else
     if [[ -z "$_timeout_bin" ]]; then
       echo "-t needs GNU timeout (brew install coreutils)." >&2
       exit 1
     fi
     local code=0
-    "$_timeout_bin" -k 7m -s SIGTERM "${_time_limit}s" ninja -C out/Default chrome chromedriver || code=$?
+    "$_timeout_bin" -k 7m -s SIGTERM "${_time_limit}s" ninja ${_ninja_jobs[@]+"${_ninja_jobs[@]}"} -C out/Default chrome chromedriver || code=$?
     if [[ "$code" -eq 124 ]]; then
       echo "Time limit reached; the build can be resumed with the compile stage."
       return 0
