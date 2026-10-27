@@ -83,9 +83,51 @@ So macOS 15.6 shows `actool`'s rendering of the same source, and Clair ships no 
 
 ### D5. Product logos
 
-Chromium's in-app product logo images (`product_logo_*` PNGs under `chrome/app/theme/chromium/` and the `default_100_percent` and `default_200_percent` theme folders) are replaced with renderings of `resources/icon/logo.svg`. That file is the mark alone, in a baked gold gradient on a transparent background. The exact file and size list is taken from Helium's resource list at implementation time. `scripts/render-icon-images.sh` renders the PNGs with `rsvg-convert` from Homebrew. They are committed, because they change only when the artwork does, and copied by the same resource-replacement step.
+The file list comes from Helium's `resources/helium_resources.txt`, checked file by file against Chromium 156.0.8078.47 through the GitHub API, without a checkout. Linux-only paths are dropped. Two of Helium's paths, `chrome/app/vector_icons/browser_logo.icon` and `components/omnibox/browser/vector_icons/product_chrome_refresh.icon`, don't exist at this tag and are left out.
 
-### D6. Originality
+| Chromium file(s) | Size | Source |
+|---|---|---|
+| `chrome/app/theme/chromium/product_logo_{16,24,48,64,128,256}.png` | as named | `logo.svg` |
+| `chrome/app/theme/default_100_percent/chromium/product_logo_{16,32}.png` | 16, 32 | `logo.svg` |
+| `chrome/app/theme/default_200_percent/chromium/product_logo_{16,32}.png` | 32, 64 | `logo.svg` |
+| `chrome/app/theme/chromium/product_logo.svg` | vector | `logo.svg` |
+| `chrome/app/theme/chromium/product_logo_22_mono.png` | 22 | `logo-mono.svg` |
+| `components/resources/default_{100,200}_percent/chromium/product_logo.png` | 171×32, 342×64 | `wordmark.svg` |
+| `components/resources/default_{100,200}_percent/chromium/product_logo_white.png` | 171×32, 342×64 | `wordmark-white.svg` |
+| nine `.icon` vector icons (D6) | their own canvases | `make_layers.py` |
+
+The source files are:
+- **`logo.svg`:** the full mark (ring layer and inlay) in a baked gold gradient on a transparent background, fitted to its square canvas.
+- **`logo-mono.svg`:** the ring layer only, in `#222222`, which is the near-black of Chromium's mono logo. The inlay is left out because it vanishes at 22 px.
+
+`scripts/render-icon-images.sh` renders the PNGs with `rsvg-convert` from Homebrew, following `resources/icon/product-logos.txt`. The owner chose to render on the development machine and commit the PNGs, because they change only when the artwork does. The resource-replacement step copies them.
+
+### D6. Vector icons
+
+Chromium draws nine of its product icons from `.icon` files, its own vector format, in whatever single color the UI asks for:
+- `chrome/app/vector_icons/{browser_logo_old,chrome_product}.icon`
+- `components/omnibox/browser/vector_icons/{chrome_product,product_chrome_refresh_old,product_old}.icon`
+- `components/vector_icons/chromium/{product,product_refresh}.icon`
+- `ui/message_center/vector_icons/{chrome_product,product_old}.icon`
+
+`make_layers.py` writes these from the same geometry. Each file keeps the canvas sizes Chromium's version declares (15, 16, 24, 32 or 96, and both 32 and 16 in `product_old.icon` in the omnibox folder). The mark is fitted to each canvas.
+- **Canvases under 32:** only the ring layer, because the hairline would be thinner than a pixel.
+- **Canvases of 32 and above:** the full mark.
+- **Colour:** `product_refresh.icon` is Chromium's only colored one, so it gets a single gold `PATH_COLOR_ARGB`. The rest stay colorless and take the UI's color.
+
+Paths use `MOVE_TO`, `LINE_TO`, `ARC_TO`, `CIRCLE` and `CLOSE`, which all exist in Chromium's vector-icon format. Generated files are committed and copied by the resource-replacement step. Chromium compiles them into C++ during the build, so a malformed file fails the build.
+
+### D7. Wordmark
+
+`resources/icon/make_wordmark.py` writes `wordmark.svg` and `wordmark-white.svg` on a 171×32 canvas:
+- **Mark:** the gold mark at the left, its ring 28 px tall and centered vertically.
+- **Text:** "Clair" set in Albert Sans Medium, with a cap height of about 17 px on the canvas.
+
+The text is converted to outlines with `fontTools`, from the variable Albert Sans font (SIL Open Font License 1.1) instanced at weight 500, so the SVGs contain no `<text>` and render the same anywhere. The text is `#4A4741` in `wordmark.svg` and white in `wordmark-white.svg`, and the mark stays gold in both. The font file is fetched by the script when the wordmark is regenerated and is not committed. Albert Sans is credited in `CREDITS.md`.
+
+**Alternatives considered:** Marcellus (the concept page's display serif) and showing the mark only. The owner chose Albert Sans.
+
+### D8. Originality
 
 The mark's geometry is original. The gold palette and the light-against-shadow idea are inspired by *Clair Obscur: Expedition 33*, and no art, emblem or wordmark from the game is used or traced. The sunburst "crown" explored as variant B3 was modelled loosely on stepped-ray Art Deco metalwork. If it is ever used as a secondary brand element (for example a DMG background), it needs its own original drawing.
 

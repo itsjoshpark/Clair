@@ -62,8 +62,19 @@ At 16 px and 32 px, the open ring and its curl SHALL stay recognisable as a clea
 - **THEN** the open ring and its curl are recognisable
 
 ### Requirement: Product logo inside the app
-Every in-app surface that Chromium brands with its product logo SHALL show the Clair mark in gold instead, without the icon's rounded-square background.
+Every in-app surface that Chromium brands with its product logo SHALL show the Clair mark instead, without the icon's rounded-square background. Where Chromium shows a color logo, the mark SHALL be gold. Where Chromium draws its logo in a single color, the mark SHALL be a single-color silhouette in that color. Chromium's logo MUST NOT appear on any of these surfaces.
 
 #### Scenario: About Clair
 - **WHEN** the user opens About Clair
 - **THEN** the product logo shown is the gold gilded ring, and Chromium's logo does not appear anywhere on the page
+
+#### Scenario: Single-color logo surfaces
+- **WHEN** the user opens a `chrome://` page, so that the address bar shows the product icon
+- **THEN** the icon is a one-color silhouette of the gilded ring, not Chromium's logo
+
+### Requirement: Clair wordmark
+Where Chromium shows its wordmark, the application SHALL show the Clair wordmark: the gold mark followed by "Clair" set in Albert Sans. A variant with white text SHALL be used where Chromium uses its white wordmark.
+
+#### Scenario: Version page
+- **WHEN** the user opens `chrome://version`
+- **THEN** the page header shows the gold mark followed by "Clair", and no "chromium" wordmark appears
