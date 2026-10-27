@@ -26,13 +26,15 @@ The motivation is in `proposal.md` and the required behaviour is in `specs/app-i
 
 ### D1. Canonical geometry
 
-The mark is drawn in a 100 × 100 drawing space centered on (50, 50) and mapped onto Icon Composer's 1024 px canvas, whose tile is 824 px wide at an offset of 100 px. The mapping `translate(107.5 90.65) scale(8.4271)` produces these values:
-- **Size:** the ring's outer edge (radius 35.2 drawing units) is 593 px across, 72% of the tile.
-- **Offset:** the ring's center lands at (528.9, 512), so the mark sits 16.9 px (about 2% of the tile) right of center.
+The mark is drawn in a 100 × 100 drawing space centered on (50, 50) and mapped onto Icon Composer's 1024 px canvas. That canvas is the icon tile itself. The 824 px tile with a 100 px margin exists only in exported icons, such as `actool`'s `.icns` and the spec's 1024 px rendering. The mapping `translate(9.36 -11.64) scale(10.4727)` produces these values:
+- **Size:** the ring's outer edge (radius 35.2 drawing units) is 737 px across, 72% of the tile.
+- **Offset:** the ring's center lands at (533, 512), so the mark sits 21 px (about 2% of the tile) right of center.
+
+A first version used an 824 px tile inside the 1024 px canvas, and `actool` rendered the ring at only 58% of the tile. Measuring `actool`'s output is how the size is checked.
 
 ```svg
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <g transform="translate(107.5 90.65) scale(8.4271)" fill="none" stroke="#000" stroke-linecap="round">
+  <g transform="translate(9.36 -11.64) scale(10.4727)" fill="none" stroke="#000" stroke-linecap="round">
     <!-- ring layer -->
     <path stroke-width="6.4" d="M74.51 29.43 A32 32 0 1 0 74.51 70.57"/>                       <!-- ring, gap +-40 deg -->
     <path stroke-width="3.6" d="M74.51 70.57 C80.43 66.02 81.08 58.22 75.88 55.62 C71.97 53.67 68.07 56.92 70.02 60.43"/> <!-- curl -->

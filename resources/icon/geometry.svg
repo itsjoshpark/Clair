@@ -1,9 +1,10 @@
 <!-- Reference drawing for the Clair mark (design D1 of the design-app-icon change).
-     A 100 x 100 drawing space mapped onto Icon Composer's 1024 px canvas, whose tile is
-     824 px wide: ring outer diameter 593 px (72% of the tile), ring centre (528.9, 512).
-     Edit the mark here and in make_layers.py together, then regenerate the layers. -->
+     A 100 x 100 drawing space mapped onto Icon Composer's 1024 px canvas, which is the
+     icon tile itself: ring outer diameter 737 px (72% of the tile), ring centre (533, 512),
+     21 px (about 2%) right of centre. Edit the mark here and in make_layers.py together,
+     then regenerate the layers. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <g transform="translate(107.5 90.65) scale(8.4271)" fill="none" stroke="#000" stroke-linecap="round">
+  <g transform="translate(9.36 -11.64) scale(10.4727)" fill="none" stroke="#000" stroke-linecap="round">
     <!-- ring layer: ring (gap +-40 deg), curl, flick -->
     <path stroke-width="6.4" d="M74.51 29.43 A32 32 0 1 0 74.51 70.57"/>
     <path stroke-width="3.6" d="M74.51 70.57 C80.43 66.02 81.08 58.22 75.88 55.62 C71.97 53.67 68.07 56.92 70.02 60.43"/>

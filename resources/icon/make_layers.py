@@ -12,9 +12,10 @@ import math
 import os
 import sys
 
-# Drawing space (100 x 100) to the 1024 px canvas; see geometry.svg.
-SCALE = 8.4271
-TX, TY = 107.5, 90.65
+# Drawing space (100 x 100) to Icon Composer's 1024 px canvas, which is the
+# icon tile itself; see geometry.svg.
+SCALE = 10.4727
+TX, TY = 9.36, -11.64
 
 RING = dict(cx=50, cy=50, r=32, width=6.4, gap=40)
 HAIRLINE = dict(cx=50, cy=50, r=23.5, width=2, gap=40)
