@@ -136,7 +136,7 @@ The mark's geometry is original. The gold palette and the light-against-shadow i
 - **[`actool` cannot compile `.icon` on the hosted runner image]** → Fall back to D3's alternative: compile on the owner's Mac and commit `Assets.car`, with the same copy step.
 - **[The runner's `actool` renders older-macOS images differently from the trial compile]** → Task 3.1's test checks the compiled outputs on CI, and task 4.5 checks the result on macOS 15.6.
 - **[Gold has low contrast on the light background]** → Use the deeper light-appearance gold and the neutral shadow. Check it in the Dock against a bright wallpaper before marking the work done.
-- **[Hand-written `icon.json` drifts from Icon Composer's format]** → The owner opens the document in Icon Composer and saves it once. The saved file is what gets committed.
+- **[Hand-written `icon.json` drifts from Icon Composer's format]** → The owner opened it in Icon Composer without warnings on 2026-10-27 and approved it unchanged. Any later edit made in Icon Composer is saved from there and committed.
 - **[The optical offset is a judgment call]** → The spec allows a 12 to 22 px range on the 1024 px canvas, so a later nudge doesn't need a spec change.
 
 ## Migration Plan
