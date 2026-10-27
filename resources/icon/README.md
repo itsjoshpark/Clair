@@ -16,7 +16,7 @@ Everything here is drawn from one geometry: the gilded ring, a thick open gold r
 | `product-logos.txt` | Every Chromium file Clair replaces, and its source and size | hand |
 | `logos/` | Rendered PNGs, at the same paths as Chromium's | `scripts/render-icon-images.sh` |
 
-The app icon itself (`Assets.car` and `app.icns`) is not committed. `./build.sh prepare` compiles it from `AppIcon.icon` with `scripts/compile-icon.sh`.
+The app icon itself (`Assets.car` and `app.icns`) is not committed. `./build.sh prepare` runs `scripts/replace-icon-resources.sh`, which compiles it from `AppIcon.icon` with `scripts/compile-icon.sh` into `chrome/app/theme/chromium/mac/`, then copies every `product-logos.txt` entry over its Chromium file. If a destination no longer exists in Chromium, `prepare` fails and names the path; update `product-logos.txt` for the new Chromium version.
 
 ## Changing the mark
 

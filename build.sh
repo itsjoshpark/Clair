@@ -13,9 +13,9 @@ Usage: ./build.sh [-d] [-l] [-j JOBS] [-s SDK_PATH] [-t SECONDS] [STAGE...]
 
 Stages (run in the order given; default: all):
   fetch      Retrieve the Chromium source into build/src
-  prepare    Prune binaries, apply all patches, rebrand UI strings, apply domain
-             substitution and unpack platform toolchains. "fetch prepare" is
-             the patch-only mode.
+  prepare    Prune binaries, apply all patches, rebrand UI strings, replace
+             the icon and logos, apply domain substitution and unpack platform
+             toolchains. "fetch prepare" is the patch-only mode.
   configure  Write args.gn, bootstrap GN, build bindgen and run gn gen
   compile    Run ninja for Clair. With -t, stop after SECONDS and record
              build/compile_status as "running" so a later run can resume.
@@ -109,6 +109,9 @@ stage_prepare() {
   python3 "$_main_repo/utils/patches.py" apply "$_src_dir" "$_main_repo/patches" "$_root_dir/patches"
   # Rebrand Chrome/Chromium as Clair in UI strings and their translations.
   python3 "$_root_dir/utils/name_substitution.py" --sub -t "$_src_dir"
+  # Replace Chromium's app icon and product logos with Clair's. Fails and names
+  # the path if a destination no longer exists in this Chromium version.
+  "$_root_dir/scripts/replace-icon-resources.sh" "$_src_dir"
   python3 "$_main_repo/utils/domain_substitution.py" apply \
     -r "$_main_repo/domain_regex.list" \
     -f "$_main_repo/domain_substitution.list" \
