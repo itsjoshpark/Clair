@@ -62,7 +62,7 @@ Clair/
     helium/                    copied or adapted from Helium (GPLv3); original headers kept
     clair/                     Clair-only patches
   utils/                       name_substitution.py, version tools (from Helium, GPLv3)
-  resources/                   icon (placeholder), DMG background and layout
+  resources/                   icon sources (icon/, from design-app-icon), DMG background and layout
   entitlements/                app and helper entitlements (from ungoogled-macos)
   downloads.ini                Chromium source tarball and Sparkle source tarball, each with sha512
   flags.macos.gn               ungoogled-macos flags + Clair flags (Sparkle on, arm64)
@@ -93,7 +93,7 @@ Clair/
   This produces `Clair.app`, `Clair Framework.framework` and `Clair Helper*.app`, with helper IDs derived from the bundle ID. The patch also extends ungoogled's `tweak_info_plist.py` change so the bundle ID is recognised.
 - The Chromium-branded strings in `chromium_strings.grd` and related files are replaced at build time by Helium's `name_substitution.py`, rather than by hand-written string patches. Substitution keeps up with upstream string changes; patches would conflict on every Chromium version.
 - The data directory and keychain service come from Helium's two small patches with "Clair" swapped in, giving `~/Library/Application Support/Clair` and "Clair Safe Storage".
-- The icon is a placeholder `.icns` plus an asset catalog in `resources/`, swapped in the way Helium's `replace_resources.py` does it.
+- The icon and the in-app logos come from the `design-app-icon` change. During `prepare`, `scripts/compile-icon.sh` compiles `resources/icon/AppIcon.icon` with `actool` into `Assets.car` and `app.icns`, which replace Chromium's files in `chrome/app/theme/chromium/mac/`. Every entry in `resources/icon/product-logos.txt` is then copied over its Chromium file, as Helium's resource list does. Nothing compiled is committed. If that change hasn't landed yet, the same step runs with whatever icon source is in `resources/icon/`.
 
 ### D3. Separate Clair version, with the Chromium version kept internally
 

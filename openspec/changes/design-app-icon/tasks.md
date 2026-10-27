@@ -24,7 +24,7 @@ Wherever a task needs a build, it means the CI build of the pull request, its lo
 
 - [ ] 3.1 Add `scripts/compile-icon.sh` and `scripts/compile-icon.test.sh`. The script runs `xcrun actool` on `AppIcon.icon` (app icon `AppIcon`, platform macOS, minimum deployment target 15.6) to write `Assets.car` and `AppIcon.icns`, then renames the latter to `app.icns`. It fails clearly on a missing or malformed input, or when `actool` is unavailable. Verify that the test compiles the real source on CI's `macos-26` runner, that `assetutil --info` lists an `AppIcon` in `Assets.car`, and that `iconutil` converts `app.icns` back to an iconset that includes 16 px and 256 px images.
 - [ ] 3.2 Call `scripts/compile-icon.sh` from `./build.sh prepare`, then copy `Assets.car` and `app.icns` into `chrome/app/theme/chromium/mac/` and every entry in `product-logos.txt` to its destination, through task 2.4's resource-replacement step. Verify in the CI fetch job's log that the compile and every copy ran, that `prepare` fails, naming the missing path, if a destination does not exist, and that the build compiles the replaced `.icon` files.
-- [ ] 3.3 Update `ship-plain-ungoogled-build`'s design D2 and task 2.4 to describe compiling from source instead of committing `Assets.car`. Verify that `openspec validate` passes for both changes and that neither describes a committed `Assets.car`.
+- [x] 3.3 Update `ship-plain-ungoogled-build`'s design D2 and task 2.4 to describe compiling from source instead of committing `Assets.car`. Verify that `openspec validate` passes for both changes and that neither describes a committed `Assets.car`.
 
 ## 4. Checks on the built app
 
