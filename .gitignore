@@ -76,3 +76,7 @@ release_asset/
 
 # Font downloaded by resources/icon/make_wordmark.py
 resources/icon/.font-cache/
+
+# Claude Code: personal settings and worktrees stay local
+.claude/settings.local.json
+.claude/worktrees/
