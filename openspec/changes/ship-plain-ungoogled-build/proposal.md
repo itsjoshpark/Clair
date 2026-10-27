@@ -31,7 +31,7 @@ Clair is going to be a browser in the style of Arc, built on Chromium. Before an
   - `sign_update` and `BinaryDelta` come from the Sparkle release tarball, not from Swift Package Manager (SPM) / DerivedData.
   - `sparkle:minimumSystemVersion` is 15.6.
   - Releasing automatically when ungoogled-chromium publishes a security update is deferred; releases start manually.
-- Add a release pipeline on GitHub Actions (public repo, standard `macos-latest` arm64 runners):
+- Add a release pipeline on GitHub Actions (public repo). Pull request builds run on free GitHub-hosted arm64 runners with lighter build settings. Release builds run on the owner's self-hosted Mac (M1 Pro, 32 GB, building on an external SSD), because the hosted runners' 7 GB RAM is below Chromium's 8 GB minimum:
   - chained build jobs that stay under the 6-hour job limit
   - Developer ID signing, notarization, DMG creation
   - publishing to GitHub Releases

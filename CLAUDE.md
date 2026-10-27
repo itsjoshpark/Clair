@@ -16,6 +16,7 @@ Never fetch Chromium or build it on the development machine, which is resource-l
 
 - `build.yml` runs one fetch job (`./build.sh fetch prepare`, the patch-only mode), then up to 20 chained compile phases through `build-phase.yml`, each one under the 6-hour job limit. The finishing phase runs a headless smoke test and uploads an unsigned app artifact. A full build takes many hours.
 - `ci.yml` runs on every push and PR: the `scripts/*.test.sh` tests, `shellcheck -S warning` and `actionlint`.
+- Release builds run on the owner's self-hosted Mac runner (label `clair-release`, M1 Pro with 32 GB, external SSD). Only manually started releases from `main` may target it, never pull requests, and especially not fork PRs. Release secrets live in the `release` environment. Never run `.github/scripts/prepare-runner.sh` on the self-hosted runner: it deletes Xcode versions and simulators.
 - Read job logs with `gh run view --job <id> --log`, or with `gh api --allow-escape-sequences repos/itsjoshpark/Clair/actions/jobs/<id>/logs`. Fix what they show, then push.
 
 Local work is limited to editing files and running the small script tests.

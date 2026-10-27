@@ -87,15 +87,26 @@ The release process SHALL offer a dry-run mode that builds, signs and notarizes 
 - **WHEN** a dry-run release is started
 - **THEN** a signed, notarized DMG is available as a workflow artifact, and no tag, release or appcast change is made
 
-### Requirement: Builds run on GitHub-hosted runners
-A complete release, from source to published assets, SHALL be produced on standard GitHub-hosted macOS arm64 runners. It MUST NOT need self-hosted machines or paid build services.
+### Requirement: Pull request builds run on GitHub-hosted runners
+Builds triggered by pull requests SHALL run on standard GitHub-hosted macOS arm64 runners. They MUST NOT run on a self-hosted runner, and MUST NOT need paid build services.
 
-#### Scenario: Release on hosted runners
-- **WHEN** a release run completes
-- **THEN** every job in it ran on a standard GitHub-hosted macOS runner
+#### Scenario: Pull request build
+- **WHEN** a pull request triggers a build
+- **THEN** every job in that build runs on a standard GitHub-hosted macOS runner
+
+### Requirement: Release builds run on the owner's self-hosted runner
+Release builds SHALL run on the repository owner's self-hosted Mac runner (label `clair-release`). Only manually started release runs from `main` MAY use that runner. Jobs from fork pull requests MUST NOT run on it.
+
+#### Scenario: Release run
+- **WHEN** the owner starts a release from `main`
+- **THEN** its build, package and publish jobs run on the `clair-release` self-hosted runner
+
+#### Scenario: Fork pull request
+- **WHEN** a pull request from a fork changes a workflow to target the `clair-release` label
+- **THEN** no job from that pull request runs on the self-hosted runner without the owner's approval
 
 ### Requirement: Secrets never exposed
-Signing certificates, notarization credentials and the Sparkle EdDSA private key SHALL be provided only as encrypted CI secrets. They MUST NOT appear in the repository, in build logs, or in any published artifact.
+Signing certificates, notarization credentials and the Sparkle EdDSA private key SHALL be provided only as encrypted secrets of a `release` environment that is limited to `main`. They MUST NOT appear in the repository, in build logs, in any published artifact, or on the self-hosted runner's disk after a job ends.
 
 #### Scenario: Inspecting a release's logs and assets
 - **WHEN** a release run's logs and every published asset are searched for the private key or the certificate password

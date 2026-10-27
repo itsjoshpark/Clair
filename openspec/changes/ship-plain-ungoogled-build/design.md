@@ -177,7 +177,8 @@ notes check  packed     finished                                        deltas, 
 - `sign_update`, `BinaryDelta` and `generate_keys` come from the Sparkle **release tarball** for the same pinned version, checked against its sha512.
 
 **Alternatives considered:**
-- One job on a larger or self-hosted runner: rejected. It needs a paid plan or hardware, and the spec requires standard hosted runners.
+- Release builds on hosted runners only: rejected after measuring. A standard runner has 7 GB RAM and 3 cores, below Chromium's 8 GB minimum (16 GB+ recommended), which is too little for an official ThinLTO link. See D9.
+- Depot (about $34 per release build) or GitHub's larger runners (Team plan organizations only): kept as fallbacks if the self-hosted Mac becomes impractical.
 - `sccache` or remote build execution: deferred. It needs paid storage.
 - Committing the version before the build: rejected. A failed build would leave a released-looking commit on `main`.
 
@@ -216,6 +217,17 @@ Handling:
 - `CREDITS.md` lists ungoogled-chromium, ungoogled-chromium-macos, Helium, ReBel, Sparkle and Front Row's release scripts, with their licenses.
 - `third_party/sparkle/README.chromium`, from Helium's patch, makes Sparkle appear in `chrome://credits`.
 - The combined work is GPLv3. Code from BSD-3 and MIT sources keeps its own license.
+
+### D9. Where builds run: hosted runners for PRs, the owner's Mac for releases
+
+- **Pull request builds** run on free `macos-26` runners (3 cores, 7 GB RAM). They prove the patches apply and the app runs, so they use lighter GN settings to fit in memory: `concurrent_links = 1`, `symbol_level = 0`, ThinLTO off, and limited ninja parallelism. These settings live in a separate GN file that only PR builds append.
+- **Release builds** run on the owner's self-hosted runner: an M1 Pro with 32 GB RAM, working on an external APFS SSD, with label `clair-release`. They use the full release settings.
+- **Runner security, since the repository is public:**
+  - The runner uses a dedicated macOS user.
+  - Fork PR workflows need the owner's approval ("Require approval for all external contributors").
+  - Only `workflow_dispatch` release runs from `main` target `clair-release`.
+  - `prepare-runner.sh` (which deletes Xcode versions and simulators) runs only on hosted runners.
+- **Secrets** live in a `release` environment limited to `main`. Self-hosted jobs receive them only for the duration of the job. The signing certificate goes into a temporary keychain that the job deletes at the end, so the Mac keeps nothing between releases. The same workflow would run unchanged on Depot.
 
 ## Risks / Trade-offs
 
