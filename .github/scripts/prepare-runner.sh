@@ -8,7 +8,8 @@
 set -euo pipefail
 shopt -s extglob nullglob
 
-xcode_version="${CLAIR_XCODE_VERSION:-26.0.1}"
+# Chromium 156 calls macOS 26.2 APIs and is built officially with the 26.5 SDK.
+xcode_version="${CLAIR_XCODE_VERSION:-26.5}"
 xcode_path="/Applications/Xcode_${xcode_version}.app"
 
 echo "::group::Disk before cleanup"

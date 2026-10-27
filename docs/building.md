@@ -20,7 +20,7 @@ To run an unsigned app downloaded from CI, unzip it and remove the quarantine fl
 You need:
 
 - an Apple Silicon Mac with macOS 15.6 or later, about 150 GB of free disk, and 32 GB or more of RAM. A clean build takes several hours.
-- Xcode 26 (CI uses 26.0.1), plus its Metal toolchain: `xcodebuild -downloadComponent MetalToolchain`
+- Xcode 26.5 or later (CI uses 26.5; Chromium 156 needs the macOS 26.2 SDK or newer and is built officially with 26.5), plus its Metal toolchain: `xcodebuild -downloadComponent MetalToolchain`
 - Homebrew packages: `brew install go ninja coreutils esbuild typescript zstd quilt`
 - Python 3.13, with `pip3 install PySocks httplib2`
 
