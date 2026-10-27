@@ -115,7 +115,7 @@ Chromium draws nine of its product icons from `.icon` files, its own vector form
 - **Canvases of 32 and above:** the full mark.
 - **Colour:** `product_refresh.icon` is Chromium's only colored one, so it gets a single gold `PATH_COLOR_ARGB`. The rest stay colorless and take the UI's color.
 
-Paths use `MOVE_TO`, `LINE_TO`, `ARC_TO`, `CIRCLE` and `CLOSE`, which all exist in Chromium's vector-icon format. Generated files are committed and copied by the resource-replacement step. Chromium compiles them into C++ during the build, so a malformed file fails the build.
+Each shape is its own `NEW_PATH` with `FILL_RULE_NONZERO`, because the format fills even-odd by default and the curl and flick overlap the ring. Paths use `MOVE_TO`, `LINE_TO`, `ARC_TO` and `CLOSE`, which all exist in Chromium's vector-icon format. Generated files are committed and copied by the resource-replacement step. Chromium compiles them into C++ during the build, so a malformed file fails the build.
 
 ### D7. Wordmark
 
