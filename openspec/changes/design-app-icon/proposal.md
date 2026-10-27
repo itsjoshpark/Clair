@@ -14,8 +14,7 @@
   - the ring's outer diameter is 72% of the icon tile's width, and the mark sits about 2% of the tile width right of center so it looks optically centered
   - the inspiration is the gilded Belle Époque look of *Clair Obscur: Expedition 33*, where the name comes from. Nothing is copied from the game's emblem, wordmark or art.
 - Add the icon source as an Icon Composer document, `resources/icon/AppIcon.icon`, with separate layers for the ring and for the hairline and bead.
-- Add a fallback icon set for macOS 15.6, whose 16 px and 32 px images use a simplified drawing that drops the hairline and bead and thickens the ring. On macOS 26 the system scales the vector source itself, and Icon Composer has no per-size artwork.
-- Compile the source into `Assets.car` with `actool`, and the fallback set into `app.icns` with `iconutil`, during `./build.sh prepare`. These are the files that `ship-plain-ungoogled-build` task 2.4 copies into Chromium's tree, so this change supplies the artwork for that step and no compiled binaries are committed.
+- Compile the source with `actool` during `./build.sh prepare`. `actool` writes `Assets.car` (including the pre-Tahoe images that macOS 15.6 uses) and an `.icns` that becomes `app.icns`, so both macOS versions show renderings of the same source. There is no separate per-size artwork; at 16 px the hairline and bead fade but the ring stays clear. These are the files that `ship-plain-ungoogled-build` task 2.4 copies into Chromium's tree, so this change supplies the artwork for that step and no compiled binaries are committed.
 - Replace Chromium's product logo images (the `product_logo_*` PNGs used by the About page and other WebUI) with flat renderings of the mark.
 
 **Out of scope for this change:**
@@ -34,7 +33,7 @@
 ## Impact
 
 - **Repository:**
-  - `resources/icon/`: the `AppIcon.icon` source, the small-size and flat logo SVGs, and a short README on editing the icon
+  - `resources/icon/`: the reference drawing, the `AppIcon.icon` source and the script that generates its layers, the flat logo SVG, and a short README on editing the icon
   - a compile script with its `*.test.sh`, called from `build.sh prepare`
   - the product logo PNGs that replace Chromium's
 - **Depends on:** `ship-plain-ungoogled-build` task 2.4 (the resource-replacement step). That change's design (D2) describes a committed placeholder `Assets.car` the way Helium does it. This change compiles from source instead, so D2 and task 2.4 need updating to match.
@@ -44,4 +43,4 @@
 ## Open Questions
 
 - **Document icon.** Chromium ships a `document.icns` for HTML and other files it opens. Check what it looks like in the first CI build. If it carries Chromium's logo, add a Clair document icon here or in a follow-up change.
-- **macOS 15.6 fallback.** Confirm that `actool` writes a usable pre-Tahoe rendition from the `.icon` source. If it doesn't, ship a rendered `app.icns` as the 15.6 fallback (see `design.md`).
+- **macOS 15.6 fallback.** Resolved on 2026-10-27: a local `actool` compile wrote pre-Tahoe images into `Assets.car` and a matching `.icns`, so the fallback comes from `actool` (design D4). The macOS 15.6 check itself is task 4.5.

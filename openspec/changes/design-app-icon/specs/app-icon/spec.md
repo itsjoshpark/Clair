@@ -51,15 +51,15 @@ On macOS 15.6 through 15.x, the application SHALL show a rendition of the same m
 - **THEN** the Dock and Finder show the gold mark on a light rounded-square tile, never a generic application icon or Chromium's logo
 
 ### Requirement: Small-size legibility
-At 16 px and 32 px, the open ring and its curl SHALL stay recognisable as a clear shape. On macOS 15, the 16 px and 32 px renditions (1x and 2x) SHALL use a simplified drawing that leaves out the inner hairline and bead and uses a heavier ring.
+At 16 px and 32 px, the open ring and its curl SHALL stay recognisable as a clear shape on every supported macOS version. The inner hairline and bead are allowed to fade at these sizes, but they MUST NOT turn the mark into a blur.
 
 #### Scenario: Finder list view on macOS 26
 - **WHEN** Clair is shown in a Finder list view or in the Finder sidebar at 16 px on macOS 26
-- **THEN** the open ring and its curl are recognisable, and any remaining fine detail does not turn the mark into a blur
+- **THEN** the open ring and its curl are recognisable
 
 #### Scenario: Finder list view on macOS 15
 - **WHEN** Clair is shown in a Finder list view at 16 px on macOS 15.6
-- **THEN** the icon shows the heavier open ring with its curl, without the hairline or bead
+- **THEN** the open ring and its curl are recognisable
 
 ### Requirement: Product logo inside the app
 Every in-app surface that Chromium brands with its product logo SHALL show the Clair mark in gold instead, without the icon's rounded-square background.
