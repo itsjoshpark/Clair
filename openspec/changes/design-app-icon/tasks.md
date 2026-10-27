@@ -16,8 +16,8 @@ Wherever a task needs a build, it means the CI build of the pull request, its lo
 ## 2. Generated images and vector icons
 
 - [ ] 2.1 Add `scripts/render-icon-images.sh` and `scripts/render-icon-images.test.sh`. The script renders each source SVG to its PNGs as listed in `resources/icon/product-logos.txt`. It fails clearly when `rsvg-convert` is missing or a list entry is malformed. Add `librsvg` to `ci.yml`'s Homebrew step. Verify that the test checks every output's pixel size with `sips` and the failure cases, and that CI passes the test and `shellcheck`.
-- [ ] 2.2 Write `resources/icon/product-logos.txt` with every PNG, SVG and `.icon` entry from design D5 (source, size, Chromium destination). Verify, one file at a time through the GitHub API, that every destination exists in Chromium at the pinned tag and that each PNG's listed size matches Chromium's file.
-- [ ] 2.3 Render and commit the PNGs to `resources/icon/logos/`. Verify that every listed PNG exists at its listed pixel size, and that the 16 px and 22 px logos still show the open ring and curl.
+- [x] 2.2 Write `resources/icon/product-logos.txt` with every PNG, SVG and `.icon` entry from design D5 (source, size, Chromium destination). Verify, one file at a time through the GitHub API, that every destination exists in Chromium at the pinned tag and that each PNG's listed size matches Chromium's file.
+- [x] 2.3 Render and commit the PNGs to `resources/icon/logos/`. Verify that every listed PNG exists at its listed pixel size, and that the 16 px and 22 px logos still show the open ring and curl.
 - [x] 2.4 Extend `make_layers.py` to write the nine `.icon` files from design D6 to `resources/icon/vector_icons/`, keeping each file's Chromium canvas sizes. Verify that each file uses only `CANVAS_DIMENSIONS`, `PATH_COLOR_ARGB`, `NEW_PATH`, `FILL_RULE_NONZERO`, `MOVE_TO`, `LINE_TO`, `ARC_TO`, `CIRCLE` and `CLOSE`, that its canvas sizes match Chromium's file, and that a render of each, converted back to SVG by the script's preview mode, shows the mark.
 
 ## 3. Compile and integrate
