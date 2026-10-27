@@ -73,3 +73,6 @@ build/
 /*.log
 upload_*/
 release_asset/
+
+# Font downloaded by resources/icon/make_wordmark.py
+resources/icon/.font-cache/
