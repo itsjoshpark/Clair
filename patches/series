@@ -23,4 +23,3 @@ ungoogled-chromium-macos/fix-gn-compatibility.patch
 ungoogled-chromium-macos/fix-gn-compatibility-chromium-156.patch
 ungoogled-chromium-macos/fix-typescript-isolated-declarations.patch
 ungoogled-chromium-macos/fix-complex-builtins.patch
-clair/fix-managed-profile-link.patch
