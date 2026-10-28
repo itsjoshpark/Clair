@@ -1,6 +1,6 @@
 # Clair
 
-Clair is a macOS web browser in the style of Arc, built on ungoogled-chromium. It targets Apple Silicon only, with macOS 15.6 as the minimum. Its UI will be C++ Views and WebUI, with Objective-C++ only where native macOS behavior is needed. There is no Swift. Updates use Sparkle 2.
+Clair is a macOS web browser in the style of Arc, built on ungoogled-chromium. It targets Apple Silicon only, with macOS 15.6 as the minimum. How its UI is built is still open: C++ Views and WebUI with Objective-C++ for native macOS behavior, native AppKit or SwiftUI views inside Chromium's window, or a fully native window like Crest's. The UX spike (roadmap step 2 in the active change's `proposal.md`) decides. Swift is allowed. Updates use Sparkle 2.
 
 ## Planning: OpenSpec
 

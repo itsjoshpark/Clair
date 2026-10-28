@@ -75,7 +75,7 @@ Clair is going to be a browser in the style of Arc, built on Chromium. Before an
 ## Roadmap Context (decided during exploration; not part of this change)
 
 1. This change: a plain ungoogled build ships.
-2. UX spike: a vibrancy sidebar with spring open/close, a two-finger swipe between Spaces, and a Cmd+T command bar. It also covers moving Chromium's toolbar into the sidebar: the URL display, back/forward/reload, permission chips, extension actions, the download indicator, and where their popups attach when the sidebar is hidden. It tests whether Views plus Objective-C++/Core Animation can feel as good as Arc.
+2. UX spike: a vibrancy sidebar with spring open/close, a two-finger swipe between Spaces, and a Cmd+T command bar. It also covers moving Chromium's toolbar into the sidebar: the URL display, back/forward/reload, permission chips, extension actions, the download indicator, and where their popups attach when the sidebar is hidden. It compares ways to build the interface: Views plus Objective-C++/Core Animation, native AppKit or SwiftUI views inside Chromium's window, and a fully native window as in Crest (`pauljoda/Crest`). It measures how native each feels against Arc, the edit-to-run time, and which Chromium features break, then picks one.
 3. MVP features:
    - vertical sidebar with folders
    - pinned tabs, and favorites stored per profile
@@ -90,4 +90,4 @@ Clair is going to be a browser in the style of Arc, built on Chromium. Before an
    - menus and shortcuts as decided in `arc-reference/clair-menus.md`; Arc's shortcuts win where they conflict with Chrome's
    - an update-ready banner at the bottom of the sidebar, like Arc's, with an "Install and Relaunch" button, alongside the Clair menu item from change 1
 
-Architecture: C++ Views plus WebUI, with Objective-C++ only where native macOS behaviour is needed. No Swift. No sync in the MVP; CloudKit may come later. Widevine is deferred until after the MVP.
+Architecture: decided by the UX spike (see step 2); Swift is allowed. No sync in the MVP; CloudKit may come later. Widevine is deferred until after the MVP.
