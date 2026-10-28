@@ -1,0 +1,36 @@
+# Remove the test-only managed profile creation call that ungoogled-chromium
+# 156.0.8078.47-1 leaves behind. Its remove-unused-preferences-fields.patch
+# drops managed_profile_creation_controller.cc from the build, so without
+# ThinLTO (the light pull request build) the Chromium Framework link fails on
+# the undefined ManagedProfileCreationController::CreateManagedProfileForTesting.
+#
+# Ported from ungoogled-chromium commit 8025d452 ("patches: fix compiler
+# warnings"), first released in 156.0.8078.73-1. Delete this patch when the
+# submodule moves to that tag or later: the change is then upstream and this
+# patch no longer applies.
+
+--- a/chrome/browser/enterprise/signin/profile_management_disclaimer_service.cc
++++ b/chrome/browser/enterprise/signin/profile_management_disclaimer_service.cc
+@@ -654,22 +654,6 @@
+   }
+   CHECK(state_->access_point.has_value());
+ 
+-  if (profile_separation_policies_for_testing_.has_value() ||
+-      user_choice_for_testing_.has_value()) {
+-    CHECK_IS_TEST();
+-    state_->profile_creation_controller =
+-        ManagedProfileCreationController::CreateManagedProfileForTesting(
+-            &profile_.get(), GetExtendedAccountInfo(state_->account_id),
+-            *state_->access_point,
+-            base::BindOnce(&ProfileManagementDisclaimerService::
+-                               OnManagedProfileCreationResult,
+-                           weak_ptr_factory_.GetWeakPtr()),
+-            profile_separation_policies_for_testing_.value_or(
+-                std::move(profile_separation_policies)),
+-            user_choice_for_testing_);
+-    return;
+-  }
+-
+ }
+ 
+ void ProfileManagementDisclaimerService::OnManagedProfileCreationResult(
