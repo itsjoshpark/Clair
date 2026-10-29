@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how a Clair release is produced and published. It covers building, signing and notarizing the app, packaging it, publishing it to GitHub Releases, and announcing it to installed copies through the appcast, so that each release can be installed and trusted on a clean Mac.
+Defines how a Clair release is produced and published. It covers packaging, signing and notarizing the app, packaging it, publishing it to GitHub Releases, and announcing it to installed copies through the appcast, so that each release can be installed and trusted on a clean Mac.
 
 ## ADDED Requirements
 
@@ -22,7 +22,7 @@ Each release SHALL be published as a GitHub Release on `itsjoshpark/Clair`, tagg
 - the DMG
 - the delta update files
 - SHA-256 checksums for every asset
-- release notes that state the Clair version, the build number and the ungoogled-chromium version
+- release notes that state the Clair version, the build number, the ungoogled-chromium version and the engine key
 
 #### Scenario: Release page contents
 - **WHEN** a user opens the GitHub Release for `v0.1.0`
@@ -81,21 +81,14 @@ A release SHALL be started manually, by choosing a patch, minor or major bump. T
 - **THEN** the new release is `0.2.0`
 
 ### Requirement: Build-only dry run
-The release process SHALL offer a dry-run mode that builds, signs and notarizes the app but creates no tag, GitHub Release or appcast change.
+The release process SHALL offer a dry-run mode that packages, signs and notarizes the app but creates no tag, GitHub Release or appcast change.
 
 #### Scenario: Dry run
 - **WHEN** a dry-run release is started
 - **THEN** a signed, notarized DMG is available as a workflow artifact, and no tag, release or appcast change is made
 
-### Requirement: Builds run on GitHub-hosted runners
-A complete release, from source to published assets, SHALL be produced on standard GitHub-hosted macOS arm64 runners. It MUST NOT need self-hosted machines or paid build services.
-
-#### Scenario: Release on hosted runners
-- **WHEN** a release run completes
-- **THEN** every job in it ran on a standard GitHub-hosted macOS runner
-
 ### Requirement: Secrets never exposed
-Signing certificates, notarization credentials and the Sparkle EdDSA private key SHALL be provided only as encrypted CI secrets. They MUST NOT appear in the repository, in build logs, or in any published artifact.
+Signing certificates, notarization credentials and the Sparkle EdDSA private key SHALL be provided only as encrypted secrets of a `release` environment that is limited to `main`. They MUST NOT appear in the repository, in build logs, in any published artifact, or on the self-hosted runner's disk after a job ends.
 
 #### Scenario: Inspecting a release's logs and assets
 - **WHEN** a release run's logs and every published asset are searched for the private key or the certificate password
