@@ -1,0 +1,41 @@
+# Clair's replacements for Chromium's product logos (design D5 and D6 of the
+# design-app-icon change), checked against Chromium 156.0.8078.47.
+#
+# <source> <size> <destination>
+#   source       file in resources/icon/
+#   size         WxH: rendered by scripts/render-icon-images.sh to logos/<destination>
+#                -  : copied as it is
+#   destination  path in the Chromium source tree
+
+# Colour mark
+logo.svg 16x16 chrome/app/theme/chromium/product_logo_16.png
+logo.svg 24x24 chrome/app/theme/chromium/product_logo_24.png
+logo.svg 48x48 chrome/app/theme/chromium/product_logo_48.png
+logo.svg 64x64 chrome/app/theme/chromium/product_logo_64.png
+logo.svg 128x128 chrome/app/theme/chromium/product_logo_128.png
+logo.svg 256x256 chrome/app/theme/chromium/product_logo_256.png
+logo.svg 16x16 chrome/app/theme/default_100_percent/chromium/product_logo_16.png
+logo.svg 32x32 chrome/app/theme/default_100_percent/chromium/product_logo_32.png
+logo.svg 32x32 chrome/app/theme/default_200_percent/chromium/product_logo_16.png
+logo.svg 64x64 chrome/app/theme/default_200_percent/chromium/product_logo_32.png
+logo.svg - chrome/app/theme/chromium/product_logo.svg
+
+# Single-colour mark
+logo-mono.svg 22x22 chrome/app/theme/chromium/product_logo_22_mono.png
+
+# Wordmark
+wordmark.svg 171x32 components/resources/default_100_percent/chromium/product_logo.png
+wordmark.svg 342x64 components/resources/default_200_percent/chromium/product_logo.png
+wordmark-white.svg 171x32 components/resources/default_100_percent/chromium/product_logo_white.png
+wordmark-white.svg 342x64 components/resources/default_200_percent/chromium/product_logo_white.png
+
+# Vector icons
+vector_icons/chrome/app/vector_icons/browser_logo_old.icon - chrome/app/vector_icons/browser_logo_old.icon
+vector_icons/chrome/app/vector_icons/chrome_product.icon - chrome/app/vector_icons/chrome_product.icon
+vector_icons/components/omnibox/browser/vector_icons/chrome_product.icon - components/omnibox/browser/vector_icons/chrome_product.icon
+vector_icons/components/omnibox/browser/vector_icons/product_chrome_refresh_old.icon - components/omnibox/browser/vector_icons/product_chrome_refresh_old.icon
+vector_icons/components/omnibox/browser/vector_icons/product_old.icon - components/omnibox/browser/vector_icons/product_old.icon
+vector_icons/components/vector_icons/chromium/product.icon - components/vector_icons/chromium/product.icon
+vector_icons/components/vector_icons/chromium/product_refresh.icon - components/vector_icons/chromium/product_refresh.icon
+vector_icons/ui/message_center/vector_icons/chrome_product.icon - ui/message_center/vector_icons/chrome_product.icon
+vector_icons/ui/message_center/vector_icons/product_old.icon - ui/message_center/vector_icons/product_old.icon

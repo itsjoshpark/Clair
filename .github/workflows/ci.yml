@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
 
       - name: Install tools
-        run: brew install cmark-gfm shellcheck actionlint
+        run: brew install cmark-gfm shellcheck actionlint librsvg
 
       - name: Run script tests
         run: |
