@@ -23,6 +23,17 @@ if [[ -z "$app" ]]; then
 fi
 
 executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+support="$HOME/Library/Application Support"
+
+# The runner is a fresh machine, so the branded app's data directory must not
+# exist yet. Check before the first launch: every launch, also the headless one
+# with --user-data-dir, creates Crashpad/ in the default data directory
+# (chrome_paths.cc, DIR_CRASH_DUMPS).
+if [[ "$(basename "$app")" == "Clair.app" && -e "$support/Clair" ]]; then
+  echo "::error::$support/Clair already exists before the first launch"
+  exit 1
+fi
+
 profile_dir="$(mktemp -d)"
 dom="$("$app/Contents/MacOS/$executable" --headless=new --no-first-run \
   --user-data-dir="$profile_dir" --disable-gpu \
@@ -37,13 +48,8 @@ fi
 echo "$(basename "$app") rendered the smoke-test page."
 
 # With the default profile location, Clair must use its own data directory.
-# Only meaningful for the branded app; the runner is a fresh machine.
+# Only meaningful for the branded app.
 if [[ "$(basename "$app")" == "Clair.app" ]]; then
-  support="$HOME/Library/Application Support"
-  if [[ -e "$support/Clair" ]]; then
-    echo "::error::$support/Clair already exists before the first launch"
-    exit 1
-  fi
   # Headless mode would use a temporary profile, so launch the app normally
   # (the runner has a GUI session) until the default profile appears.
   "$app/Contents/MacOS/$executable" --no-first-run --use-mock-keychain \
