@@ -106,7 +106,7 @@ Clair/
 - The Chromium-branded strings in `chromium_strings.grd` and related files are replaced at build time by Helium's `name_substitution.py`, rather than by hand-written string patches. Substitution keeps up with upstream string changes; patches would conflict on every Chromium version.
 - The data directory and keychain service come from Helium's two small patches with "Clair" swapped in, giving `~/Library/Application Support/Clair` and "Clair Safe Storage".
 - The app icon and the in-app logos come from the `design-app-icon` change. They are compiled into the engine like the rest of the branding. The icon is final, so this costs no extra engine builds.
-- During `prepare`, `scripts/replace-icon-resources.sh` does this step. `scripts/compile-icon.sh` compiles `resources/icon/AppIcon.icon` with `actool` into `Assets.car` and `app.icns`, which replace Chromium's files in `chrome/app/theme/chromium/mac/`. Every entry in `resources/icon/product-logos.txt` is then copied over its Chromium file, as Helium's resource list does. Nothing compiled is committed. If that change hasn't landed yet, the same step runs with whatever icon source is in `resources/icon/`.
+- During `prepare`, `scripts/replace-icon-resources.sh` puts them into the Chromium tree. `scripts/compile-icon.sh` compiles `resources/icon/AppIcon.icon` with `actool` into `Assets.car` and `app.icns`, which replace Chromium's files in `chrome/app/theme/chromium/mac/`. Every entry in `resources/icon/product-logos.txt` is then copied over its Chromium file, as Helium's resource list does. Nothing compiled is committed.
 
 ### D3. Separate Clair version, written at packaging time
 
