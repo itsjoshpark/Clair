@@ -2,7 +2,7 @@
 
 Observed on 2026-10-27 in Arc 1.170.0 (macOS, 1920×1080 pt display, light appearance, default Space theme). Keyboard-driven states were scripted with AppleScript and System Events, and mouse-driven states (menus, hovers, drags) were performed by hand. Sizes come from the accessibility tree and images from `screencapture`. All sizes are in points. The profile was close to new: one Space, the "Arc Basics" folder, and a Google favorite.
 
-This complements `menus-and-shortcuts.md` (menus and keys) and `feature-strings.md` (UI strings). Those say *what* exists; this file records what it looks like and what it does when used. Screenshots are in `screenshots/`.
+This complements `menus-and-shortcuts.md` (menus and keys) and `feature-strings.md` (UI strings). Those say *what* exists; this file records what it looks like and what it does when used. Screenshots are in `screenshots/`. How the app is built is recorded from Dia, Arc's successor, in `dia-architecture.md`.
 
 ## Method limits
 
