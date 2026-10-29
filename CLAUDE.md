@@ -16,12 +16,13 @@ The work is planned as OpenSpec changes in `openspec/changes/<name>/`, each with
 
 Never fetch Chromium or build it on the development machine, which is resource-limited. The build is split in two (design D9–D12 of the active change):
 
-- **Engine:** the patched Chromium. `scripts/engine-key.sh` hashes its inputs (ungoogled pin, `downloads.ini`, GN flags, `patches/`, `overlay/`, `utils/`, `native/ClairHost.h`, compiled-in branding, build scripts) into a key. `engine.yml` builds it only on the owner's self-hosted Mac (label `clair-release`, M1 Pro with 32 GB, external SSD), when the owner starts it, and publishes the prerelease `engine-<key>`. The Mac keeps its workspace, so a patch fix rebuilds incrementally. To rebuild after a fix: push the branch, then `gh workflow run engine.yml -f ref=<branch>`, and read the log.
+- **Engine:** the patched Chromium. `scripts/engine-key.sh` hashes its inputs (ungoogled pin, `downloads.ini`, GN flags, `patches/`, `overlay/`, `utils/`, `native/ClairHost.h`, compiled-in branding, build scripts) into a key. `engine.yml` builds it only on the owner's self-hosted Mac (label `clair-release`, M1 Pro with 32 GB, external SSD), when the owner starts it, and publishes the prerelease `chromium-engine-<key>`. The Mac keeps its workspace, so a patch fix rebuilds incrementally. To rebuild after a fix: push the branch, then `gh workflow run engine.yml -f ref=<branch>`, and read the log.
 - **App:** `ClairUI`, packaging, signing and Sparkle. It builds in minutes against the prebuilt engine for the current key.
 - **Merge gate** (`ci.yml`, required, minutes): the `scripts/*.test.sh` tests, `shellcheck -S warning`, `actionlint`, and `ClairUI`'s build and unit tests. A PR that changes the engine key also runs the patch check (`./build.sh fetch prepare` on a hosted runner, about 40 minutes), and can't merge until its engine is published.
 - **Quality checks** (`quality.yml`): run after every merge to `main`. They package the app from the engine and run the runtime suite in `tests/runtime/`. A failure opens a `quality-failure` issue; fix it from there. No release ships with quality checks failing or unfinished.
 - **Until the first engine is published,** `build.yml` still runs PR #1's hosted chain: a fetch job, then up to 20 compile phases through `build-phase.yml`.
 - The self-hosted Mac never runs pull request jobs, especially not fork PRs. Release secrets live in the `release` environment, and engine builds and quality checks never see them. Never run `.github/scripts/prepare-runner.sh` on the self-hosted runner: it deletes Xcode versions and simulators.
+- Every macOS job and the self-hosted Mac use Xcode 27 (hosted runner label `xcode-27`).
 - Read job logs with `gh run view --job <id> --log`, or with `gh api --allow-escape-sequences repos/itsjoshpark/Clair/actions/jobs/<id>/logs`. Fix what they show, then push.
 
 Local work is limited to editing files, running the small script tests, and building `ClairUI` with Xcode against `native/ClairHost.h`.
@@ -43,7 +44,7 @@ Local work is limited to editing files, running the small script tests, and buil
 
   Keep original patch headers, and credit sources in `CREDITS.md`.
 - `overlay/`: new Chromium source files at their paths in the Chromium tree, copied in after the patches. Only new files; edits to existing files are patches.
-- `native/`: `ClairHost.h` (the contract between Chromium and `ClairUI`), `project.yml` (XcodeGen) and the Swift sources and unit tests.
+- `native/`: `ClairHost.h` (the contract between Chromium and `ClairUI`), the `ClairUI` Xcode project (JSON format, `project.xcproj`, Xcode 27.2 or later) and the Swift sources and unit tests.
 - `package.sh`: turns an engine into `Clair.app`: embeds `ClairUI` and Sparkle, writes the version and Sparkle keys into `Info.plist`, signs, and builds the DMG.
 - `build.sh`: the staged engine build (`fetch`, `prepare`, `configure`, `compile`), used by `engine.yml` and the patch check. See `docs/building.md`.
 - `.github/scripts/`: CI helpers (runner preparation, packing and unpacking the build directory, the smoke test).

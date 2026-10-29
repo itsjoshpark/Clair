@@ -65,7 +65,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [x] 6.3 Add the release validation script. It works out the version from the latest `v*` tag plus the bump, sets the build number to `rev-list --count HEAD` + 1, checks that this is greater than the newest appcast entry, and checks that `next.md` is present and edited and that `<version>.md` doesn't exist. Add tests. Verify that the tests cover `0.1.0` → `0.1.1` for a patch bump, `0.1.3` → `0.2.0` for a minor bump, and each refusal case.
 - [ ] 6.4 Add the delta script. It downloads the DMGs of up to three previous releases, runs `BinaryDelta create`, and signs each asset with `sign_update`, using tools from the pinned Sparkle release tarball, checked against its sha512. Verify with two local packages that the delta applies (`BinaryDelta apply`), and that the result passes `codesign --verify`.
 - [x] 6.5 Add `ci.yml`, which runs the script tests and shellcheck on pushes and pull requests. Verify that a run is green.
-- [ ] 6.6 Check that the release validation script ignores `engine-*` tags and prereleases. Verify with a test that has an `engine-0123456789abcdef` tag newer than the latest `v*` tag.
+- [ ] 6.6 Check that the release validation script ignores `chromium-engine-*` tags and prereleases. Verify with a test that has an `chromium-engine-0123456789abcdef` tag newer than the latest `v*` tag.
 
 ## 7. CI release workflow
 
@@ -73,14 +73,14 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
   - a dedicated macOS user
   - a work directory and the persistent engine workspace on an external APFS SSD
   - label `clair-release`, and a service that survives reboots
-  - the CI toolchain: Xcode 26.6, matching `prepare-runner.sh`, with its Metal toolchain, brew packages, XcodeGen and Python 3.13
+  - the CI toolchain: Xcode 27.2 with its Metal toolchain, the macOS SDK the engine needs (see design Risks), brew packages and Python 3.13
   - "Require approval for all external contributors" turned on for fork PR workflows
 
   Verify with a `workflow_dispatch` test job on `[self-hosted, clair-release]` that prints the toolchain versions and the SSD's free space.
 - [ ] 7.1 **(owner)** Add the secrets to a `release` environment limited to `main`: the Developer ID `.p12` (base64) and its password, a CI keychain password, and the App Store Connect API key ID, issuer and `.p8`; `SPARKLE_ED_PRIVATE_KEY` is from 4.1. Verify that a workflow step reports each secret as present without printing any value.
 - [ ] 7.2 Add `release.yml`. It has inputs `bump` (patch, minor or major) and `dry_run`, and `concurrency: release`. Its jobs are:
   - `validate`, using the 6.3 script
-  - `engine`, which downloads `engine-<key>`, or calls `engine.yml` and waits when it isn't published
+  - `engine`, which downloads `chromium-engine-<key>`, or calls `engine.yml` and waits when it isn't published
   - `quality`, which calls `quality.yml` unless it has already passed for the commit
 
   Verify that `validate` fails with an unedited `next.md`. Verify that a commit whose quality checks failed stops the run before packaging. Verify that a commit with no engine builds one first.
@@ -111,13 +111,13 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
 - [ ] 9.1 Write `native/ClairHost.h`: the entry point Chromium calls once the main menu exists, and a host protocol with graceful relaunch and the Chromium and ungoogled-chromium versions. Verify that it compiles in an Objective-C++ unit and from Swift through a module map.
 - [ ] 9.2 Add `patches/clair/native-layer-hook.patch` plus overlay files under `overlay/chrome/browser/clair/`. Together they load `ClairUI.framework` from `Contents/Frameworks` after the main menu is built, implement the host protocol, and log and carry on when the framework is missing. Keep the patch to the call sites; the logic goes in the overlay. Verify that a bare engine starts and logs the missing framework, and that a packaged app loads it.
-- [ ] 9.3 Add `native/project.yml` (XcodeGen) for `ClairUI.framework` (Swift, macOS 15.6, arm64) and `ClairUITests`, with `ClairHost.h` exposed to Swift. Verify that `xcodegen && xcodebuild build test` succeeds on the development machine with no Chromium checkout.
-- [ ] 9.4 Make `package.sh` build `ClairUI` (or take a built copy) and embed it. Verify that a change to a Swift file alone produces a new package from the same `engine-<key>`.
+- [ ] 9.3 Add `native/ClairUI.xcodeproj` in Xcode 27.2's JSON format (`project.xcproj`, no `project.pbxproj`) for `ClairUI.framework` (Swift, macOS 15.6, arm64) and `ClairUITests`, with `ClairHost.h` exposed to Swift. Verify that `xcodebuild build test` succeeds on the development machine with no Chromium checkout, and that the project has no `project.pbxproj`.
+- [ ] 9.4 Make `package.sh` build `ClairUI` (or take a built copy) and embed it. Verify that a change to a Swift file alone produces a new package from the same `chromium-engine-<key>`.
 
 ## 10. Engine pipeline
 
 - [ ] 10.1 Write `scripts/engine-key.sh` and its test (D10). Verify that the test changes each covered input and sees a new key, changes Swift sources, `version.txt`, notes, workflows and `package.sh` and sees the same key, and that `--manifest` lists every covered file.
-- [ ] 10.2 Add `engine.yml` (`workflow_dispatch`, input: ref) on `[self-hosted, clair-release]`. It works out the key and stops if `engine-<key>` exists. Otherwise it builds with the release settings in the persistent workspace, runs the headless smoke test, and publishes the `engine-<key>` prerelease with `clair-engine-<key>.tar.zst`, its SHA-256 and `engine.json`. Verify that a first run publishes an engine, and that a second run for the same key stops in under a minute.
+- [ ] 10.2 Add `engine.yml` (`workflow_dispatch`, input: ref) on `[self-hosted, clair-release]`. It works out the key and stops if `chromium-engine-<key>` exists. Otherwise it builds with the release settings in the persistent workspace, runs the headless smoke test, and publishes the `chromium-engine-<key>` prerelease with `Clair-Chromium-Engine-<key>-arm64.zip`, its SHA-256 and `engine.json`. It creates the release as a draft and publishes it with `--latest=false` only after every upload succeeds. Verify that a first run publishes an engine, and that a second run for the same key stops in under a minute.
 - [ ] 10.3 Make `build.sh` update the persistent workspace in place when the ungoogled-chromium pin is unchanged (D11), recording the key it holds, and fall back to a fresh tree otherwise. Verify that changing one Clair patch rebuilds only affected targets (ninja reports a small fraction of the full build), that the resulting engine matches a fresh-tree engine's smoke test, and that a deliberately corrupted workspace record triggers a fresh tree.
 - [ ] 10.4 Make `engine.yml` check free space on the SSD and refuse to start below a reserve. Verify by setting the reserve above the current free space.
 - [ ] 10.5 **(owner)** Publish the first engine from `main` after PR #1 and #2 merge. Record the measured full-build time and a patch-fix rebuild time in `docs/building.md`.
@@ -125,10 +125,10 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
 ## 11. Checks
 
-- [ ] 11.1 Extend `ci.yml` (the merge gate) with the native layer's `xcodegen`, `xcodebuild build` and `xcodebuild test`, unsigned, on `macos-26`. Verify that a pull request changing only a Swift file finishes all checks within 10 minutes.
-- [ ] 11.2 Add the engine check job to `ci.yml`. It compares the pull request's engine key with its base's. When they differ, it runs the patch check (`./build.sh fetch prepare` on `macos-26`) and fails until `engine-<key>` is published. Make `engine.yml` re-run this check on open pull requests with the key it just published. Verify both cases: a Swift-only pull request skips it, and a pull request changing a patch runs it, and passes only after the engine is published.
+- [ ] 11.1 Extend `ci.yml` (the merge gate) with the native layer's `xcodebuild build` and `xcodebuild test`, unsigned, on `xcode-27`. Move `prepare-runner.sh` and the other hosted macOS jobs to the `xcode-27` image too, and update its Xcode cleanup for that image. Verify that a pull request changing only a Swift file finishes all checks within 10 minutes.
+- [ ] 11.2 Add the engine check job to `ci.yml`. It compares the pull request's engine key with its base's. When they differ, it runs the patch check (`./build.sh fetch prepare` on `xcode-27`) and fails until `chromium-engine-<key>` is published. Make `engine.yml` re-run this check on open pull requests with the key it just published. Verify both cases: a Swift-only pull request skips it, and a pull request changing a patch runs it, and passes only after the engine is published.
 - [ ] 11.3 **(owner)** Make the merge-gate jobs and the engine check required status checks on `main`. Verify that a pull request with a failing script test can't be merged.
-- [ ] 11.4 Add `quality.yml` (push to `main`, `workflow_dispatch` on any ref, `workflow_call`). It downloads `engine-<key>`, or fails with "no engine for <key>" and the command to build it. It then packages the app ad-hoc signed and runs `verify-app.sh` without signing checks and the runtime suite. Verify that it passes on `main` after 10.5.
+- [ ] 11.4 Add `quality.yml` (push to `main`, `workflow_dispatch` on any ref, `workflow_call`). It downloads `chromium-engine-<key>`, or fails with "no engine for <key>" and the command to build it. It then packages the app ad-hoc signed and runs `verify-app.sh` without signing checks and the runtime suite. Verify that it passes on `main` after 10.5.
 - [ ] 11.5 Write the runtime suite in `tests/runtime/` (D12): XCUITest for the native UI, the Chrome DevTools Protocol for page state, and a test-only Sparkle key with local test appcasts. Cover every test D12 lists, and retry a failed test once before it counts. Verify that each test fails when the behaviour it covers is broken on purpose.
 - [ ] 11.6 Make a failed quality run on `main` open or update a GitHub issue labelled `quality-failure`, naming the commit, the failing tests and the run link, and close it when a later run on `main` passes. Verify with a dispatched run on a throwaway branch that has a deliberately failing test and issue reporting turned on by an input.
 

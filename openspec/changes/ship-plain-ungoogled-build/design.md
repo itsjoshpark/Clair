@@ -32,9 +32,10 @@ Four existing projects already solve most of this change, and Clair copies from 
 
 Constraints:
 
-- **Hosted runner:** `macos-26` arm64 has 3 cores and 7 GB RAM, below Chromium's 8 GB minimum. Measured on PR #1: about 147 GB free after cleanup, a 38-minute fetch and patch job, and a 17.4 GB patched source tree (6.0 GB with zstd). The job limit is 6 hours.
+- **Hosted runner:** Clair's macOS jobs use GitHub's `xcode-27` image (a public preview: macOS 27 with Xcode 27). A standard hosted Mac has 3 cores and 7 GB RAM, below Chromium's 8 GB minimum. Measured on PR #1's `macos-26` runs: about 147 GB free after cleanup, a 38-minute fetch and patch job, and a 17.4 GB patched source tree (6.0 GB with zstd). The job limit is 6 hours.
 - **Owner's Mac:** an M1 Pro with 32 GB RAM and an external APFS SSD, used as the `clair-release` self-hosted runner. It is not always online.
-- **Development machine:** a resource-limited VM that never fetches or builds Chromium.
+- **Development machine:** a resource-limited VM with Xcode 27.2 that never fetches or builds Chromium.
+- **Toolchain:** Xcode 27 everywhere: hosted jobs, the owner's Mac and the development machine. The native layer's project uses Xcode 27.2's JSON format (`project.xcproj`), which Xcode 26 can't open. Chromium may still need an older macOS SDK under Xcode 27: Crest builds with Xcode 27 and the macOS 26.5 SDK, because Chromium's pinned LLD can't read the Xcode 27 SDK's `libSystem.tbd`.
 - **Engine:** ungoogled-chromium removes Web Store URLs (`disable-webstore-urls.patch`). Extensions are installed through the `extension-mime-request-handling` flag.
 
 ## Goals / Non-Goals
@@ -67,7 +68,7 @@ Clair/
   overlay/                     new Chromium source files, at their paths in the Chromium tree
   native/
     ClairHost.h                the contract between Chromium and the native layer
-    project.yml                XcodeGen definition of ClairUI.framework and its tests
+    ClairUI.xcodeproj/         Xcode project in the JSON format (project.xcproj): ClairUI.framework and its tests
     ClairUI/                   Swift sources
     ClairUITests/              unit tests that run without Chromium
   utils/                       name_substitution.py, version tools (from Helium, GPLv3)
@@ -91,7 +92,7 @@ Clair/
 - Forking `ungoogled-chromium-macos`: rejected. Clair would inherit its release timing and x86_64 support, and every Clair change would conflict with theirs.
 - Depending on Helium as a submodule: rejected. Clair should not depend on Helium's future.
 - `git subtree`: rejected, because it makes the pinned engine tag harder to see and to bump.
-- A hand-maintained Xcode project: rejected in favour of XcodeGen's `project.yml`, which is diff-friendly and easy for agents to edit. Crest does the same.
+- XcodeGen (Crest's choice) or a Swift package: rejected. Xcode 27.2's JSON project format is already diff-friendly and easy for agents to edit, without an extra tool.
 
 ### D2. Branding through Chromium's `BRANDING` file, plus name substitution
 
@@ -109,7 +110,9 @@ Clair/
 
 ### D3. Separate Clair version, written at packaging time
 
-- The Clair version and build number are **not** engine inputs. If they were, every release would need a new engine.
+- The Clair version and build number are **not** engine inputs, for two reasons:
+  - The build number is the commit count, so it changes on every commit. Compiled in, it would change the engine key on every commit, and no prebuilt engine would ever be reused.
+  - The release commit, which bumps `version.txt`, is made by the release itself. A compiled-in version would mean the shipped engine is built after the quality checks, from a commit nothing tested.
 - `package.sh` writes them into `Clair.app/Contents/Info.plist`:
   - `CFBundleShortVersionString` = `version.txt`
   - `CFBundleVersion` = build number
@@ -152,7 +155,7 @@ validate ──> engine ──> quality ──> package ──> publish
    |            |           |           |           |
    v            v           v           v           v
 version,    download     D12 suite   ClairUI +   (non-dry-run)
-build no.,  engine-<key>, against    Sparkle,    release commit,
+build no.,  chromium-engine-<key>, against    Sparkle,    release commit,
 notes check or build it  the engine  plist, sign, tag, GitHub
             (D10)        (must pass) notarize,   Release, push
                                      DMG, deltas main last
@@ -164,7 +167,7 @@ notes check or build it  the engine  plist, sign, tag, GitHub
   - checks that the build number is greater than the newest appcast entry
   - checks that `.sparkle/notes/next.md` exists and differs from the template, and that `<version>.md` doesn't exist yet
   - writes the results as job outputs
-- **engine:** works out the engine key and downloads `engine-<key>`. If it isn't published, it runs the engine build (D10) first.
+- **engine:** works out the engine key and downloads `chromium-engine-<key>`. If it isn't published, it runs the engine build (D10) first.
 - **quality:** runs the quality checks (D12) on the release commit, unless they have already passed for that commit. A failure stops the release.
 - **package:**
   - embeds `ClairUI.framework` and `Sparkle.framework`, and writes the version, build number and Sparkle keys into `Info.plist`
@@ -225,10 +228,10 @@ Handling:
 
 | Work | Runs on | Started by |
 |---|---|---|
-| Merge gate | hosted `macos-26` and Ubuntu | every pull request and push |
-| Patch check | hosted `macos-26` | pull requests that change the engine key |
+| Merge gate | hosted `xcode-27` and Ubuntu | every pull request and push |
+| Patch check | hosted `xcode-27` | pull requests that change the engine key |
 | Engine build | owner's Mac (`clair-release`) | the owner, by hand (`engine.yml`, any of the owner's branches), or a release |
-| Quality checks | hosted `macos-26` | every push to `main`, by hand on any branch, and releases |
+| Quality checks | hosted `xcode-27` | every push to `main`, by hand on any branch, and releases |
 | Release | owner's Mac (`clair-release`) | the owner, from `main` |
 
 - **No Chromium compile runs on hosted runners.** Hosted runners only fetch and patch the source (the patch check) or run the packaged app (the quality checks).
@@ -251,17 +254,17 @@ Handling:
   - `build.sh`, `retrieve_and_unpack_resource.py`, and `scripts/engine-key.sh` itself
 
   It can also print the manifest, so a key change can be explained. Its test checks that changing any covered file changes the key, and that changing anything else (Swift sources, `version.txt`, notes, workflows, `package.sh`) does not.
-- **The engine artifact** is the unsigned `Clair.app` that the Chromium build produces, with the branding, the hook and the Chromium version compiled in. There is no `ClairUI`, no Sparkle, and no Clair version in it. It is published as the GitHub prerelease `engine-<key>` with:
-  - `clair-engine-<key>.tar.zst` and its SHA-256
+- **The engine artifact** is the unsigned `Clair.app` that the Chromium build produces, with the branding, the hook and the Chromium version compiled in. There is no `ClairUI`, no Sparkle, and no Clair version in it. It is published as the GitHub prerelease `chromium-engine-<key>` with:
+  - `Clair-Chromium-Engine-<key>-arm64.zip` (made with `ditto`, which keeps the bundle's symlinks) and its SHA-256
   - `engine.json`: the key, the manifest, the ungoogled-chromium tag, the Chromium version, the Xcode and SDK versions, and the build date
 
-  Prereleases never become the repository's "latest" release, and the release tooling looks only at `v*` tags.
+  The naming follows Crest's (`chromium-engine-<key>`, `Crest-Chromium-Engine-<key>-arm64.zip`). The release is created as a draft prerelease and published with `--latest=false` only after every asset is uploaded, so a half-uploaded engine is never visible. Engine prereleases never become the repository's "latest" release, and the release tooling looks only at `v*` tags. They do appear on the Releases page and add a tag each; each one's notes say it's an internal build artifact, not for users.
 - **`engine.yml`** (`workflow_dispatch`, input: the ref to build) runs on the owner's Mac:
-  1. works out the key and stops early if `engine-<key>` already exists
+  1. works out the key and stops early if `chromium-engine-<key>` already exists
   2. prepares the source in the persistent workspace on the external SSD (D11)
   3. builds with the full release settings
   4. runs the headless smoke test against the bare engine
-  5. packs and publishes `engine-<key>`
+  5. zips the app and publishes `chromium-engine-<key>`
 - Because the key is computed from file contents, an engine built from a pull request branch is valid for the squash-merged commit on `main` as long as the engine inputs are the same.
 
 ### D11. Fast engine rebuilds on the owner's Mac
@@ -277,13 +280,13 @@ Handling:
 
 - **Merge gate** (`ci.yml`, every pull request and push, target under 10 minutes):
   - `scripts/*.test.sh`, `shellcheck -S warning`, `actionlint`
-  - `xcodegen` + `xcodebuild build` and `xcodebuild test` for `ClairUI` and `ClairUITests`, unsigned. It compiles against `native/ClairHost.h`, with no Chromium.
+  - `xcodebuild build` and `xcodebuild test` for `ClairUI` and `ClairUITests`, unsigned. It compiles against `native/ClairHost.h`, with no Chromium.
   - an **engine check** job that works out the pull request's engine key and its base's key. If they differ:
-    - it runs the patch check on `macos-26`: fetch the pinned source, apply ungoogled's series, `patches/series`, the overlay and domain substitution, with no compile (`./build.sh fetch prepare`, about 40 minutes)
-    - it reports whether `engine-<key>` is published, and fails until it is, so an engine change can't merge without an engine. After publishing, `engine.yml` re-runs the engine check on open pull requests whose head has that key, so nobody has to re-run it by hand.
+    - it runs the patch check on `xcode-27`: fetch the pinned source, apply ungoogled's series, `patches/series`, the overlay and domain substitution, with no compile (`./build.sh fetch prepare`, about 40 minutes)
+    - it reports whether `chromium-engine-<key>` is published, and fails until it is, so an engine change can't merge without an engine. After publishing, `engine.yml` re-runs the engine check on open pull requests whose head has that key, so nobody has to re-run it by hand.
   - All of these are required checks on `main`.
 - **Quality checks** (`quality.yml`: push to `main`, `workflow_dispatch` on any ref, and called by `release.yml`):
-  1. downloads `engine-<key>`. If it isn't published, the run fails with "no engine for <key>" and the command to build it.
+  1. downloads `chromium-engine-<key>`. If it isn't published, the run fails with "no engine for <key>" and the command to build it.
   2. builds `ClairUI` and packages the app unsigned (ad-hoc signed), with the version of the commit
   3. runs `verify-app.sh` without the signing checks
   4. runs the runtime suite in `tests/runtime/` on the hosted runner's desktop session
@@ -309,7 +312,11 @@ Handling:
 - **[Risk] An in-place engine update leaves a stale or mixed tree,** giving an engine that doesn't match its key.
   → The workspace records its key, `build.sh` falls back to a fresh tree on any doubt, and the patch check proves the same inputs apply to clean source on a hosted runner.
 - **[Risk] Chromium reads the outer bundle's version** in places that break when packaging writes the Clair version (D3).
-  → The builder audits these reads before task 3.1 is done. Fallback: make the version an engine input. Each release then costs one incremental engine build, mostly relinking.
+  → The builder audits these reads before task 3.1 is done, and patches each one that must keep the Chromium version.
+- **[Risk] Chromium 156 doesn't build with Xcode 27's own SDK.**
+  → Build the engine with Xcode 27 and a macOS 26.x SDK, as Crest does, and record the SDK in `engine.json`. PR #1's hosted chain keeps Xcode 26.6 until it is retired.
+- **[Risk] The `xcode-27` hosted image is a preview,** so it may queue or break.
+  → Accepted, since Crest relies on it too. Fallback: `macos-26` with Xcode 27 installed in the job.
 - **[Risk] Main-menu changes:** Chromium may rebuild or reorder the main menu after `ClairUI` adds its items.
   → The quality suite checks the items. Fallback: a one-line hook in `main_menu_builder.mm` that calls into `ClairUI`.
 - **[Risk] Sparkle and Chromium both want to relaunch.**

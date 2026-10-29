@@ -22,14 +22,14 @@ The repository SHALL define an engine key: a hash computed from the contents of 
 - **THEN** its engine key is the same as its parent's key
 
 ### Requirement: Prebuilt engines published per key
-Each engine build SHALL be published as a GitHub prerelease named `engine-<key>`. It SHALL contain the built, unsigned Chromium app bundle, its SHA-256 checksum, and a manifest naming the key, the input files and their hashes, the ungoogled-chromium tag, the Chromium version and the toolchain versions. Packaging, quality checks and releases SHALL use the published engine for their commit's key, and MUST NOT compile Chromium themselves.
+Each engine build SHALL be published as a GitHub prerelease named `chromium-engine-<key>`. It SHALL contain the built, unsigned Chromium app bundle, its SHA-256 checksum, and a manifest naming the key, the input files and their hashes, the ungoogled-chromium tag, the Chromium version and the toolchain versions. Packaging, quality checks and releases SHALL use the published engine for their commit's key, and MUST NOT compile Chromium themselves.
 
 #### Scenario: App packaged from a prebuilt engine
 - **WHEN** the quality checks run on a commit whose key is already published
-- **THEN** they download `engine-<key>` and package the app without compiling any Chromium source
+- **THEN** they download `chromium-engine-<key>` and package the app without compiling any Chromium source
 
 #### Scenario: Engine releases don't affect app releases
-- **WHEN** an `engine-<key>` prerelease is published
+- **WHEN** an `chromium-engine-<key>` prerelease is published
 - **THEN** it is not the repository's latest release, and the release tooling's version calculation ignores it
 
 ### Requirement: Engine builds run on the owner's Mac when started by the owner
@@ -37,7 +37,7 @@ Chromium SHALL be compiled only on the repository owner's self-hosted Mac runner
 
 #### Scenario: Owner builds an engine for a branch
 - **WHEN** the owner starts the engine build for a branch whose key has no published engine
-- **THEN** the self-hosted Mac builds it with the release build settings, runs the headless smoke test, and publishes `engine-<key>`
+- **THEN** the self-hosted Mac builds it with the release build settings, runs the headless smoke test, and publishes `chromium-engine-<key>`
 
 #### Scenario: Engine already published
 - **WHEN** the engine build is started for a key that is already published
@@ -66,7 +66,7 @@ Every pull request SHALL run a merge gate on GitHub-hosted runners that compiles
 - **THEN** its checks finish within 10 minutes, and no job fetches Chromium source
 
 ### Requirement: Patch check for engine changes
-A pull request that changes the engine key SHALL also run a patch check on a GitHub-hosted runner. The check fetches the pinned Chromium source and applies ungoogled-chromium's series, Clair's series, the overlay and domain substitution, without compiling. Such a pull request SHALL NOT merge until its patch check passes and `engine-<key>` is published for its head commit's key.
+A pull request that changes the engine key SHALL also run a patch check on a GitHub-hosted runner. The check fetches the pinned Chromium source and applies ungoogled-chromium's series, Clair's series, the overlay and domain substitution, without compiling. Such a pull request SHALL NOT merge until its patch check passes and `chromium-engine-<key>` is published for its head commit's key.
 
 #### Scenario: Patch no longer applies
 - **WHEN** a pull request bumps the ungoogled-chromium tag and one Clair patch no longer applies

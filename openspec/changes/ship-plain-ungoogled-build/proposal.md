@@ -35,7 +35,7 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
 - Build the engine as a prebuilt artifact:
   - an **engine key** is a hash over every engine input: the ungoogled-chromium pin, `downloads.ini`, the GN flags, `patches/`, the overlay, `ClairHost.h`, the compiled-in branding resources, and the scripts that prepare and build Chromium
   - the owner starts an engine build by hand, on any of the owner's branches. It runs on the owner's self-hosted Mac (M1 Pro, 32 GB, external SSD, label `clair-release`), which keeps its build directory between runs so a patch fix rebuilds only what it touched
-  - the result is published as a GitHub prerelease, `engine-<key>`, and is reused by every app build, quality check and release with the same key
+  - the result is published as a GitHub prerelease, `chromium-engine-<key>`, and is reused by every app build, quality check and release with the same key
 - Split the checks:
   - a **merge gate** on every pull request that finishes in minutes: script tests, shellcheck, actionlint, and the native layer's build and unit tests
   - a **patch check** on pull requests that change the engine key: fetch the Chromium source and apply every patch on a hosted runner (about 40 minutes), with no compile. These pull requests also need a published engine for their key before they merge
@@ -80,7 +80,7 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
   - ungoogled-chromium (BSD-3)
   - patches derived from ungoogled-chromium-macos (BSD-3) and Helium (GPLv3)
   - Sparkle 2 (MIT)
-  - Xcode, the Metal toolchain and XcodeGen
+  - Xcode 27.2 and the Metal toolchain on every machine and runner, with the native layer in Xcode's JSON project format
 - **Accounts and secrets:**
   - Apple Developer Program membership (Developer ID certificate, notarization credentials) stored as GitHub Actions secrets
   - a Sparkle EdDSA private key (GitHub secret `SPARKLE_ED_PRIVATE_KEY`) that must be backed up; losing it strands every installed copy. The feed URL can be moved later by shipping an update with a new `SUFeedURL`, as long as the old URL keeps working during the move.

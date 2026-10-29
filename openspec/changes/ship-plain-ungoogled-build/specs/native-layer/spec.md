@@ -40,4 +40,4 @@ Packaging SHALL embed `ClairUI.framework` and its dependencies into the engine's
 
 #### Scenario: Native-only change reaches the app
 - **WHEN** only the native layer changes and the quality checks package the app
-- **THEN** the packaged app contains the new `ClairUI.framework` and uses the same `engine-<key>` as the previous commit
+- **THEN** the packaged app contains the new `ClairUI.framework` and uses the same `chromium-engine-<key>` as the previous commit
