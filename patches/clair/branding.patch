@@ -1,0 +1,25 @@
+# Brand the app as Clair: product and company names, copyright and the
+# dev.joshuapark.Clair bundle identifier (helpers derive theirs from it).
+# MAC_TEAM_ID stays empty, as in ungoogled-chromium.
+
+--- a/chrome/app/theme/chromium/BRANDING
++++ b/chrome/app/theme/chromium/BRANDING
+@@ -1,10 +1,10 @@
+-COMPANY_FULLNAME=The Chromium Authors
+-COMPANY_SHORTNAME=The Chromium Authors
+-PRODUCT_FULLNAME=Chromium
+-PRODUCT_SHORTNAME=Chromium
+-PRODUCT_INSTALLER_FULLNAME=Chromium Installer
+-PRODUCT_INSTALLER_SHORTNAME=Chromium Installer
+-COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Chromium Authors. All rights reserved.
+-MAC_BUNDLE_ID=org.chromium.Chromium
++COMPANY_FULLNAME=The Clair Authors
++COMPANY_SHORTNAME=The Clair Authors
++PRODUCT_FULLNAME=Clair
++PRODUCT_SHORTNAME=Clair
++PRODUCT_INSTALLER_FULLNAME=Clair Installer
++PRODUCT_INSTALLER_SHORTNAME=Clair Installer
++COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Clair Authors and The Chromium Authors. All rights reserved.
++MAC_BUNDLE_ID=dev.joshuapark.Clair
+ MAC_CREATOR_CODE=Cr24
+ MAC_TEAM_ID=

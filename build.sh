@@ -13,8 +13,9 @@ Usage: ./build.sh [-d] [-l] [-j JOBS] [-s SDK_PATH] [-t SECONDS] [STAGE...]
 
 Stages (run in the order given; default: all):
   fetch      Retrieve the Chromium source into build/src
-  prepare    Prune binaries, apply all patches, apply domain substitution and
-             unpack platform toolchains. "fetch prepare" is the patch-only mode.
+  prepare    Prune binaries, apply all patches, rebrand UI strings, apply domain
+             substitution and unpack platform toolchains. "fetch prepare" is
+             the patch-only mode.
   configure  Write args.gn, bootstrap GN, build bindgen and run gn gen
   compile    Run ninja for Clair. With -t, stop after SECONDS and record
              build/compile_status as "running" so a later run can resume.
@@ -106,6 +107,8 @@ stage_prepare() {
   # Applies ungoogled-chromium's series, then Clair's patches/series. Stops at
   # the first patch that does not apply and names it.
   python3 "$_main_repo/utils/patches.py" apply "$_src_dir" "$_main_repo/patches" "$_root_dir/patches"
+  # Rebrand Chrome/Chromium as Clair in UI strings and their translations.
+  python3 "$_root_dir/utils/name_substitution.py" --sub -t "$_src_dir"
   python3 "$_main_repo/utils/domain_substitution.py" apply \
     -r "$_main_repo/domain_regex.list" \
     -f "$_main_repo/domain_substitution.list" \
@@ -121,7 +124,7 @@ stage_prepare() {
 stage_configure() {
   mkdir -p "$_out_dir"
   {
-    cat "$_main_repo/flags.gn" "$_root_dir/flags.macos.gn"
+    cat "$_main_repo/flags.gn" "$_root_dir/flags.macos.gn" "$_root_dir/flags.clair.gn"
     if [[ "$_light" == true ]]; then
       cat "$_root_dir/flags.pr.gn"
     fi
