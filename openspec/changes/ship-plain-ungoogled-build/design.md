@@ -4,27 +4,26 @@
 
 The motivation is in `proposal.md` (Why) and the required behaviour is in `specs/`. This section covers only what shapes the approach.
 
-The repository holds only `LICENSE` (GPLv3), `.gitignore`, and OpenSpec files. There is no build code yet.
+The first pull request (#1) adds the repository scaffolding, `build.sh`, the release scripts and a chained 20-phase Chromium build on hosted runners. This revision keeps the scaffolding and scripts, and replaces the hosted compile chain with prebuilt engines (see Migration Plan).
 
-Two existing projects already solve most of this change, and Clair copies from them rather than depending on them:
+Four existing projects already solve most of this change, and Clair copies from them rather than depending on them:
 
 - **ungoogled-chromium-macos** (BSD-3):
   - `build.sh`: download, then prune, patch and domain-substitute, then write `args.gn`, then build
   - `flags.macos.gn`
   - about 27 macOS build-fix patches, including `set-bundle-identifier.patch`
   - `sign_and_package_app.sh`: signs each helper with its own identifier and entitlements, then builds the DMG with `pkg-dmg`
-  - a chained GitHub Actions build: one job fetches and packs resources, then up to 20 resume jobs. Each resume job runs `timeout … ninja` with about one hour of headroom under the 6-hour limit, then packs the partial `out/` as an artifact for the next job.
 - **Helium / helium-macos** (GPLv3):
   - `change-chromium-branding.patch` (the `BRANDING` file)
   - `change-product-dir-name.patch` (`chrome_paths_mac.mm`)
   - `change-keychain-name.patch` (`keychain_password_mac.mm`)
   - `add-helium-versioning.patch`: a separate product version alongside the Chromium version (`version_info`, `tweak_info_plist.py`, the About and Version pages)
   - `utils/name_substitution.py`: replaces "Chromium" in user-facing strings
-  - a Sparkle 2 integration:
-    - `rebel/macos/sparkle-integration.patch`, plus Helium's `updater/{fixup-sparkle-glue,sparkle2-integration,disable-default-updater}.patch`
-    - Sparkle **2.10.0 is built from source** in the GN build, at `third_party/sparkle`, through `build_sparkle_framework.py`
-    - it uses a **headless user driver** (`SPUHeadlessUserDriver`)
-    - `SUPublicEDKey` and `SUEnableAutomaticChecks` are written into `Info.plist` by `tweak_info_plist.py`
+  - a Sparkle 2 integration built into Chromium (ReBel's glue plus Helium's `updater/` patches). Clair does not take it: Sparkle lives in the native layer instead (D4). Helium's patches remain a reference for how Chromium's relaunch and version code interact with Sparkle.
+- **Crest** (`pauljoda/Crest`, MPL-2.0), a SwiftUI browser built on ungoogled-chromium-macos:
+  - a native host: `native-host.patch` swaps Chromium's browser window for a native one when a switch is present, and an overlay of new files under `chrome/browser/ui/crest/` connects Chromium to a Swift framework through one header, `CrestChromiumHost.h`
+  - prebuilt engines: `chromium_engine.py` hashes every engine input into a key, the self-hosted Mac builds and publishes `chromium-engine-<key>` releases, and every other job downloads the engine for its key
+  - pull request checks that build the Swift framework against the header, with no Chromium build
 - **Front Row** (`itsjoshpark/FrontRow`) provides the release mechanics:
   - `.sparkle/appcast.xml` committed on `main`
   - `.sparkle/notes/next.md` and `TEMPLATE.md`
@@ -33,21 +32,25 @@ Two existing projects already solve most of this change, and Clair copies from t
 
 Constraints:
 
-- **Runner:** a standard `macos-latest` arm64 runner has 3 M1 cores, 7 GB RAM and 14 GB of SSD listed. The job limit is 6 hours and the cache is 10 GB.
+- **Hosted runner:** `macos-26` arm64 has 3 cores and 7 GB RAM, below Chromium's 8 GB minimum. Measured on PR #1: about 147 GB free after cleanup, a 38-minute fetch and patch job, and a 17.4 GB patched source tree (6.0 GB with zstd). The job limit is 6 hours.
+- **Owner's Mac:** an M1 Pro with 32 GB RAM and an external APFS SSD, used as the `clair-release` self-hosted runner. It is not always online.
+- **Development machine:** a resource-limited VM that never fetches or builds Chromium.
 - **Engine:** ungoogled-chromium removes Web Store URLs (`disable-webstore-urls.patch`). Extensions are installed through the `extension-mime-request-handling` flag.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- One repository that builds Clair from a pinned ungoogled-chromium tag, both locally and in CI, with the same scripts.
-- Keep Clair's own code that touches Chromium to the minimum this change needs: branding, versioning and updater.
+- One repository that builds Clair from a pinned ungoogled-chromium tag, with the same scripts on every machine.
+- Leave ungoogled-chromium alone as much as possible. Patches are limited to build fixes, identity, versioning and the one native-layer hook. Anything else Clair adds lives in the native layer or in overlay files.
+- A pull request that doesn't change the engine is checked in minutes. A broken engine build can be fixed and rebuilt quickly.
+- Automated runtime tests that catch regressions in the packaged app.
 - A release process that is safe to run for every ungoogled-chromium security tag with a single changed line.
 
 **Non-Goals:**
 - A good Chrome Web Store install experience. ungoogled-chromium's behaviour stays as it is, and the MVP will revisit it.
 - Automatically starting a release when ungoogled-chromium publishes a tag.
-- Faster builds through `sccache`, remote build execution, or caching.
-- Automated runtime UI tests. Runtime checks are a manual checklist in this change.
+- Building Chromium on hosted runners, or with `sccache` or remote build execution.
+- Replacing Chromium's browser window. That is the UX spike's job.
 
 ## Decisions
 
@@ -60,27 +63,35 @@ Clair/
     series                     Clair's macOS-layer series, in apply order
     ungoogled-chromium-macos/  copied from ungoogled-chromium-macos (BSD-3), credited
     helium/                    copied or adapted from Helium (GPLv3); original headers kept
-    clair/                     Clair-only patches
+    clair/                     Clair-only patches (identity, versioning, the native-layer hook)
+  overlay/                     new Chromium source files, at their paths in the Chromium tree
+  native/
+    ClairHost.h                the contract between Chromium and the native layer
+    project.yml                XcodeGen definition of ClairUI.framework and its tests
+    ClairUI/                   Swift sources
+    ClairUITests/              unit tests that run without Chromium
   utils/                       name_substitution.py, version tools (from Helium, GPLv3)
-  resources/                   icon sources (icon/, from design-app-icon), DMG background and layout
+  resources/                   icon and logo sources (icon/, from design-app-icon), DMG background and layout
   entitlements/                app and helper entitlements (from ungoogled-macos)
-  downloads.ini                Chromium source tarball and Sparkle source tarball, each with sha512
-  flags.macos.gn               ungoogled-macos flags + Clair flags (Sparkle on, arm64)
+  downloads.ini                Chromium source tarball, with sha512
+  flags.macos.gn               ungoogled-macos flags + Clair flags (arm64)
   version.txt                  Clair version, e.g. 0.1.0 (changed only by release commits)
-  build.sh                     local and CI build entry point (based on ungoogled-macos)
-  sign_and_package_app.sh      sign, notarize, staple, DMG (based on ungoogled-macos)
-  scripts/                     append-appcast-item.sh (+ test), render-notes.sh, verify-app.sh
+  build.sh                     engine build entry point (based on ungoogled-macos)
+  package.sh                   app packaging: engine + ClairUI + Sparkle, plist, signing, DMG
+  scripts/                     engine-key.sh, append-appcast-item.sh, render-notes.sh, verify-app.sh, … (each + test)
+  tests/runtime/               the quality-check suite (D12)
   .sparkle/                    appcast.xml, notes/{TEMPLATE.md,next.md,README.md,<version>.md}
-  .github/workflows/           release.yml (chained), ci.yml (lint and script tests)
+  .github/workflows/           ci.yml, engine.yml, quality.yml, release.yml
   LICENSE, LICENSE.ungoogled_chromium, CREDITS.md
 ```
 
-`build.sh` applies ungoogled-chromium's own series first, then `patches/series`, using ungoogled's `utils/patches.py`.
+`build.sh` applies ungoogled-chromium's own series first, then `patches/series`, using ungoogled's `utils/patches.py`, then copies `overlay/` into the source tree. `overlay/` holds only new files. A change to an existing Chromium file is a patch, so every edit to upstream code is visible in `patches/`.
 
 **Alternatives considered:**
 - Forking `ungoogled-chromium-macos`: rejected. Clair would inherit its release timing and x86_64 support, and every Clair change would conflict with theirs.
 - Depending on Helium as a submodule: rejected. Clair should not depend on Helium's future.
 - `git subtree`: rejected, because it makes the pinned engine tag harder to see and to bump.
+- A hand-maintained Xcode project: rejected in favour of XcodeGen's `project.yml`, which is diff-friendly and easy for agents to edit. Crest does the same.
 
 ### D2. Branding through Chromium's `BRANDING` file, plus name substitution
 
@@ -93,55 +104,58 @@ Clair/
   This produces `Clair.app`, `Clair Framework.framework` and `Clair Helper*.app`, with helper IDs derived from the bundle ID. The patch also extends ungoogled's `tweak_info_plist.py` change so the bundle ID is recognised.
 - The Chromium-branded strings in `chromium_strings.grd` and related files are replaced at build time by Helium's `name_substitution.py`, rather than by hand-written string patches. Substitution keeps up with upstream string changes; patches would conflict on every Chromium version.
 - The data directory and keychain service come from Helium's two small patches with "Clair" swapped in, giving `~/Library/Application Support/Clair` and "Clair Safe Storage".
-- The icon and the in-app logos come from the `design-app-icon` change. During `prepare`, `scripts/replace-icon-resources.sh` does this step. `scripts/compile-icon.sh` compiles `resources/icon/AppIcon.icon` with `actool` into `Assets.car` and `app.icns`, which replace Chromium's files in `chrome/app/theme/chromium/mac/`. Every entry in `resources/icon/product-logos.txt` is then copied over its Chromium file, as Helium's resource list does. Nothing compiled is committed. If that change hasn't landed yet, the same step runs with whatever icon source is in `resources/icon/`.
+- The app icon and the in-app logos come from the `design-app-icon` change. They are compiled into the engine like the rest of the branding. The icon is final, so this costs no extra engine builds.
+- During `prepare`, `scripts/replace-icon-resources.sh` does this step. `scripts/compile-icon.sh` compiles `resources/icon/AppIcon.icon` with `actool` into `Assets.car` and `app.icns`, which replace Chromium's files in `chrome/app/theme/chromium/mac/`. Every entry in `resources/icon/product-logos.txt` is then copied over its Chromium file, as Helium's resource list does. Nothing compiled is committed. If that change hasn't landed yet, the same step runs with whatever icon source is in `resources/icon/`.
 
-### D3. Separate Clair version, with the Chromium version kept internally
+### D3. Separate Clair version, written at packaging time
 
-- Adapted from Helium's `add-helium-versioning.patch`:
+- The Clair version and build number are **not** engine inputs. If they were, every release would need a new engine.
+- `package.sh` writes them into `Clair.app/Contents/Info.plist`:
   - `CFBundleShortVersionString` = `version.txt`
   - `CFBundleVersion` = build number
-  - `version_info` gains Clair's version and build number, for the About page and `chrome://version`
-  - everything that websites or extensions see (user agent, client hints, `minimum_chrome_version`) still uses the Chromium version
-- **Build number** = `git rev-list --count` of the release commit, as in Front Row. It is passed to GN as an argument and is never stored. A build from the release tag reproduces the same number. Local builds use the count of `HEAD`.
-- Chromium's own `UpgradeDetector` and installed-version code compare bundle versions. Helium's Sparkle glue already moves these to Sparkle's view (`get_installed_version_mac.mm`). Clair keeps that behaviour.
-
-**Alternative considered:** setting `CFBundleShortVersionString` to the Chromium version, as Chromium does. Rejected, because the spec requires the Clair version scheme, and Sparkle's display version must be Clair's.
-
-### D4. Sparkle 2 built from source with a headless driver; updates appear in the Clair menu
-
-- Clair takes Helium's Sparkle patch set: the ReBel glue, Sparkle 2 integration, and the default updater turned off. Sparkle is built from the pinned source tarball listed in `downloads.ini`, so no prebuilt binary is checked in.
-- `SUFeedURL` = `https://github.com/itsjoshpark/Clair/raw/main/.sparkle/appcast.xml`.
-- `SUPublicEDKey` comes from a GN argument.
-- `SUEnableAutomaticChecks` = YES, with automatic download and install on quit turned on, and no user-facing settings.
-- The headless driver means Sparkle never shows windows.
-- A new `patches/clair/update-menu.patch` adds to the Clair menu (`main_menu_builder.mm` / `app_controller_mac.mm`):
-  - **Check for Updates…**: always present. It starts a user-initiated check and shows an `NSAlert`: up to date, check failed, or "Clair X.Y.Z is ready" with **Install and Relaunch** / **Later**.
-  - **Install Update and Relaunch**: present only while the Sparkle glue reports a downloaded update.
-- **Relaunch** goes through Chromium's own graceful relaunch (`chrome::AttemptRelaunch`), which brings back the previous session. Chromium's quit flow already asks for confirmation about active downloads and warns that incognito windows won't reopen. Sparkle is told to postpone its own relaunch until Chromium's shutdown finishes (Helium already does this in `application_lifetime_desktop.cc`).
-- **About page:** the Sparkle status UI is removed or hidden in `chrome://settings/help` (`version_updater_mac.mm`), so it shows versions only.
-- **The sidebar update banner** belongs to the MVP change. The glue exposes "update ready" state that the banner can observe later.
+- An adapted `add-helium-versioning.patch` makes the About page and `chrome://version` read the Clair version and build number from the main bundle's `Info.plist` at run time, instead of from compile-time constants. They show them alongside the compiled-in Chromium version and ungoogled-chromium revision.
+- Everything that websites or extensions see (user agent, client hints, `minimum_chrome_version`) still uses the Chromium version.
+- **Build number** = `git rev-list --count` of the release commit, as in Front Row. It is never stored. A build from the release tag reproduces the same number. Builds that aren't releases use the count of `HEAD`.
+- Chromium may read the outer bundle's `CFBundleShortVersionString` elsewhere, for example when it locates its versioned framework directory, for app shims, or in `UpgradeDetector`. The builder finds every such read, using Helium's versioning and Sparkle patches as a map, and either confirms it is safe or patches it to use the Chromium version.
 
 **Alternatives considered:**
+- Passing the version to GN, as Helium does: rejected, because it makes the version an engine input.
+- Setting `CFBundleShortVersionString` to the Chromium version, as Chromium does: rejected, because the spec requires the Clair version scheme, and Sparkle's display version must be Clair's.
+
+### D4. Sparkle 2 in the native layer, headless; updates appear in the Clair menu
+
+- `Sparkle.framework` 2.10.0 comes from the Sparkle release tarball, checked against its sha512: the same tarball that supplies `sign_update`, `BinaryDelta` and `generate_keys`. `package.sh` embeds it in `Clair.app/Contents/Frameworks`. Sparkle is not part of the engine.
+- `ClairUI` starts an `SPUUpdater` with its own `SPUUserDriver` implementation that never shows Sparkle's windows.
+- `package.sh` writes into `Info.plist`:
+  - `SUFeedURL` = `https://github.com/itsjoshpark/Clair/raw/main/.sparkle/appcast.xml`
+  - `SUPublicEDKey`, committed in the repository
+  - `SUEnableAutomaticChecks` = YES, with automatic download and install on quit, and no user-facing settings
+- `ClairUI` adds two items to the Clair application menu with AppKit, after Chromium has built the main menu. No Chromium patch is needed for the menu.
+  - **Check for Updates…**: always present. It starts a user-initiated check and shows an `NSAlert`: up to date, check failed, or "Clair X.Y.Z is ready" with **Install and Relaunch** / **Later**.
+  - **Install Update and Relaunch**: present only while a downloaded update is waiting.
+- **Relaunch** goes through Chromium's own graceful relaunch (`chrome::AttemptRelaunch`), reached through `ClairHost.h`. It brings back the previous session, and Chromium's quit flow already asks about active downloads and warns that incognito windows won't reopen. Sparkle's relaunch is postponed until Chromium's shutdown finishes, so the app restarts exactly once. Helium's `application_lifetime_desktop.cc` change shows the same hand-off.
+- **About page:** `chrome://settings/help` shows versions only. Ungoogled-chromium already has no updater; the builder confirms nothing update-related shows, and patches only if something does.
+- A non-official build reads a feed-URL override from the environment for testing. Release packaging leaves it out.
+- **The sidebar update banner** belongs to the MVP change. `ClairUI` keeps the "update ready" state where the banner can observe it later.
+
+**Alternatives considered:**
+- Helium's Sparkle patches inside Chromium: rejected. They add four patches to maintain on every Chromium update, make Sparkle an engine input, and would be removed again once the native window exists.
+- Building Sparkle from source: rejected. The pinned, checksummed release tarball already supplies Sparkle's tools, and building the framework adds time without a benefit to Clair.
 - Sparkle's standard UI with dialogs and release notes: rejected by product choice, which is Arc-style.
-- Chromium's three-dot-menu relaunch badge: it goes away when the toolbar is removed in the MVP, so it isn't the main place updates appear. It is harmless to keep for now.
-- A prebuilt Sparkle framework: rejected, to keep the build reproducible from source and consistent with Helium.
 
-### D5. Release pipeline: chained jobs, with the release commit made in the final job
+### D5. Release pipeline: ensure the engine, run the quality checks, package, publish
 
-The chained build lives in its own reusable workflow, `build.yml`: a fetch job, then phases 1–20, each a call to `build-phase.yml`, then a result check. It runs on every pull request that touches build inputs, which makes GitHub Actions the project's build machine; the development machine never builds Chromium. A pull request build ends with a headless smoke test and an unsigned app artifact. `release.yml` calls the same `build.yml`.
-
-`release.yml` is triggered manually, with `bump` (patch, minor or major) and `dry_run` inputs, and uses `concurrency: release` so only one release runs at a time.
+`release.yml` is triggered manually, with `bump` (patch, minor or major) and `dry_run` inputs, and uses `concurrency: release` so only one release runs at a time. Its jobs run on the owner's Mac.
 
 ```
-validate ──> fetch ──> build-01 ──> build-02 ── … ──> build-NN ──> package ──> publish
-   |            |          |  (each job: restore out/, ninja with timeout,     |         |
-   |            |          |   upload partial out/, report finished|running)    |         |
-   v            v          v                                                    v         v
-version,     source +   skipped once                                    sign, notarize,  (non-dry-run)
-build no.,   patches    build has                                       staple, DMG,     release commit,
-notes check  packed     finished                                        deltas,          tag, GitHub
-                                                                        sign_update      Release, push
-                                                                                         main last
+validate ──> engine ──> quality ──> package ──> publish
+   |            |           |           |           |
+   v            v           v           v           v
+version,    download     D12 suite   ClairUI +   (non-dry-run)
+build no.,  engine-<key>, against    Sparkle,    release commit,
+notes check or build it  the engine  plist, sign, tag, GitHub
+            (D10)        (must pass) notarize,   Release, push
+                                     DMG, deltas main last
 ```
 
 - **validate:**
@@ -150,18 +164,11 @@ notes check  packed     finished                                        deltas, 
   - checks that the build number is greater than the newest appcast entry
   - checks that `.sparkle/notes/next.md` exists and differs from the template, and that `<version>.md` doesn't exist yet
   - writes the results as job outputs
-- **fetch:**
-  - downloads the Chromium tarball and Sparkle source
-  - prunes, patches and domain-substitutes them
-  - writes `args.gn`, with the version, build number and Sparkle key as GN args
-  - packs everything as an artifact, following ungoogled-macos's `retrieve-resources` job
-- **build-01…NN:**
-  - each job runs `timeout` ninja, leaving about an hour for setup and upload
-  - each job uploads the partial `out/` compressed with zstd
-  - a job is skipped once an earlier one reports `finished`
-  - NN starts at 20, as ungoogled-macos does, and is tuned after the first measured runs
+- **engine:** works out the engine key and downloads `engine-<key>`. If it isn't published, it runs the engine build (D10) first.
+- **quality:** runs the quality checks (D12) on the release commit, unless they have already passed for that commit. A failure stops the release.
 - **package:**
-  - signs every helper and the Sparkle framework's `Autoupdate`/`Updater.app` individually with the hardened runtime and their entitlements, never using `--deep`
+  - embeds `ClairUI.framework` and `Sparkle.framework`, and writes the version, build number and Sparkle keys into `Info.plist`
+  - signs every helper, `ClairUI`, and Sparkle's `Autoupdate`/`Updater.app` individually with the hardened runtime and their entitlements, never using `--deep`
   - notarizes with `notarytool` and staples the app
   - builds the DMG, then signs, notarizes and staples the DMG
   - runs `scripts/verify-app.sh`
@@ -171,79 +178,154 @@ notes check  packed     finished                                        deltas, 
 - **publish:**
   - creates the release commit (version and archived notes) in the Front Row way: `version.txt`, `.sparkle/notes/<version>.md`, a new `next.md` from the template, and the appcast entry from `append-appcast-item.sh`, extended for `<sparkle:deltas>` and a minimum system version of 15.6
   - tags it `v<version>`
-  - creates the GitHub Release with the DMG, deltas, SHA-256 checksums and notes (Clair version, build number, ungoogled-chromium tag)
+  - creates the GitHub Release with the DMG, deltas, SHA-256 checksums and notes (Clair version, build number, ungoogled-chromium tag, engine key)
   - pushes to `main` only after the Release exists
   - before pushing, checks that `main` hasn't moved since `validate`. If it has, it aborts before creating the Release, so the appcast never points at missing files.
-- `sign_update`, `BinaryDelta` and `generate_keys` come from the Sparkle **release tarball** for the same pinned version, checked against its sha512.
+- The release commit changes only `version.txt`, the notes and the appcast. None of these is an engine input, so the release commit has the same engine key as the commit the quality checks ran on.
 
 **Alternatives considered:**
-- Release builds on hosted runners only: rejected after measuring. A standard runner has 7 GB RAM and 3 cores, below Chromium's 8 GB minimum (16 GB+ recommended), which is too little for an official ThinLTO link. See D9.
+- Release builds on hosted runners: rejected after measuring. 7 GB RAM is too little for an official ThinLTO link. See D9.
 - Depot (about $34 per release build) or GitHub's larger runners (Team plan organizations only): kept as fallbacks if the self-hosted Mac becomes impractical.
-- `sccache` or remote build execution: deferred. It needs paid storage.
 - Committing the version before the build: rejected. A failed build would leave a released-looking commit on `main`.
 
 ### D6. Signing, notarization and secrets
 
-The following are GitHub Actions secrets:
+The following are secrets of a `release` environment that is limited to `main`:
 - the Developer ID Application certificate as base64 `.p12`, and its password
 - a CI keychain password
 - notarization credentials: an App Store Connect API key (key ID, issuer, `.p8`)
 - `SPARKLE_ED_PRIVATE_KEY`
 
 Handling:
-- The Sparkle key is generated once, locally, with `generate_keys`. Its public half is committed as a GN default. The private half goes into the secret and into an offline backup.
+- The Sparkle key is generated once, locally, with `generate_keys`. Its public half is committed. The private half goes into the secret and into an offline backup.
 - Scripts pass secrets only through stdin or temporary keychains, never as command-line arguments, and run with `set +x` around any step that uses them.
+- Engine builds, the merge gate and the quality checks get no secrets. Quality checks sign ad hoc, and use a test-only EdDSA key pair committed under `tests/` for their own test appcasts. That test key is never trusted by a shipped build.
 
 ### D7. Verification
 
-- **`scripts/verify-app.sh`** runs in `package`. It fails the release on any static check from the specs:
+- **`scripts/verify-app.sh`** runs in `package` and in the quality checks. It fails on any static check from the specs:
   - bundle and helper IDs
   - `LSMinimumSystemVersion` is 15.6
   - every Mach-O is arm64 only (checked with `lipo`)
-  - `codesign --verify --strict`, `spctl --assess` and `stapler validate` pass
+  - `CFBundleShortVersionString` matches `version.txt` and `CFBundleVersion` is an integer
   - `SUFeedURL` and `SUPublicEDKey` are present
   - no "Chromium" in `CFBundleName`
-- **Runtime checks**, as a manual release checklist in `.sparkle/notes/README.md` or `docs/release-checklist.md`:
-  - user-agent version
-  - the "Clair Safe Storage" keychain item
-  - data directory isolation when running alongside Chromium
-  - installing a CRX through the flag
-  - no Google traffic, checked with `--log-net-log` and a host filter
-  - the update flow, end to end, using a dry-run DMG and a test appcast
+  - in `package` only: `codesign --verify --strict`, `spctl --assess` and `stapler validate` pass
+- **Runtime behaviour** is covered by the quality checks (D12).
+- **A manual release checklist** keeps only what the quality checks can't do on a hosted runner: a clean Mac's first open of the notarized DMG, default-browser registration, the real Developer ID update path (deltas, install on quit, Install and Relaunch), and Sparkle's rejection of a release signed by a different team.
 
 ### D8. Attribution and licensing
 
 - Each copied patch keeps its original header. Clair's changes to it are marked.
-- `CREDITS.md` lists ungoogled-chromium, ungoogled-chromium-macos, Helium, ReBel, Sparkle and Front Row's release scripts, with their licenses.
-- `third_party/sparkle/README.chromium`, from Helium's patch, makes Sparkle appear in `chrome://credits`.
-- The combined work is GPLv3. Code from BSD-3 and MIT sources keeps its own license.
+- `CREDITS.md` lists ungoogled-chromium, ungoogled-chromium-macos, Helium, Sparkle and Front Row's release scripts, with their licenses, and Crest for any file adapted from it.
+- Files adapted from Crest keep MPL-2.0 for those files, which is compatible with GPLv3. Crest's own BrowserWindow code adapts Mori's (MIT), so that provenance is kept too if Clair adapts it.
+- The combined work is GPLv3. Code from BSD-3, MIT and MPL-2.0 sources keeps its own license.
 
-### D9. Where builds run: hosted runners for PRs, the owner's Mac for releases
+### D9. Where builds run
 
-- **Pull request builds** run on free `macos-26` runners (3 cores, 7 GB RAM). They prove the patches apply and the app runs, so they use lighter GN settings to fit in memory: `concurrent_links = 1`, `symbol_level = 0`, ThinLTO off, and limited ninja parallelism. These settings live in a separate GN file that only PR builds append.
-- **Release builds** run on the owner's self-hosted runner: an M1 Pro with 32 GB RAM, working on an external APFS SSD, with label `clair-release`. They use the full release settings.
+| Work | Runs on | Started by |
+|---|---|---|
+| Merge gate | hosted `macos-26` and Ubuntu | every pull request and push |
+| Patch check | hosted `macos-26` | pull requests that change the engine key |
+| Engine build | owner's Mac (`clair-release`) | the owner, by hand (`engine.yml`, any of the owner's branches), or a release |
+| Quality checks | hosted `macos-26` | every push to `main`, by hand on any branch, and releases |
+| Release | owner's Mac (`clair-release`) | the owner, from `main` |
+
+- **No Chromium compile runs on hosted runners.** Hosted runners only fetch and patch the source (the patch check) or run the packaged app (the quality checks).
 - **Runner security, since the repository is public:**
   - The runner uses a dedicated macOS user.
+  - Only `workflow_dispatch` runs target `clair-release`, and starting one needs write access to the repository, which only the owner has. No `pull_request` workflow targets it.
   - Fork PR workflows need the owner's approval ("Require approval for all external contributors").
-  - Only `workflow_dispatch` release runs from `main` target `clair-release`.
+  - Engine builds run without the `release` environment, so they never see release secrets. They need only `contents: write` to publish the engine prerelease.
   - `prepare-runner.sh` (which deletes Xcode versions and simulators) runs only on hosted runners.
-- **Secrets** live in a `release` environment limited to `main`. Self-hosted jobs receive them only for the duration of the job. The signing certificate goes into a temporary keychain that the job deletes at the end, so the Mac keeps nothing between releases. The same workflow would run unchanged on Depot.
+- **Secrets** reach only release jobs on the Mac, for the duration of the job. The signing certificate goes into a temporary keychain that the job deletes at the end, so the Mac keeps nothing between releases.
+
+### D10. Engine key and prebuilt engines
+
+- **`scripts/engine-key.sh`** prints the engine key: the first 16 hex characters of a SHA-256 over a sorted manifest of `<path> <sha256>` lines. The manifest covers:
+  - the `ungoogled-chromium` submodule commit
+  - `downloads.ini`, `flags.macos.gn` and any other GN flag files
+  - everything under `patches/`, `overlay/` and `utils/`
+  - `native/ClairHost.h`
+  - the branding resources compiled into the engine
+  - `build.sh`, `retrieve_and_unpack_resource.py`, and `scripts/engine-key.sh` itself
+
+  It can also print the manifest, so a key change can be explained. Its test checks that changing any covered file changes the key, and that changing anything else (Swift sources, `version.txt`, notes, workflows, `package.sh`) does not.
+- **The engine artifact** is the unsigned `Clair.app` that the Chromium build produces, with the branding, the hook and the Chromium version compiled in. There is no `ClairUI`, no Sparkle, and no Clair version in it. It is published as the GitHub prerelease `engine-<key>` with:
+  - `clair-engine-<key>.tar.zst` and its SHA-256
+  - `engine.json`: the key, the manifest, the ungoogled-chromium tag, the Chromium version, the Xcode and SDK versions, and the build date
+
+  Prereleases never become the repository's "latest" release, and the release tooling looks only at `v*` tags.
+- **`engine.yml`** (`workflow_dispatch`, input: the ref to build) runs on the owner's Mac:
+  1. works out the key and stops early if `engine-<key>` already exists
+  2. prepares the source in the persistent workspace on the external SSD (D11)
+  3. builds with the full release settings
+  4. runs the headless smoke test against the bare engine
+  5. packs and publishes `engine-<key>`
+- Because the key is computed from file contents, an engine built from a pull request branch is valid for the squash-merged commit on `main` as long as the engine inputs are the same.
+
+### D11. Fast engine rebuilds on the owner's Mac
+
+- The Mac keeps a persistent engine workspace on its external SSD: the unpacked Chromium source, the downloads cache and `out/Default`. It is never deleted between runs.
+- **Same ungoogled-chromium tag, changed Clair patches or overlay:** `build.sh` reverts the previously applied Clair series and overlay and applies the new ones in place. Only files they touch change, so ninja rebuilds only the affected targets. The workspace records which key it currently holds.
+- **New ungoogled-chromium tag or changed ungoogled series:** a fresh source tree, which in practice means a full rebuild.
+- If an in-place update fails or leaves the tree in an unknown state, `build.sh` falls back to a fresh tree. Correctness wins over speed.
+- How the revert works (quilt, ungoogled's patch and domain-substitution revert tools, or a pristine copy) is the builder's choice. Domain substitution must be reverted or reapplied consistently.
+- **Fixing a broken engine build from the development machine:** edit the patch, push the branch, start `engine.yml` with `gh workflow run`, and read its log with `gh run view --log`. A patch that no longer applies is caught earlier by the patch check (D12).
+
+### D12. Checks: merge gate, patch check, quality checks
+
+- **Merge gate** (`ci.yml`, every pull request and push, target under 10 minutes):
+  - `scripts/*.test.sh`, `shellcheck -S warning`, `actionlint`
+  - `xcodegen` + `xcodebuild build` and `xcodebuild test` for `ClairUI` and `ClairUITests`, unsigned. It compiles against `native/ClairHost.h`, with no Chromium.
+  - an **engine check** job that works out the pull request's engine key and its base's key. If they differ:
+    - it runs the patch check on `macos-26`: fetch the pinned source, apply ungoogled's series, `patches/series`, the overlay and domain substitution, with no compile (`./build.sh fetch prepare`, about 40 minutes)
+    - it reports whether `engine-<key>` is published, and fails until it is, so an engine change can't merge without an engine. After publishing, `engine.yml` re-runs the engine check on open pull requests whose head has that key, so nobody has to re-run it by hand.
+  - All of these are required checks on `main`.
+- **Quality checks** (`quality.yml`: push to `main`, `workflow_dispatch` on any ref, and called by `release.yml`):
+  1. downloads `engine-<key>`. If it isn't published, the run fails with "no engine for <key>" and the command to build it.
+  2. builds `ClairUI` and packages the app unsigned (ad-hoc signed), with the version of the commit
+  3. runs `verify-app.sh` without the signing checks
+  4. runs the runtime suite in `tests/runtime/` on the hosted runner's desktop session
+- **The runtime suite** starts with these tests:
+  - the app launches with a fresh data directory and renders a local test page
+  - the application menu reads "About Clair", "Hide Clair" and "Quit Clair", and contains "Check for Updates…"
+  - `~/Library/Application Support/Clair` and a "Clair Safe Storage" keychain item are created, and no "Chromium Safe Storage" item is read or created
+  - `navigator.userAgent` reports the engine's Chromium version and doesn't contain the Clair version
+  - the About page shows the Clair version and build number, and the Chromium version labelled as the engine
+  - an idle first launch makes no requests to Google service hosts, checked with `--log-net-log`
+  - "Check for Updates…" against local test appcasts, signed with the test key, reports "up to date" and "Clair X.Y.Z is ready" correctly
+  - relaunching through `ClairHost` restores the open windows and tabs
+
+  The runtime suite runs the app through the macOS accessibility APIs (XCUITest, launching `Clair.app` by path) for native UI. It uses the Chrome DevTools Protocol (`--remote-debugging-port`, quality-check builds only) for page state.
+- **On failure:** the quality run fails visibly on the `main` commit and opens or updates a GitHub issue labelled `quality-failure`. The issue names the commit, the failing tests and the run link, so an agent can be sent to fix it.
+- **Releases** run the quality checks for their own commit (D5) and stop on a failure. They never wait on, or skip, a run that's still in progress.
+- **Not covered:** visual appearance, layout and animation, which are checked by hand in the running app.
 
 ## Risks / Trade-offs
 
-- **[Risk] Runner disk:** 14 GB is listed for the runner, while a Chromium checkout plus a partial `out/` is far larger, so the build may run out of disk.
-  Measured on the first PR build (`macos-26`, 2026-10-26): the volume is 320 GB with 96 GB free at the start and 147 GB free after `prepare-runner.sh`. The fetched and patched build directory is 17.4 GB, which zstd compresses to a 6.0 GB artifact. The fetch job took 38 minutes.
-  → Delete the preinstalled SDKs (Android, extra Xcodes, simulators) as ungoogled-macos does, and turn off Spotlight. Measure free space in the first dry run. Fallback: build `out/` on an external volume where it's available, or reduce `symbol_level`.
-- **[Risk] Partial `out/` artifacts:** these may run into artifact size or storage limits; storage for public repos isn't documented.
-  → Use zstd compression and keep only one partial artifact at a time (`overwrite: true`). Watch the first runs. Fallback: split the artifact.
-- **[Risk] Build time:** about 8–12 hours on 3-core runners, so a security release reaches users about half a day after its tag.
-  → Accepted for now. Remote build execution or caching is a later improvement.
+- **[Risk] The owner's Mac is offline** when an engine build or a release is needed.
+  → Engine pull requests wait. Merges without engine changes and their quality checks continue, using the existing engines. Depot or larger hosted runners are the fallback (D5).
+- **[Risk] An in-place engine update leaves a stale or mixed tree,** giving an engine that doesn't match its key.
+  → The workspace records its key, `build.sh` falls back to a fresh tree on any doubt, and the patch check proves the same inputs apply to clean source on a hosted runner.
+- **[Risk] Chromium reads the outer bundle's version** in places that break when packaging writes the Clair version (D3).
+  → The builder audits these reads before task 3.1 is done. Fallback: make the version an engine input. Each release then costs one incremental engine build, mostly relinking.
+- **[Risk] Main-menu changes:** Chromium may rebuild or reorder the main menu after `ClairUI` adds its items.
+  → The quality suite checks the items. Fallback: a one-line hook in `main_menu_builder.mm` that calls into `ClairUI`.
+- **[Risk] Sparkle and Chromium both want to relaunch.**
+  → Sparkle's relaunch waits for Chromium's shutdown, as in Helium. The quality suite covers relaunch through `ClairHost`, and the release checklist covers the real update path.
+- **[Risk] Hosted-runner GUI tests are flaky.**
+  → Tests wait on conditions rather than fixed times, and a test failure is retried once before it counts.
+- **[Risk] Disk on the owner's SSD:** a persistent workspace and its downloads cache take about 150 GB.
+  → `engine.yml` reports free space and refuses to start below a set reserve.
 - **[Risk] `main` moves during a long release.**
   → `concurrency: release`, plus the publish job's check that `main` hasn't moved before creating the Release. Avoid pushing to `main` while a release runs.
-- **[Risk] Helium's Sparkle and versioning patches stop applying** on a new Chromium version.
+- **[Risk] Helium's versioning and identity patches stop applying** on a new Chromium version.
   → They live in Clair's tree, so Clair can fix them without waiting for Helium. Helium's upstream fixes are a reference.
 - **[Risk] The Sparkle private key is lost or leaked.** Losing it strands every installed copy; leaking it lets someone else push updates.
   → Keep an offline backup. The key exists only in the secret store and the backup. If it's lost, the only recovery is asking users to reinstall by hand, so the backup is essential.
+- **[Trade-off] Engine pull requests can't merge until the owner has built their engine.**
+  → Accepted, so that `main` always has an engine and its quality checks always run.
 - **[Trade-off] Extensions:** without Web Store URLs, extension installs work but feel clumsy in this release.
   → Accepted for change 1. The MVP decides on Web Store support.
 - **[Trade-off] Rollback:** Sparkle never downgrades.
@@ -251,15 +333,22 @@ Handling:
 
 ## Migration Plan
 
-- This is the first release, so there is nothing to migrate.
+- This is the first release, so there is no user data to migrate.
+- **From PR #1's hosted build chain:**
+  1. PR #1 and #2 finish their hosted builds and merge as they are. The builds prove that the patches and branding compile end to end before the owner's Mac is set up.
+  2. The owner sets up the self-hosted runner (task 7.0).
+  3. `engine.yml` publishes the first engine from `main`.
+  4. The hosted compile phases (`build-phase.yml` and the compile part of `build.yml`) are removed. Their fetch and patch job becomes the patch check, and `pack-build.sh`/`unpack-build.sh` are kept only if the engine packing reuses them.
 - Steps before the first release:
   1. generate the Sparkle keys and store them in secrets and the backup
   2. add the Apple secrets
-  3. run a dry run and fix the build, disk and notarization
-  4. do the manual runtime checklist on the dry-run DMG
-  5. write `next.md` and release `0.1.0`
+  3. publish an engine and get the quality checks green on `main`
+  4. run a dry run and fix signing and notarization
+  5. do the manual release checklist on the dry-run DMG
+  6. write `next.md` and release `0.1.0`
 - The update path is first exercised by `0.1.1`, which tests deltas once earlier releases exist. Before that, test it with a dry run against a private test appcast.
 
 ## Open Questions
 
-- The right number of chained build jobs (NN) and the real build time on `macos-latest`. Tuned after the first measured dry runs.
+- Engine build times on the owner's Mac: a full build, and a typical in-place patch fix. Measured on the first engine builds.
+- Whether hosted runners' desktop sessions allow the keychain and accessibility access the runtime suite needs without prompts. Checked in the first quality run.

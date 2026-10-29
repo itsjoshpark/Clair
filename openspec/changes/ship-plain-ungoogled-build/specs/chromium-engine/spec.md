@@ -29,11 +29,18 @@ Clair SHALL ship ungoogled-chromium's default settings and Google-service remova
 - **THEN** it makes no network requests to Google service endpoints, such as Safe Browsing, sync, sign-in, metrics, or component and variations servers
 
 ### Requirement: No browser behavior changes beyond identity and updates
-Apart from the identity defined in `app-identity` and the updater defined in `software-updates`, Clair in this change SHALL behave the same as the ungoogled-chromium release it is built from. That includes browser UI, menus, keyboard shortcuts and settings.
+Apart from the identity defined in `app-identity`, the native layer defined in `native-layer` and the updater defined in `software-updates`, Clair in this change SHALL behave the same as the ungoogled-chromium release it is built from. That includes browser UI, menus, keyboard shortcuts and settings. The only menu change is the two update items in the Clair menu.
 
 #### Scenario: Stock browser UI
 - **WHEN** a user opens a window in this release of Clair
-- **THEN** it shows Chromium's standard tab strip, toolbar and menus, as the same ungoogled-chromium release does on macOS
+- **THEN** it shows Chromium's standard tab strip, toolbar and menus, as the same ungoogled-chromium release does on macOS, plus the update items in the Clair menu
+
+### Requirement: Changes to Chromium limited to hooks and identity
+Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, and the hook that loads the native layer. Other behaviour Clair adds SHALL live in the native layer, or in new source files that Clair adds to the Chromium tree, which change no existing file.
+
+#### Scenario: Reviewing Clair's patch series
+- **WHEN** the patches in `patches/clair/` and `patches/helium/` are listed
+- **THEN** each one is a build fix, an identity or branding change, a versioning change, or the native-layer hook, and none implements the updater or the update menu
 
 ### Requirement: Extension installation as in ungoogled-chromium
 Clair SHALL support installing Chrome extensions through the same mechanisms as ungoogled-chromium. One example is the `--extension-mime-request-handling=always-prompt-for-install` option, available as a flag in `chrome://flags`, which lets users install CRX files. Installed extensions SHALL run with full Chrome extension API support.

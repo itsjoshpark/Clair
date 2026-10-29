@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how a Clair release is produced and published. It covers building, signing and notarizing the app, packaging it, publishing it to GitHub Releases, and announcing it to installed copies through the appcast, so that each release can be installed and trusted on a clean Mac.
+Defines how a Clair release is produced and published. It covers packaging, signing and notarizing the app, packaging it, publishing it to GitHub Releases, and announcing it to installed copies through the appcast, so that each release can be installed and trusted on a clean Mac.
 
 ## ADDED Requirements
 
@@ -22,7 +22,7 @@ Each release SHALL be published as a GitHub Release on `itsjoshpark/Clair`, tagg
 - the DMG
 - the delta update files
 - SHA-256 checksums for every asset
-- release notes that state the Clair version, the build number and the ungoogled-chromium version
+- release notes that state the Clair version, the build number, the ungoogled-chromium version and the engine key
 
 #### Scenario: Release page contents
 - **WHEN** a user opens the GitHub Release for `v0.1.0`
@@ -81,29 +81,11 @@ A release SHALL be started manually, by choosing a patch, minor or major bump. T
 - **THEN** the new release is `0.2.0`
 
 ### Requirement: Build-only dry run
-The release process SHALL offer a dry-run mode that builds, signs and notarizes the app but creates no tag, GitHub Release or appcast change.
+The release process SHALL offer a dry-run mode that packages, signs and notarizes the app but creates no tag, GitHub Release or appcast change.
 
 #### Scenario: Dry run
 - **WHEN** a dry-run release is started
 - **THEN** a signed, notarized DMG is available as a workflow artifact, and no tag, release or appcast change is made
-
-### Requirement: Pull request builds run on GitHub-hosted runners
-Builds triggered by pull requests SHALL run on standard GitHub-hosted macOS arm64 runners. They MUST NOT run on a self-hosted runner, and MUST NOT need paid build services.
-
-#### Scenario: Pull request build
-- **WHEN** a pull request triggers a build
-- **THEN** every job in that build runs on a standard GitHub-hosted macOS runner
-
-### Requirement: Release builds run on the owner's self-hosted runner
-Release builds SHALL run on the repository owner's self-hosted Mac runner (label `clair-release`). Only manually started release runs from `main` MAY use that runner. Jobs from fork pull requests MUST NOT run on it.
-
-#### Scenario: Release run
-- **WHEN** the owner starts a release from `main`
-- **THEN** its build, package and publish jobs run on the `clair-release` self-hosted runner
-
-#### Scenario: Fork pull request
-- **WHEN** a pull request from a fork changes a workflow to target the `clair-release` label
-- **THEN** no job from that pull request runs on the self-hosted runner without the owner's approval
 
 ### Requirement: Secrets never exposed
 Signing certificates, notarization credentials and the Sparkle EdDSA private key SHALL be provided only as encrypted secrets of a `release` environment that is limited to `main`. They MUST NOT appear in the repository, in build logs, in any published artifact, or on the self-hosted runner's disk after a job ends.
