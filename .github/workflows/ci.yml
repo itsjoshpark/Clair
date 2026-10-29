@@ -1,0 +1,46 @@
+# Fast checks for every push and pull request: release script tests, shell
+# script lint and workflow lint. The Chromium build itself is in build.yml.
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scripts:
+    name: Script tests and lint
+    runs-on: macos-26
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install tools
+        run: brew install cmark-gfm shellcheck actionlint
+
+      - name: Run script tests
+        run: |
+          failures=0
+          for test in scripts/*.test.sh; do
+            echo "==> $test"
+            "$test" || failures=$((failures + 1))
+          done
+          exit "$failures"
+
+      - name: Lint shell scripts
+        run: shellcheck -S warning build.sh scripts/*.sh .github/scripts/*.sh
+
+      - name: Lint workflows
+        run: actionlint
+
+      - name: Check the appcast is well-formed
+        run: xmllint --noout .sparkle/appcast.xml

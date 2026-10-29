@@ -1,0 +1,9 @@
+# Credits
+
+Clair is built on the work of these projects. Code copied or adapted from them keeps its original license and copyright headers. Clair's own code is licensed under the GNU General Public License v3.0 (see `LICENSE`).
+
+| Project | What Clair uses | License |
+|---|---|---|
+| [Chromium](https://www.chromium.org/) | The browser engine and application | BSD-3-Clause (and the licenses of its third-party components, listed in `chrome://credits`) |
+| [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium) | Core patch series, binary pruning, domain substitution and build utilities, pinned as the `ungoogled-chromium/` submodule | BSD-3-Clause (`LICENSE.ungoogled_chromium`) |
+| [ungoogled-chromium-macos](https://github.com/ungoogled-software/ungoogled-chromium-macos) | macOS build patches (`patches/ungoogled-chromium-macos/`), entitlements (`entitlements/`), `retrieve_and_unpack_resource.py`, `downloads-arm64.ini`, `flags.macos.gn`, and the chained GitHub Actions build approach. Copied from commit `cb57ca4773476197e810b251dea6623907bff40a`. | BSD-3-Clause (`LICENSE.ungoogled_chromium`) |

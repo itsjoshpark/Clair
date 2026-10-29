@@ -60,3 +60,16 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Clair build outputs (Chromium source, download cache, packaged artifacts)
+build/
+*.dmg
+*.tar.zst
+.DS_Store
+.gcs_entries
+
+# Files written to the repository root during GitHub Actions runs
+/epoch_job_start.txt
+/*.log
+upload_*/
+release_asset/
