@@ -31,19 +31,38 @@ A downloaded update SHALL be installed the next time the user quits Clair. The u
 - **WHEN** an update has finished downloading and the user quits Clair
 - **THEN** the update is installed, and the next launch of Clair runs the new version
 
+### Requirement: Downloaded update installs while the user is idle
+While a downloaded update is waiting, Clair SHALL install it and relaunch on its own once the Mac has received no keyboard, mouse or trackpad input for 30 minutes. It SHALL NOT do so while a download is in progress, an incognito window is open, or a tab is playing audio or using the camera, microphone or screen; it SHALL try again at the next idle period. If Clair was not the active app, the relaunched Clair SHALL stay in the background.
+
+#### Scenario: User away with an update ready
+- **WHEN** an update is waiting and the Mac has had no input for 30 minutes
+- **THEN** Clair installs the update, relaunches with its windows and tabs restored, and runs the new version
+
+#### Scenario: Something would be interrupted
+- **WHEN** an update is waiting and the Mac has had no input for 30 minutes, but a download is in progress, an incognito window is open, or a tab is playing audio or using the camera, microphone or screen
+- **THEN** Clair does not install the update, and installs it at a later idle period once none of these holds
+
+#### Scenario: Clair in the background
+- **WHEN** Clair installs an update while idle and another app was active
+- **THEN** the relaunched Clair does not become the active app
+
 ### Requirement: Update ready indicator in the application menu
-While a downloaded update is waiting to be installed, the Clair application menu SHALL contain an "Install Update and Relaunch" item, which installs the update and relaunches immediately. Status SHALL NOT appear on the About settings page.
+The Clair application menu SHALL contain one update item. While a downloaded update is waiting to be installed, that item SHALL read "Update Available…" and carry a "1 update" badge, in place of "Check for Updates…". Choosing it SHALL show an alert with the new version and "Restart and Update" and "Later". Clair SHALL add no other update item to the menu. Status SHALL NOT appear on the About settings page.
 
 #### Scenario: Update ready
 - **WHEN** an update has finished downloading
-- **THEN** the Clair menu shows "Install Update and Relaunch", and choosing it installs the update and relaunches Clair
+- **THEN** the Clair menu's update item reads "Update Available…" with a "1 update" badge, and the menu has no "Check for Updates…" item
+
+#### Scenario: Choosing Update Available
+- **WHEN** the user chooses "Update Available…"
+- **THEN** an alert shows the new version with "Restart and Update" and "Later", and "Restart and Update" installs the update and relaunches Clair
 
 #### Scenario: No update waiting
 - **WHEN** no downloaded update is waiting
-- **THEN** the Clair menu has no "Install Update and Relaunch" item
+- **THEN** the Clair menu's update item reads "Check for Updates…" with no badge
 
 ### Requirement: Manual update check
-The Clair application menu SHALL contain a "Check for Updates…" item that checks the appcast immediately and reports the result in a small alert. When a newer release is available, the alert SHALL show its version and offer "Install and Relaunch" and "Later".
+While no downloaded update is waiting, the Clair application menu's update item SHALL read "Check for Updates…". It SHALL check the appcast immediately and report the result in a small alert. When a newer release is available, the alert SHALL show its version and offer "Restart and Update" and "Later".
 
 #### Scenario: Already up to date
 - **WHEN** a user chooses "Check for Updates…" while running the newest compatible release in the appcast
@@ -51,11 +70,11 @@ The Clair application menu SHALL contain a "Check for Updates…" item that chec
 
 #### Scenario: Update available after a manual check
 - **WHEN** a user chooses "Check for Updates…" and the appcast lists a newer compatible release
-- **THEN** Clair downloads it, and an alert shows the new version with "Install and Relaunch" and "Later"
+- **THEN** Clair downloads it, and an alert shows the new version with "Restart and Update" and "Later"
 
 #### Scenario: Choosing Later
 - **WHEN** the user chooses "Later" in that alert
-- **THEN** the update stays downloaded, the Clair menu shows "Install Update and Relaunch", and the update installs on quit
+- **THEN** the update stays downloaded, the Clair menu's update item reads "Update Available…", and the update installs on quit or while the user is idle
 
 #### Scenario: Check fails
 - **WHEN** a user chooses "Check for Updates…" and the appcast cannot be reached
@@ -66,7 +85,7 @@ Clair SHALL install an update only if its EdDSA signature verifies against the S
 
 #### Scenario: Tampered update is rejected
 - **WHEN** a downloaded update's file does not match its EdDSA signature in the appcast
-- **THEN** Clair refuses to install it, offers no "Install Update and Relaunch" item for it, and keeps running the current version unchanged
+- **THEN** Clair refuses to install it, the Clair menu doesn't show "Update Available…" for it, and Clair keeps running the current version unchanged
 
 #### Scenario: Valid update is installed
 - **WHEN** a downloaded update's EdDSA signature verifies and its app is signed by the same Developer ID team
@@ -95,12 +114,12 @@ When the appcast provides a delta for the running build, Clair SHALL download th
 - **THEN** Clair downloads the full release and installs that instead
 
 ### Requirement: Relaunch preserves the browsing session
-When Clair relaunches through "Install and Relaunch" or "Install Update and Relaunch", it SHALL restore the windows and tabs that were open before the relaunch, whatever the user's startup setting. It SHALL warn first if quitting would lose an active download or incognito windows.
+When Clair relaunches to install an update, through "Restart and Update" or while the user is idle, it SHALL restore the windows and tabs that were open before the relaunch, whatever the user's startup setting. After "Restart and Update", it SHALL warn first if quitting would lose an active download or incognito windows. An idle install never needs that warning, because it doesn't run in those cases.
 
-#### Scenario: Install and relaunch
-- **WHEN** a user chooses "Install Update and Relaunch" while three windows with open tabs exist
+#### Scenario: Restart and update
+- **WHEN** a user chooses "Restart and Update" while three windows with open tabs exist
 - **THEN** Clair quits, installs the update, and relaunches with the same three windows and their tabs restored
 
 #### Scenario: Active download on relaunch
-- **WHEN** a user chooses "Install Update and Relaunch" while a download is in progress
+- **WHEN** a user chooses "Restart and Update" while a download is in progress
 - **THEN** Clair warns that relaunching will cancel the download, and lets the user postpone the update

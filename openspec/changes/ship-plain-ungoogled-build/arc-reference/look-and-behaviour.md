@@ -220,13 +220,29 @@ Menus use the standard macOS menu style (translucent, rounded, separators).
 
 ![Incognito](screenshots/incognito-window.jpg)
 
+## Software updates
+
+Observed on 2026-10-29 in Arc 1.170.0, with 1.171.0 already downloaded in the background (`currentUpdateDownloadedSince` in Arc's defaults). The banner and menu were observed. The rest of the flow comes from Arc's UI strings and its appcast (`https://releases.arc.net/updates.xml`) and was not observed.
+
+![Update banner](screenshots/update-banner.jpg)
+![Update banner on hover](screenshots/update-banner-hover.jpg)
+
+- **Banner:** while a downloaded update waits, a pill reading "New Arc Version Available" sits at the bottom of the sidebar, directly above the bottom bar. It is about 210×22, inset 8 from the sidebar edges, a low-contrast tinted capsule with small centred text. It has no icon, badge or animation.
+- **Hover:** the pill grows upward into a white rounded card, about 210×87: the title, a hairline, an "Automatic Updates" checkbox, and an accent-filled **Restart and Update** button. Moving away collapses it again.
+- **Menu:** the Arc menu's "Check for Updates…" becomes **"Update Available…"**, and the accessibility tree reports a "1 update" badge on it (the macOS menu-item badge). There is no second menu item.
+- **Manual check** (strings only): an alert titled "Arc is ready to update!" with the message "Restart required." and confirm and cancel buttons, whose labels weren't recovered. Toasts cover the other states: "Update in progress. Hang tight!" (checking while a download runs), "A new update is pending! It will be ready soon", "Restart at a later time to finish installing the new update!" (cancelled), and "Something went wrong installing a new update. We'll try again later."
+- **Installing:** a downloaded update installs on quit. Arc also installs it on its own after the user has been inactive: the remote flags `auto-update-inactivity-delay-in-seconds` and `auto-update-required-idle-duration-in-seconds` set the thresholds (values not cached locally), and analytics events include `sleepSatisfiedForAutoUpdate` and `autoUpdateQueued`.
+- **After the update** (strings only): a sidebar banner says "Update Complete!" with a **See What's New** button that opens the release notes. `ARC_SidebarBanner.bundle` ships `update-heart-animation.json`, a 2-second, 60 fps Lottie of a heart with a ring, which presumably plays on that banner.
+- **Settings:** General has "Automatically update my Arc" with a "Learn more about auto-updating" link. Arc counts banner dismissals (`autoUpdateBannerDismissalCount`).
+- **Release notes:** each appcast item has one friendly `<h3>` paragraph, for example naming the new Chromium version and saying it is "worth installing soon". Deltas are about 50–80 MB against a 459 MB full download.
+
 ## Settings window
 
 A 684×650 window with an icon toolbar of eight panes: account, General, Profiles, Max, Links, Shortcuts, Icon, Advanced. Each pane groups its rows in rounded cards with toggles on the right, in macOS System Settings style.
 
 | Pane | Contents | Clair relevance |
 |---|---|---|
-| General | Automatically update; Warn before quitting; Previews settings; pointer to Profile settings; Ad blocker (Block Ads, Block Trackers, Block Cookie Banners, Ad Block Settings…) | Updates are decided (no update settings). Ad blocking is out of scope |
+| General | Automatically update (see Software updates); Warn before quitting; Previews settings; pointer to Profile settings; Ad blocker (Block Ads, Block Trackers, Block Cookie Banners, Ad Block Settings…) | Updates are decided (no update settings). Ad blocking is out of scope |
 | Profiles | Explainer ("Profiles help keep your data separate across Spaces…"); profile list with Space counts and +/−/edit; per profile: Search engine, Search settings, Include search suggestions, **Archive tabs after (12 hours default)**, New documents, Download location; links to Privacy and Security, Passwords, Credit Cards, Notifications, Clear Browsing Data | Profile list and the search engine matter for the MVP. Archive is not in Clair. Passwords and cards are removed |
 | Links | Little Arc toggles (Opt+Cmd+N anywhere, Opt+Cmd-click, links from other apps, archive Little Arcs after 6 h); **Peek: "Open a Peek window when clicking on links with Shift held" and "…on links to other sites" (only favorites and pinned tabs)**, both on by default; "Choose where links open inside Arc" (Air Traffic Control rules) | Peek behaviour is defined here. Little Arc and Air Traffic Control are out of scope |
 | Shortcuts | "Learn the Essential Shortcuts"; a searchable list of every action with an editable shortcut field; "Custom Shortcuts" lets the user choose whether Arc or the website gets the key; Reset All Shortcuts | Editable shortcuts are not in Clair's MVP |
@@ -256,7 +272,7 @@ Left out on purpose for this pass:
 
 - Space switching (two-finger swipe, Ctrl+N) and the switcher with several Spaces
 - the theme editor
-- the update-ready banner at the bottom of the sidebar
+- the "Update Complete!" banner after an update, and the manual-check alert's buttons
 
 Not reached:
 

@@ -8,7 +8,7 @@ Standard macOS items (Edit/Find/Spelling/Substitutions, Window > Move & Resize, 
 
 | Menu | Items (shortcut) |
 |---|---|
-| Clair | About Clair (shows the Clair and Chromium versions) · Settings… (Cmd+,) · Set as Default Browser · Check for Updates… · Install Update and Relaunch (only while a downloaded update is waiting) |
+| Clair | About Clair (shows the Clair and Chromium versions) · Settings… (Cmd+,) · Set as Default Browser · Check for Updates… (reads "Update Available…" with a "1 update" badge while a downloaded update is waiting, as in Arc) |
 | File | New Tab… (Cmd+T, opens the command bar) · New Window (Cmd+N) · New Incognito Window (Shift+Cmd+N) · Restore Last Closed Tab (Shift+Cmd+T) · Open Command Bar (Cmd+L) · New Profile · Close Tab (Cmd+W) · Close Window (Shift+Cmd+W) · Print (Cmd+P) |
 | Edit | standard items + Copy URL (Shift+Cmd+C) |
 | View | Hide Sidebar (Cmd+S) · Collapse Pinned Tabs · Stop Loading (Cmd+.) · Refresh (Cmd+R) · Force Refresh (Shift+Cmd+R) · Add Split View (Ctrl+Shift+=) · Close Split Pane (Ctrl+Shift+-) · Separate Page from Split View · Expand Current Split · Actual Size / Zoom In / Zoom Out (Cmd+0 / Cmd++ / Cmd+-) · Developer > (View Source Opt+Cmd+U, Developer Tools Opt+Cmd+I, Inspect Elements Opt+Cmd+C, JavaScript Console Opt+Cmd+J, Allow JavaScript from Apple Events) · Enter Full Screen (Ctrl+Cmd+F) |

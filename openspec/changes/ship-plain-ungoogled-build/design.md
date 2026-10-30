@@ -133,18 +133,24 @@ Clair/
   - `SUFeedURL` = `https://github.com/itsjoshpark/Clair/raw/main/.sparkle/appcast.xml`
   - `SUPublicEDKey`, committed in the repository
   - `SUEnableAutomaticChecks` = YES, with automatic download and install on quit, and no user-facing settings
-- `ClairUI` adds two items to the Clair application menu with AppKit, after Chromium has built the main menu. No Chromium patch is needed for the menu.
-  - **Check for Updates…**: always present. It starts a user-initiated check and shows an `NSAlert`: up to date, check failed, or "Clair X.Y.Z is ready" with **Install and Relaunch** / **Later**.
-  - **Install Update and Relaunch**: present only while a downloaded update is waiting.
+- `ClairUI` adds one update item to the Clair application menu with AppKit, after Chromium has built the main menu, as Arc does. No Chromium patch is needed for the menu.
+  - **Check for Updates…** while no update is waiting. It starts a user-initiated check and shows an `NSAlert`: up to date, check failed, or "Clair X.Y.Z is ready" with **Restart and Update** / **Later**.
+  - **Update Available…** while a downloaded update is waiting, with an `NSMenuItemBadge` reading "1 update". It shows the same "Clair X.Y.Z is ready" alert.
+- **Install while idle**, as Arc does. When Sparkle reports an update that will install on quit (`updater(_:willInstallUpdateOnQuit:immediateInstallationBlock:)`), `ClairUI` keeps the immediate-installation block and watches the system idle time (`CGEventSourceSecondsSinceLastEventType` for any input, combined session state). After 30 minutes without input, it asks `ClairHost` whether a silent relaunch is safe: no download in progress, no incognito window, and no tab that is audible or capturing the camera, microphone or screen. If it is, `ClairUI` runs the block, which relaunches through the path below. If it isn't, it waits for the next 30 minutes without input. The relaunch doesn't activate Clair when another app was active. Arc's thresholds are server flags that weren't recorded, so 30 minutes is Clair's own choice.
 - **Relaunch** goes through Chromium's own graceful relaunch (`chrome::AttemptRelaunch`), reached through `ClairHost.h`. It brings back the previous session, and Chromium's quit flow already asks about active downloads and warns that incognito windows won't reopen. Sparkle's relaunch is postponed until Chromium's shutdown finishes, so the app restarts exactly once. Helium's `application_lifetime_desktop.cc` change shows the same hand-off.
 - **About page:** `chrome://settings/help` shows versions only. Ungoogled-chromium already has no updater; the builder confirms nothing update-related shows, and patches only if something does.
 - A non-official build reads a feed-URL override from the environment for testing. Release packaging leaves it out.
-- **The sidebar update banner** belongs to the MVP change. `ClairUI` keeps the "update ready" state where the banner can observe it later.
+- **The sidebar update banners** belong to the MVP change and follow Arc's (`arc-reference/look-and-behaviour.md`, Software updates):
+  - while an update waits, a "New Clair Version Available" pill at the bottom of the sidebar, which grows on hover into a card with a **Restart and Update** button. It has no "Automatic Updates" checkbox, because Clair has no update settings
+  - after an update, an "Update Complete!" banner with **See What's New**, which opens the release's page, `https://github.com/itsjoshpark/Clair/releases/tag/v<version>`, the appcast's `fullReleaseNotesLink`
+  - `ClairUI` keeps the "update ready" state and the version it last ran, where the banners can observe them later.
 
 **Alternatives considered:**
 - Helium's Sparkle patches inside Chromium: rejected. They add four patches to maintain on every Chromium update, make Sparkle an engine input, and would be removed again once the native window exists.
 - Building Sparkle from source: rejected. The pinned, checksummed release tarball already supplies Sparkle's tools, and building the framework adds time without a benefit to Clair.
 - Sparkle's standard UI with dialogs and release notes: rejected by product choice, which is Arc-style.
+- A separate "Install Update and Relaunch" menu item next to "Check for Updates…": replaced by Arc's single item that changes to "Update Available…".
+- Arc's "Automatic Updates" checkbox and settings toggle: rejected, because Clair has no update settings.
 
 ### D5. Release pipeline: ensure the engine, run the quality checks, package, publish
 
@@ -215,7 +221,7 @@ Handling:
   - no "Chromium" in `CFBundleName`
   - in `package` only: `codesign --verify --strict`, `spctl --assess` and `stapler validate` pass
 - **Runtime behaviour** is covered by the quality checks (D12).
-- **A manual release checklist** keeps only what the quality checks can't do on a hosted runner: a clean Mac's first open of the notarized DMG, default-browser registration, the real Developer ID update path (deltas, install on quit, Install and Relaunch), and Sparkle's rejection of a release signed by a different team.
+- **A manual release checklist** keeps only what the quality checks can't do on a hosted runner: a clean Mac's first open of the notarized DMG, default-browser registration, the real Developer ID update path (deltas, install on quit, Restart and Update, install while idle), and Sparkle's rejection of a release signed by a different team.
 
 ### D8. Attribution and licensing
 
@@ -297,7 +303,8 @@ Handling:
   - `navigator.userAgent` reports the engine's Chromium version and doesn't contain the Clair version
   - the About page shows the Clair version and build number, and the Chromium version labelled as the engine
   - an idle first launch makes no requests to Google service hosts, checked with `--log-net-log`
-  - "Check for Updates…" against local test appcasts, signed with the test key, reports "up to date" and "Clair X.Y.Z is ready" correctly
+  - "Check for Updates…" against local test appcasts, signed with the test key, reports "up to date" and "Clair X.Y.Z is ready" correctly, and the item then reads "Update Available…"
+  - with an update waiting and a simulated idle period, Clair installs and relaunches, and doesn't while a download is in progress, an incognito window is open, or a tab is audible
   - relaunching through `ClairHost` restores the open windows and tabs
 
   The runtime suite runs the app through the macOS accessibility APIs (XCUITest, launching `Clair.app` by path) for native UI. It uses the Chrome DevTools Protocol (`--remote-debugging-port`, quality-check builds only) for page state.
@@ -321,6 +328,8 @@ Handling:
   → The quality suite checks the items. Fallback: a one-line hook in `main_menu_builder.mm` that calls into `ClairUI`.
 - **[Risk] Sparkle and Chromium both want to relaunch.**
   → Sparkle's relaunch waits for Chromium's shutdown, as in Helium. The quality suite covers relaunch through `ClairHost`, and the release checklist covers the real update path.
+- **[Risk] An idle install interrupts something the user left running,** such as a long download, a call, or music.
+  → It runs only after 30 minutes without input, and `ClairHost` vetoes it while a download is in progress, an incognito window is open, or a tab is audible or capturing. The session is restored after the relaunch. The quality suite covers each veto.
 - **[Risk] Hosted-runner GUI tests are flaky.**
   → Tests wait on conditions rather than fixed times, and a test failure is retried once before it counts.
 - **[Risk] Disk on the owner's SSD:** a persistent workspace and its downloads cache take about 150 GB.
