@@ -18,7 +18,7 @@ Clair SHALL load its native framework, `ClairUI.framework`, from `Clair.app/Cont
 - **THEN** it starts and renders a page with Chromium's stock menus, and logs that the native layer is missing
 
 ### Requirement: One contract between Chromium and the native layer
-The native layer SHALL reach Chromium only through the Objective-C protocols declared in `native/ClairHost.h`, and Chromium SHALL reach the native layer only through the entry point that header declares. In this change the contract SHALL cover at least the graceful relaunch that restores the session, and the Chromium and ungoogled-chromium versions.
+The native layer SHALL reach Chromium only through the Objective-C protocols declared in `native/ClairHost.h`, and Chromium SHALL reach the native layer only through the entry point that header declares. In this change the contract SHALL cover at least the graceful relaunch that restores the session, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), and the Chromium and ungoogled-chromium versions.
 
 #### Scenario: Relaunch from the native layer
 - **WHEN** the native layer asks the host to relaunch
