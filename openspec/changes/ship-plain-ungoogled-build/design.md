@@ -33,8 +33,7 @@ Four existing projects already solve most of this change, and Clair copies from 
 Constraints:
 
 - **Hosted runner:** Clair's macOS jobs use GitHub's `xcode-27` image (a public preview: macOS 27 with Xcode 27). A standard hosted Mac has 3 cores and 7 GB RAM, below Chromium's 8 GB minimum. Measured on PR #1's `macos-26` runs: about 147 GB free after cleanup, a 38-minute fetch and patch job, and a 17.4 GB patched source tree (6.0 GB with zstd). The job limit is 6 hours.
-- **Owner's Mac:** an M1 Pro with 32 GB RAM and an external APFS SSD, used as the `clair-release` self-hosted runner. It is not always online.
-- **Development machine:** a resource-limited VM with Xcode 27.2 that never fetches or builds Chromium.
+- **Owner's Mac:** an M1 Pro with 32 GB RAM, used as the `clair-release` self-hosted runner. The runner's work directory and the persistent engine workspace are on its internal disk, which it shares with macOS and the owner's files. The owner starts the runner by hand, so it is online only while the owner runs it.
 - **Toolchain:** Xcode 27 everywhere: hosted jobs, the owner's Mac and the development machine. The native layer's project uses Xcode 27.2's JSON format (`project.xcproj`), which Xcode 26 can't open. Chromium may still need an older macOS SDK under Xcode 27: Crest builds with Xcode 27 and the macOS 26.5 SDK, because Chromium's pinned LLD can't read the Xcode 27 SDK's `libSystem.tbd`.
 - **Engine:** ungoogled-chromium removes Web Store URLs (`disable-webstore-urls.patch`). Extensions are installed through the `extension-mime-request-handling` flag.
 
@@ -242,12 +241,17 @@ Handling:
 
 - **No Chromium compile runs on hosted runners.** Hosted runners only fetch and patch the source (the patch check) or run the packaged app (the quality checks).
 - **Runner security, since the repository is public:**
-  - The runner uses a dedicated macOS user.
+  - The runner runs as the owner's own macOS user and is started by hand, not as a service. Workflow code therefore has the owner's file and keychain access. This is accepted because only the owner can start runs on it (below), and `engine.yml` builds only branches of this repository, never a pull request ref (`refs/pull/*`).
   - Only `workflow_dispatch` runs target `clair-release`, and starting one needs write access to the repository, which only the owner has. No `pull_request` workflow targets it.
   - Fork PR workflows need the owner's approval ("Require approval for all external contributors").
   - Engine builds run without the `release` environment, so they never see release secrets. They need only `contents: write` to publish the engine prerelease.
   - `prepare-runner.sh` (which deletes Xcode versions and simulators) runs only on hosted runners.
-- **Secrets** reach only release jobs on the Mac, for the duration of the job. The signing certificate goes into a temporary keychain that the job deletes at the end, so the Mac keeps nothing between releases.
+- **Secrets** reach only release jobs on the Mac, for the duration of the job. Because the runner shares the owner's user, the release job leaves the owner's keychains alone:
+  - It creates `$RUNNER_TEMP/clair-signing.keychain-db`, locked with the CI keychain password, and imports the Developer ID certificate into it.
+  - It adds that keychain to the user's keychain search list for the duration of the job, so it shows in Keychain Access while a release runs. It never changes the default keychain and never writes to the login keychain.
+  - `notarytool` gets the App Store Connect key as a file and IDs (`--key`, `--key-id`, `--issuer`), not as a profile stored in the keychain.
+  - When the job ends, including on failure or cancellation, it restores the previous search list and deletes the keychain, so the Mac keeps nothing between releases.
+- The engine smoke test runs the bare engine with `--use-mock-keychain`, so engine builds add no keychain items either.
 
 ### D10. Engine key and prebuilt engines
 
@@ -267,15 +271,15 @@ Handling:
   The naming follows Crest's (`chromium-engine-<key>`, `Crest-Chromium-Engine-<key>-arm64.zip`). The release is created as a draft prerelease and published with `--latest=false` only after every asset is uploaded, so a half-uploaded engine is never visible. Engine prereleases never become the repository's "latest" release, and the release tooling looks only at `v*` tags. They do appear on the Releases page and add a tag each; each one's notes say it's an internal build artifact, not for users.
 - **`engine.yml`** (`workflow_dispatch`, input: the ref to build) runs on the owner's Mac:
   1. works out the key and stops early if `chromium-engine-<key>` already exists
-  2. prepares the source in the persistent workspace on the external SSD (D11)
-  3. builds with the full release settings
+  2. prepares the source in the persistent workspace on the Mac's internal disk (D11)
+  3. builds with the full release settings, under `caffeinate -i` so the Mac doesn't sleep during the build
   4. runs the headless smoke test against the bare engine
   5. zips the app and publishes `chromium-engine-<key>`
 - Because the key is computed from file contents, an engine built from a pull request branch is valid for the squash-merged commit on `main` as long as the engine inputs are the same.
 
 ### D11. Fast engine rebuilds on the owner's Mac
 
-- The Mac keeps a persistent engine workspace on its external SSD: the unpacked Chromium source, the downloads cache and `out/Default`. It is never deleted between runs.
+- The Mac keeps a persistent engine workspace on its internal disk: the unpacked Chromium source, the downloads cache and `out/Default`. It is never deleted between runs, and is excluded from Time Machine and Spotlight.
 - **Same ungoogled-chromium tag, changed Clair patches or overlay:** `build.sh` reverts the previously applied Clair series and overlay and applies the new ones in place. Only files they touch change, so ninja rebuilds only the affected targets. The workspace records which key it currently holds.
 - **New ungoogled-chromium tag or changed ungoogled series:** a fresh source tree, which in practice means a full rebuild.
 - If an in-place update fails or leaves the tree in an unknown state, `build.sh` falls back to a fresh tree. Correctness wins over speed.
@@ -332,8 +336,8 @@ Handling:
   → It runs only after 30 minutes without input, and `ClairHost` vetoes it while a download is in progress, an incognito window is open, or a tab is audible or capturing. The session is restored after the relaunch. The quality suite covers each veto.
 - **[Risk] Hosted-runner GUI tests are flaky.**
   → Tests wait on conditions rather than fixed times, and a test failure is retried once before it counts.
-- **[Risk] Disk on the owner's SSD:** a persistent workspace and its downloads cache take about 150 GB.
-  → `engine.yml` reports free space and refuses to start below a set reserve.
+- **[Risk] Disk on the owner's Mac:** a persistent workspace and its downloads cache take about 150 GB of the internal disk, which also holds macOS and the owner's files, so filling it affects the whole Mac.
+  → Before building, `engine.yml` estimates how much the build will grow the workspace (a fresh tree: about 150 GB, less the workspace it replaces; an in-place update: much less) and refuses to start if that would leave less than 30 GB free. It reports the free space before and after the build.
 - **[Risk] `main` moves during a long release.**
   → `concurrency: release`, plus the publish job's check that `main` hasn't moved before creating the Release. Avoid pushing to `main` while a release runs.
 - **[Risk] Helium's versioning and identity patches stop applying** on a new Chromium version.

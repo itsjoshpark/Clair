@@ -34,7 +34,7 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
 - Integrate Sparkle 2 auto-updates in the native layer. `Sparkle.framework` comes from the pinned Sparkle release and is embedded at packaging time. The native layer adds one update item to the Clair menu with AppKit, "Check for Updates…", which reads "Update Available…" while a downloaded update is waiting, as in Arc. A waiting update installs on quit, or on its own once the user has been idle for 30 minutes. Updates use an EdDSA-signed appcast and delta updates.
 - Build the engine as a prebuilt artifact:
   - an **engine key** is a hash over every engine input: the ungoogled-chromium pin, `downloads.ini`, the GN flags, `patches/`, the overlay, `ClairHost.h`, the compiled-in branding resources, and the scripts that prepare and build Chromium
-  - the owner starts an engine build by hand, on any of the owner's branches. It runs on the owner's self-hosted Mac (M1 Pro, 32 GB, external SSD, label `clair-release`), which keeps its build directory between runs so a patch fix rebuilds only what it touched
+  - the owner starts an engine build by hand, on any of the owner's branches. It runs on the owner's self-hosted Mac (M1 Pro, 32 GB, label `clair-release`), which keeps its build directory on its internal disk between runs so a patch fix rebuilds only what it touched
   - the result is published as a GitHub prerelease, `chromium-engine-<key>`, and is reused by every app build, quality check and release with the same key
 - Split the checks:
   - a **merge gate** on every pull request that finishes in minutes: script tests, shellcheck, actionlint, and the native layer's build and unit tests
@@ -86,7 +86,7 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
   - a Sparkle EdDSA private key (GitHub secret `SPARKLE_ED_PRIVATE_KEY`) that must be backed up; losing it strands every installed copy. The feed URL can be moved later by shipping an update with a new `SUFeedURL`, as long as the old URL keeps working during the move.
 - **Infrastructure:**
   - GitHub Actions: free for public repos, 6-hour job limit, 10 GB cache
-  - the owner's self-hosted Mac runs engine builds and releases. It must be online for either, and holds a persistent engine workspace on its external SSD
+  - the owner's self-hosted Mac runs engine builds and releases. It must be online for either (the owner starts the runner by hand), and holds a persistent engine workspace on its internal disk
   - engine artifacts are published as GitHub prereleases, one per engine key
 - **Local development:** the development machine never fetches or builds Chromium. The native layer builds locally with Xcode against `ClairHost.h`, without a Chromium checkout.
 - **Irreversible once shipped:** the bundle ID, data directory, keychain name, Sparkle public key, and the version scheme's ordering. The appcast URL can be moved only through a migration update.
