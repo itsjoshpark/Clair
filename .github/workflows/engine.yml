@@ -25,18 +25,24 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # A fresh tree and its downloads cache take about 150 GB, and 30 GB of the
-  # internal disk must stay free (D11).
-  FRESH_TREE_GB: 150
+  # A fresh tree, its build output and its downloads cache take about 38 GB
+  # (measured, docs/building.md); 50 leaves a margin. 30 GB of the internal disk
+  # must stay free (D11).
+  FRESH_TREE_GB: 50
   RESERVE_GB: 30
   # The build is stopped if free space falls below this while it runs.
   FLOOR_GB: 10
 
 jobs:
   engine:
-    name: Build and publish the engine
+    name: Build the engine
     runs-on: [self-hosted, clair-release]
     timeout-minutes: 2160
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+      published: ${{ steps.key.outputs.published }}
+      commit: ${{ steps.package.outputs.commit }}
+      branch: ${{ steps.package.outputs.branch }}
     steps:
       - name: Check the ref
         env:
@@ -170,10 +176,14 @@ jobs:
           STAGES: ${{ steps.workspace.outputs.stages }}
         run: |
           free_gb="$(df -g . | awk 'NR == 2 { print $4 }')"
+          # build/base is an APFS clone of build/src and shares its disk space,
+          # but du would count it again, so it is left out.
           existing_gb=0
-          if [[ -d build ]]; then
-            existing_gb="$(du -sg build | cut -f 1)"
-          fi
+          for dir in build/src build/download_cache; do
+            if [[ -d "$dir" ]]; then
+              existing_gb=$(( existing_gb + $(du -sg "$dir" | cut -f 1) ))
+            fi
+          done
           # A fresh tree grows the workspace to about FRESH_TREE_GB. Resuming a
           # compile adds at most what is left of that.
           growth=$(( FRESH_TREE_GB - existing_gb ))
@@ -260,9 +270,11 @@ jobs:
           rm -rf "$home" "$RUNNER_TEMP/smoke-output"
 
       - name: Package the engine
+        id: package
         if: ${{ steps.key.outputs.published != 'true' }}
         run: |
-          out="$RUNNER_TEMP/engine"
+          # The publish job reads it from the workspace, which outlives the job.
+          out=build/package
           rm -rf "$out"
           mkdir -p "$out"
           zip="Clair-Chromium-Engine-$KEY-arm64.zip"
@@ -289,18 +301,37 @@ jobs:
             > "$out/engine.json"
           cat "$out/engine.json"
           ls -lh "$out"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Publish chromium-engine-${{ steps.key.outputs.key }}
-        if: ${{ steps.key.outputs.published != 'true' }}
+  publish:
+    # A job of its own, so it gets a fresh token: the engine job's token can
+    # stop working before a full compile ends (HTTP 401 after four hours).
+    name: Publish chromium-engine-${{ needs.engine.outputs.key }}
+    needs: engine
+    if: ${{ needs.engine.outputs.published == 'false' }}
+    runs-on: [self-hosted, clair-release]
+    timeout-minutes: 60
+    steps:
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          KEY: ${{ needs.engine.outputs.key }}
+          COMMIT: ${{ needs.engine.outputs.commit }}
+          BRANCH: ${{ needs.engine.outputs.branch }}
         run: |
+          out="$GITHUB_WORKSPACE/build/package"
           tag="chromium-engine-$KEY"
-          notes="Internal build artifact for Clair's app builds, not for users. Engine key $KEY, built from $BRANCH at $(git rev-parse --short HEAD)."
+          if [[ ! -f "$out/Clair-Chromium-Engine-$KEY-arm64.zip" ]]; then
+            echo "::error::No packaged engine for $KEY in $out"
+            exit 1
+          fi
+          notes="Internal build artifact for Clair's app builds, not for users. Engine key $KEY, built from $BRANCH at ${COMMIT:0:7}."
           # A draft stays invisible until every asset is uploaded.
           gh release create "$tag" --draft --prerelease --latest=false \
-            --target "$(git rev-parse HEAD)" --title "$tag" --notes "$notes" \
-            "$RUNNER_TEMP"/engine/*
+            --target "$COMMIT" --title "$tag" --notes "$notes" \
+            "$out"/*
           gh release edit "$tag" --draft=false --prerelease --latest=false
-          rm -rf "$RUNNER_TEMP/engine"
+          rm -rf "$out"
           echo "::notice::Published $tag"

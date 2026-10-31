@@ -274,7 +274,7 @@ Handling:
   2. prepares the source in the persistent workspace on the Mac's internal disk (D11)
   3. builds with the full release settings, under `caffeinate -i -s` so the Mac doesn't sleep during the build. It stops the build if free space falls below 10 GB.
   4. runs the headless smoke test against the bare engine, in a throwaway home (`HOME` and `CFFIXED_USER_HOME`) with `--use-mock-keychain`, so the owner's own Clair data directory and keychain are never touched
-  5. zips the app and publishes `chromium-engine-<key>`
+  5. zips the app into the workspace, and a second job on the same Mac publishes `chromium-engine-<key>` with a token of its own: the build job's token stopped working (HTTP 401) by the end of a four-hour compile
 - Because the key is computed from file contents, an engine built from a pull request branch is valid for the squash-merged commit on `main` as long as the engine inputs are the same.
 
 ### D11. Fast engine rebuilds on the owner's Mac
@@ -339,8 +339,8 @@ Handling:
   → It runs only after 30 minutes without input, and `ClairHost` vetoes it while a download is in progress, an incognito window is open, or a tab is audible or capturing. The session is restored after the relaunch. The quality suite covers each veto.
 - **[Risk] Hosted-runner GUI tests are flaky.**
   → Tests wait on conditions rather than fixed times, and a test failure is retried once before it counts.
-- **[Risk] Disk on the owner's Mac:** a persistent workspace and its downloads cache take about 150 GB of the internal disk, which also holds macOS and the owner's files, so filling it affects the whole Mac.
-  → Before building, `engine.yml` estimates how much the build will grow the workspace (a fresh tree: about 150 GB, less the workspace it replaces; an in-place update: much less) and refuses to start if that would leave less than 30 GB free. It reports the free space before and after the build.
+- **[Risk] Disk on the owner's Mac:** a persistent workspace and its downloads cache take about 38 GB of the internal disk (measured on the first engine; 50 GB with a margin), which also holds macOS and the owner's files, so filling it affects the whole Mac.
+  → Before building, `engine.yml` estimates how much the build will grow the workspace (a fresh tree: about 50 GB, less the workspace it replaces; an in-place update: much less) and refuses to start if that would leave less than 30 GB free. It reports the free space before and after the build.
 - **[Risk] `main` moves during a long release.**
   → `concurrency: release`, plus the publish job's check that `main` hasn't moved before creating the Release. Avoid pushing to `main` while a release runs.
 - **[Risk] Helium's versioning and identity patches stop applying** on a new Chromium version.

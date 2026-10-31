@@ -102,9 +102,10 @@ jobs:
           df -h "$work_folder"
           free_gb="$(df -g "$work_folder" | awk 'NR == 2 { print $4 }')"
           echo "Free: $free_gb GB"
-          # A fresh engine tree takes about 150 GB, and 30 GB must stay free (D11).
-          if (( free_gb < 180 )); then
-            echo "::warning::$free_gb GB free; a fresh engine build needs about 180 GB (150 GB workspace + 30 GB reserve)"
+          # A fresh engine workspace takes about 50 GB with a margin, and 30 GB
+          # must stay free (D11).
+          if (( free_gb < 80 )); then
+            echo "::warning::$free_gb GB free; a fresh engine build needs about 80 GB (50 GB workspace + 30 GB reserve)"
           fi
           echo "::endgroup::"
 
