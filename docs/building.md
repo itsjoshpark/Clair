@@ -17,19 +17,28 @@ To run an unsigned app downloaded from CI, unzip it and remove the quarantine fl
 
 ## Building locally
 
-You need:
+### System requirements
 
-- an Apple Silicon Mac with macOS 15.6 or later, about 150 GB of free disk, and 32 GB or more of RAM. A clean build takes several hours.
-- Xcode 26.2 or later (CI uses 26.6, the newest on GitHub's runner image; Chromium 156 needs the macOS 26.2 SDK or newer), plus its Metal toolchain: `xcodebuild -downloadComponent MetalToolchain`
-- Homebrew packages: `brew install go ninja coreutils esbuild typescript zstd quilt`
-- Python 3.13, with `pip3 install PySocks httplib2`
+Building and running have different requirements: Clair runs on macOS 15.6 or later, but building it needs a much newer Mac.
+
+| | Engine (Chromium) | Native layer (`ClairUI`) |
+|---|---|---|
+| Mac | Apple Silicon, 32 GB of RAM or more, about 150 GB of free disk | Apple Silicon |
+| macOS | 26.6 or later, for Xcode 27.2 | 26.6 or later, for Xcode 27.2 |
+| Xcode | 27.2 or later, with its Metal toolchain (`xcodebuild -downloadComponent MetalToolchain`): ANGLE compiles its shaders with it | 27.2 or later: the project is in Xcode's JSON format (`project.xcproj`), which Xcode 26 can't open |
+| macOS SDK | 26.x, 26.2 or later, passed with `-s`: Chromium 156 needs 26.2, and its linker can't read the macOS 27 SDK that Xcode 27 ships. The Command Line Tools include a 26.x SDK (`/Library/Developer/CommandLineTools/SDKs/`) | Xcode's own |
+| Other tools | Python 3.13 with `pip3 install PySocks httplib2`, and `brew install go ninja coreutils esbuild typescript zstd quilt` | none |
+
+`engine.yml` picks the newest installed 26.x SDK itself. On the owner's Mac, `.github/workflows/runner-check.yml` checks the Xcode version, the Metal toolchain, the SDK, Python and the Homebrew tools, and warns when free disk is low. Software Update can replace the Command Line Tools' SDKs; when the SDK changes, the engine build deletes `out/Default` and compiles from scratch. A clean engine build takes about 4 hours on an M1 Pro (see [Engine build times](#engine-build-times)).
+
+GitHub's `macos-26` runner image has Xcode 26.6 at most, so CI jobs that build `ClairUI` use the `xcode-27` image (a public preview).
 
 Then:
 
 ```sh
 git clone --recurse-submodules https://github.com/itsjoshpark/Clair.git
 cd Clair
-./build.sh            # fetch, prepare, configure and compile
+./build.sh -s /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk   # fetch, prepare, configure and compile
 ```
 
 The stages can also be run one at a time: `./build.sh fetch prepare`, then `./build.sh configure`, then `./build.sh compile`. Run `./build.sh -h` for the options. The app is built at `build/src/out/Default/`.
