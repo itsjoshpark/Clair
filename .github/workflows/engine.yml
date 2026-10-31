@@ -127,10 +127,10 @@ jobs:
         run: |
           # build/engine_key: the key of a finished compile. build/prepared_key:
           # the key of a fetched, patched and configured tree that a rerun can
-          # resume compiling. build/prepared_sdk: the SDK it was configured with.
-          # mac_sdk_path is a symlink with a fixed name, so ninja doesn't see an
-          # SDK change: a tree whose SDK changed is compiled again from scratch.
-          echo "clean=false" >> "$GITHUB_OUTPUT"
+          # resume compiling. build/prepared_sdk: the SDK it was configured with;
+          # when that changes, the configure stage deletes the build output so
+          # nothing compiled with the old SDK is linked in.
+          clean=false
           if [[ "$CLEAN" != true && "$(cat build/engine_key 2>/dev/null)" == "$KEY" && -d build/src/out/Default/Clair.app ]]; then
             echo "Workspace already holds a finished engine for $KEY"
             echo "stages=" >> "$GITHUB_OUTPUT"
@@ -138,19 +138,22 @@ jobs:
             if [[ "$CLEAN" == true ]]; then
               echo "Compiling $KEY from scratch, as requested"
               echo "stages=configure compile" >> "$GITHUB_OUTPUT"
-              echo "clean=true" >> "$GITHUB_OUTPUT"
+              clean=true
             elif [[ "$(cat build/prepared_sdk 2>/dev/null)" == "$MACOS_SDK" ]]; then
               echo "Resuming the compile for $KEY"
               echo "stages=compile" >> "$GITHUB_OUTPUT"
             else
               echo "The SDK for $KEY is now $MACOS_SDK: compiling from scratch"
               echo "stages=configure compile" >> "$GITHUB_OUTPUT"
-              echo "clean=true" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "Starting from fresh source for $KEY"
-            echo "stages=fetch prepare configure compile" >> "$GITHUB_OUTPUT"
+            # build.sh updates the tree in place when only Clair's patches
+            # changed (D11), and otherwise starts from fresh source.
+            echo "Updating the workspace for $KEY"
+            echo "stages=update configure compile" >> "$GITHUB_OUTPUT"
+            clean="$CLEAN"
           fi
+          echo "clean=$clean" >> "$GITHUB_OUTPUT"
 
       - name: Check the Metal toolchain
         if: ${{ steps.workspace.outputs.stages != '' && steps.key.outputs.published != 'true' }}
@@ -192,18 +195,18 @@ jobs:
           set -m
           read -r -a stages <<<"$STAGES"
           rm -f build/engine_key
-          if [[ "${stages[0]}" == fetch ]]; then
-            # The fetch stage also clears compile_status, but only once it runs.
+          if [[ "${stages[0]}" == update ]]; then
+            # The update also clears compile_status, but only once it runs.
             rm -f build/prepared_key build/prepared_sdk build/compile_status
           elif [[ "${stages[0]}" == configure ]]; then
             # The tree stays prepared, but its SDK is recorded only once the
             # compile starts, so a failed configure is retried.
             rm -f build/prepared_sdk build/compile_status
-            if [[ "$CLEAN" == true ]]; then
-              # The configure stage recreates out/ from args.gn up.
-              echo "Deleting the build output in build/src/out"
-              rm -rf build/src/out
-            fi
+          fi
+          if [[ "$CLEAN" == true ]]; then
+            # The configure stage recreates out/ from args.gn up.
+            echo "Deleting the build output in build/src/out"
+            rm -rf build/src/out
           fi
           python3 --version
           if ! python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 13))'; then
@@ -211,7 +214,8 @@ jobs:
             exit 1
           fi
           # caffeinate keeps the Mac awake for the length of the build.
-          caffeinate -i -s ./build.sh -s "$MACOS_SDK" "${stages[@]}" &
+          # -k keeps the base tree that in-place updates start from.
+          caffeinate -i -s ./build.sh -k -s "$MACOS_SDK" "${stages[@]}" &
           build_pid=$!
           trap 'kill -TERM -- "-$build_pid" 2>/dev/null || true' EXIT INT TERM
           prepared=false
