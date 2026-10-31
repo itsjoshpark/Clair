@@ -20,8 +20,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Chromium's pinned LLD can't read the macOS 27 SDK (design Risks).
-  MACOS_SDK: /Library/Developer/CommandLineTools/SDKs/MacOSX26.2.sdk
   # A fresh tree and its downloads cache take about 150 GB, and 30 GB of the
   # internal disk must stay free (D11).
   FRESH_TREE_GB: 150
@@ -68,6 +66,30 @@ jobs:
           echo /opt/homebrew/bin >> "$GITHUB_PATH"
           echo /opt/homebrew/opt/python@3.13/libexec/bin >> "$GITHUB_PATH"
 
+      - name: Pick the macOS SDK
+        run: |
+          # Chromium 156 needs a macOS 26.2 or newer SDK, and its pinned LLD
+          # can't read the macOS 27 SDK (design Risks). Software Update
+          # replaces the Command Line Tools' SDKs, so take the newest 26.x
+          # installed rather than a fixed path.
+          best="" best_version=""
+          for sdk in "$(xcode-select -p)"/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.*.sdk \
+                     /Library/Developer/CommandLineTools/SDKs/MacOSX26.*.sdk; do
+            [[ -d "$sdk" && ! -L "$sdk" ]] || continue
+            version="$(/usr/libexec/PlistBuddy -c 'Print :Version' "$sdk/SDKSettings.plist" 2>/dev/null)" || continue
+            [[ "$version" =~ ^26\.([0-9]+)(\.([0-9]+))?$ ]] || continue
+            (( BASH_REMATCH[1] >= 2 )) || continue
+            if [[ -z "$best" ]] || [[ "$(printf '%s\n%s\n' "$best_version" "$version" | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -1)" == "$version" ]]; then
+              best="$sdk" best_version="$version"
+            fi
+          done
+          if [[ -z "$best" ]]; then
+            echo "::error::No macOS 26.2 or newer 26.x SDK is installed."
+            exit 1
+          fi
+          echo "macOS SDK $best_version: $best"
+          echo "MACOS_SDK=$best" >> "$GITHUB_ENV"
+
       - name: Work out the engine key
         id: key
         env:
@@ -98,13 +120,18 @@ jobs:
         run: |
           # build/engine_key: the key of a finished compile. build/prepared_key:
           # the key of a fetched, patched and configured tree that a rerun can
-          # resume compiling.
+          # resume compiling. build/prepared_sdk: the SDK it was configured with.
           if [[ "$(cat build/engine_key 2>/dev/null)" == "$KEY" && -d build/src/out/Default/Clair.app ]]; then
             echo "Workspace already holds a finished engine for $KEY"
             echo "stages=" >> "$GITHUB_OUTPUT"
           elif [[ "$(cat build/prepared_key 2>/dev/null)" == "$KEY" ]]; then
-            echo "Resuming the compile for $KEY"
-            echo "stages=compile" >> "$GITHUB_OUTPUT"
+            if [[ "$(cat build/prepared_sdk 2>/dev/null)" == "$MACOS_SDK" ]]; then
+              echo "Resuming the compile for $KEY"
+              echo "stages=compile" >> "$GITHUB_OUTPUT"
+            else
+              echo "Resuming $KEY with a new SDK ($MACOS_SDK): configuring again"
+              echo "stages=configure compile" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "Starting from fresh source for $KEY"
             echo "stages=fetch prepare configure compile" >> "$GITHUB_OUTPUT"
@@ -151,7 +178,11 @@ jobs:
           rm -f build/engine_key
           if [[ "${stages[0]}" == fetch ]]; then
             # The fetch stage also clears compile_status, but only once it runs.
-            rm -f build/prepared_key build/compile_status
+            rm -f build/prepared_key build/prepared_sdk build/compile_status
+          elif [[ "${stages[0]}" == configure ]]; then
+            # The tree stays prepared, but its SDK is recorded only once the
+            # compile starts, so a failed configure is retried.
+            rm -f build/prepared_sdk build/compile_status
           fi
           python3 --version
           if ! python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 13))'; then
@@ -167,6 +198,7 @@ jobs:
             # Record a configured tree as soon as the compile starts, so a rerun
             # after a compile failure resumes instead of starting again.
             if ! $prepared && [[ -f build/compile_status ]]; then
+              echo "$MACOS_SDK" > build/prepared_sdk
               echo "$KEY" > build/prepared_key
               prepared=true
             fi
