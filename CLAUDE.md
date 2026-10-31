@@ -20,7 +20,7 @@ Never fetch Chromium or build it by hand on the development machine; only `engin
 - **App:** `ClairUI`, packaging, signing and Sparkle. It builds in minutes against the prebuilt engine for the current key.
 - **Merge gate** (`ci.yml`, required, minutes): the `scripts/*.test.sh` tests, `shellcheck -S warning`, `actionlint`, and `ClairUI`'s build and unit tests. A PR that changes the engine key also runs the patch check (`./build.sh fetch prepare` on a hosted runner, about 40 minutes), and can't merge until its engine is published.
 - **Quality checks** (`quality.yml`): run after every merge to `main`. They package the app from the engine and run the runtime suite in `tests/runtime/`. A failure opens a `quality-failure` issue; fix it from there. No release ships with quality checks failing or unfinished.
-- **Until the first engine is published,** `build.yml` still runs PR #1's hosted chain: a fetch job, then up to 20 compile phases through `build-phase.yml`.
+- **Patch check** (`build.yml`): until the engine check in `ci.yml` exists (task 11.2), every PR that isn't docs-only runs `./build.sh fetch prepare` on a hosted runner. No hosted workflow compiles Chromium.
 - The self-hosted Mac never runs pull request jobs, especially not fork PRs. Release secrets live in the `release` environment, and engine builds and quality checks never see them. Never run `.github/scripts/prepare-runner.sh` on the self-hosted runner: it deletes Xcode versions and simulators.
 - Every macOS job and the self-hosted Mac use Xcode 27 (hosted runner label `xcode-27`).
 - Read job logs with `gh run view --job <id> --log`, or with `gh api --allow-escape-sequences repos/itsjoshpark/Clair/actions/jobs/<id>/logs`. Fix what they show, then push.
@@ -31,7 +31,7 @@ Local work is limited to editing files, running the small script tests, and buil
 
 - Use Conventional Commits (`feat:`, `fix:`, `build:`, `ci:`, `docs:`, `chore:`…) for commits and PR titles. The PR title becomes the squash commit message.
 - Work on a branch and open a PR. Never push to `main`.
-- **While PR #1's hosted chain is in use, every push to an open PR restarts its build** and cancels the one in progress, including docs-only pushes, because `paths-ignore` compares the whole PR diff. While a build is running, keep small follow-ups (task checkmarks, notes) as local commits or on a follow-up branch.
+- **Every push to an open PR restarts its patch check** and cancels the one in progress, including docs-only pushes, because `paths-ignore` compares the whole PR diff. A push never affects an `engine.yml` run, which checks out its branch when it starts.
 - Once a PR's checks pass (CI, plus Build when it ran), squash-merge it with `gh pr merge --squash --delete-branch`. Then switch to `main`, pull, and delete the local branch.
 
 ## Repository layout

@@ -9,7 +9,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ./build.sh [-d] [-k] [-l] [-j JOBS] [-s SDK_PATH] [-t SECONDS] [STAGE...]
+Usage: ./build.sh [-d] [-k] [-j JOBS] [-s SDK_PATH] [-t SECONDS] [STAGE...]
 
 Stages (run in the order given; default: all):
   fetch      Retrieve the Chromium source into build/src
@@ -28,8 +28,6 @@ Options:
   -d           Use the Chromium source archive instead of cloning
   -k           Keep a clone of the tree from before Clair's patches in
                build/base, so a later "update" can work in place (APFS only)
-  -l           Light build for pull request checks: configure appends
-               flags.pr.gn (no ThinLTO, no symbols, one link at a time)
   -j JOBS      Run at most JOBS ninja jobs in parallel during compile
   -s SDK_PATH  Use this macOS SDK instead of the Xcode default
   -t SECONDS   Time limit for the compile stage
@@ -61,13 +59,11 @@ _clone=true
 _keep_base=false
 _sdk_path=""
 _time_limit=""
-_light=false
 _ninja_jobs=()
-while getopts ':dklj:s:t:h' option; do
+while getopts ':dkj:s:t:h' option; do
   case "$option" in
     d) _clone=false ;;
     k) _keep_base=true ;;
-    l) _light=true ;;
     j)
       if [[ ! "$OPTARG" =~ ^[1-9][0-9]*$ ]]; then
         echo "Invalid job count: $OPTARG" >&2
@@ -246,9 +242,6 @@ stage_configure() {
   mkdir -p "$_out_dir"
   {
     cat "$_main_repo/flags.gn" "$_root_dir/flags.macos.gn" "$_root_dir/flags.clair.gn"
-    if [[ "$_light" == true ]]; then
-      cat "$_root_dir/flags.pr.gn"
-    fi
     echo 'target_cpu = "arm64"'
     if [[ -n "$_sdk_path" ]]; then
       echo 'mac_sdk_path = "//out/Default/sdk/selected_macos_sdk"'

@@ -121,7 +121,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [ ] 10.3 Make `build.sh` update the persistent workspace in place when the ungoogled-chromium pin is unchanged (D11), recording the key it holds, and fall back to a fresh tree otherwise. Verify that changing one Clair patch rebuilds only affected targets (ninja reports a small fraction of the full build), that the resulting engine matches a fresh-tree engine's smoke test, and that a deliberately corrupted workspace record triggers a fresh tree.
 - [x] 10.4 Make `engine.yml` estimate how much the coming build will grow the workspace (fresh tree or in place) and refuse to start if that would leave less than 30 GB free on the workspace's volume. It reports the free space before and after the build. Verify by setting the reserve above the current free space.
 - [ ] 10.5 **(owner)** Publish the first engine from `main` after PR #1 and #2 merge. Record the measured full-build time and a patch-fix rebuild time in `docs/building.md`.
-- [ ] 10.6 Remove the hosted compile phases (`build-phase.yml` and the compile part of `build.yml`) once 10.5 is done, keeping the fetch and patch job for the patch check. Verify that no hosted workflow runs ninja.
+- [x] 10.6 Remove the hosted compile phases (`build-phase.yml` and the compile part of `build.yml`) once 10.5 is done, keeping the fetch and patch job for the patch check. Verify that no hosted workflow runs ninja.
 
 ## 11. Checks
 

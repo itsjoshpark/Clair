@@ -1,9 +1,0 @@
-# Lighter settings for pull request builds on GitHub-hosted runners (3 cores,
-# 7 GB of memory). `./build.sh -l configure` appends this file; release builds
-# leave it out. The app still has the same identity and behavior, it is only
-# built without ThinLTO and without debug symbols or dSYMs, and links one
-# binary at a time.
-concurrent_links = 1
-enable_dsyms = false
-symbol_level = 0
-use_thin_lto = false
