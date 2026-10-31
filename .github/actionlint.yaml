@@ -1,0 +1,4 @@
+# actionlint settings. clair-release is the owner's self-hosted Mac (design D9).
+self-hosted-runner:
+  labels:
+    - clair-release

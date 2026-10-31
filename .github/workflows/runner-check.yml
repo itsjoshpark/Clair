@@ -1,0 +1,126 @@
+# Checks the owner's self-hosted Mac (task 7.0): toolchain versions, free disk
+# space, and that the runner's folder is kept out of Time Machine and
+# Spotlight. Start it by hand with `gh workflow run runner-check.yml`.
+name: Runner check
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    name: Check the self-hosted runner
+    runs-on: [self-hosted, clair-release]
+    timeout-minutes: 10
+    steps:
+      - name: Check toolchain, disk and exclusions
+        shell: bash
+        run: |
+          set -uo pipefail
+          failures=0
+          fail() { echo "::error::$*"; failures=$((failures + 1)); }
+          # Succeeds when dotted version $1 is at least $2.
+          version_at_least() {
+            awk -v a="$1" -v b="$2" 'BEGIN {
+              split(a, x, "."); split(b, y, ".")
+              for (i = 1; i <= 3; i++) {
+                if (x[i] + 0 > y[i] + 0) exit 0
+                if (x[i] + 0 < y[i] + 0) exit 1
+              }
+              exit 0
+            }'
+          }
+
+          echo "::group::Machine"
+          sw_vers
+          echo "Architecture: $(uname -m)"
+          echo "CPU: $(sysctl -n machdep.cpu.brand_string)"
+          echo "Memory: $(( $(sysctl -n hw.memsize) / 1073741824 )) GB"
+          echo "User: $(whoami)"
+          echo "::endgroup::"
+
+          echo "::group::Xcode"
+          xcode-select -p
+          if xcodebuild -version; then
+            xcode_version="$(xcodebuild -version | awk 'NR == 1 { print $2 }')"
+            version_at_least "$xcode_version" 27.2 || fail "Xcode $xcode_version is older than 27.2"
+          else
+            fail "xcodebuild is not available"
+          fi
+          metal="$(xcodebuild -showComponent MetalToolchain 2>&1)"
+          echo "$metal"
+          grep -q "Status: installed" <<<"$metal" ||
+            fail "The Metal toolchain is not installed (xcodebuild -downloadComponent MetalToolchain)"
+          echo "::endgroup::"
+
+          # Chromium 156 needs a macOS 26.2 or newer SDK, and its LLD can't read
+          # the macOS 27 SDK, so the engine builds against a 26.x SDK (design Risks).
+          echo "::group::macOS SDKs"
+          found_sdk=""
+          for sdk in "$(xcode-select -p)"/Platforms/MacOSX.platform/Developer/SDKs/MacOSX*.sdk \
+                     /Library/Developer/CommandLineTools/SDKs/MacOSX*.sdk; do
+            [[ -d "$sdk" && ! -L "$sdk" ]] || continue
+            version="$(/usr/libexec/PlistBuddy -c 'Print :Version' "$sdk/SDKSettings.plist" 2>/dev/null)"
+            echo "$version  $sdk"
+            if [[ "$version" == 26.* ]] && version_at_least "$version" 26.2; then
+              found_sdk="$sdk"
+            fi
+          done
+          if [[ -n "$found_sdk" ]]; then
+            echo "Engine SDK: $found_sdk"
+          else
+            fail "No macOS 26.2 or newer 26.x SDK found"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Python and Homebrew"
+          # engine.yml puts Homebrew first on PATH, so check its python3. Any
+          # Python 3.10 or newer may build; 3.13 is the fallback (design Risks).
+          PATH="/opt/homebrew/bin:$PATH"
+          if command -v python3 >/dev/null; then
+            python_version="$(python3 -c 'import platform; print(platform.python_version())')"
+            echo "Python $python_version: $(command -v python3)"
+            version_at_least "$python_version" 3.10 || fail "Python $python_version is older than 3.10"
+            python3 -c 'import socks, httplib2' 2>/dev/null ||
+              fail "Python $python_version lacks PySocks or httplib2 (python3 -m pip install --break-system-packages PySocks httplib2)"
+          else
+            fail "python3 is not on PATH (brew install python)"
+          fi
+          if command -v brew >/dev/null; then
+            brew --version | head -1
+            for formula in ninja esbuild typescript; do
+              brew list --versions "$formula" || fail "Homebrew formula $formula is not installed"
+            done
+          else
+            fail "brew is not on PATH"
+          fi
+          echo "::endgroup::"
+
+          work_folder="$(dirname "$RUNNER_WORKSPACE")"
+          runner_folder="$(dirname "$work_folder")"
+          echo "::group::Disk"
+          df -h "$work_folder"
+          free_gb="$(df -g "$work_folder" | awk 'NR == 2 { print $4 }')"
+          echo "Free: $free_gb GB"
+          # A fresh engine tree takes about 150 GB, and 30 GB must stay free (D11).
+          if (( free_gb < 180 )); then
+            echo "::warning::$free_gb GB free; a fresh engine build needs about 180 GB (150 GB workspace + 30 GB reserve)"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Time Machine and Spotlight"
+          echo "Runner folder: $runner_folder"
+          tm="$(tmutil isexcluded "$runner_folder")"
+          echo "$tm"
+          [[ "$tm" == "[Excluded]"* ]] ||
+            fail "Time Machine backs up $runner_folder (tmutil addexclusion $runner_folder)"
+          # An excluded folder returns no Spotlight results.
+          indexed="$(mdfind -onlyin "$runner_folder" -count "kMDItemDisplayName == '*'" 2>/dev/null || echo 0)"
+          echo "Spotlight items: $indexed"
+          (( indexed == 0 )) ||
+            fail "Spotlight indexes $runner_folder (System Settings > Spotlight > Search Privacy)"
+          echo "::endgroup::"
+
+          echo "$failures check(s) failed"
+          (( failures == 0 ))

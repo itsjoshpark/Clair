@@ -36,7 +36,7 @@ fi
 
 profile_dir="$(mktemp -d)"
 dom="$("$app/Contents/MacOS/$executable" --headless=new --no-first-run \
-  --user-data-dir="$profile_dir" --disable-gpu \
+  --user-data-dir="$profile_dir" --disable-gpu --use-mock-keychain \
   --dump-dom 'data:text/html,<title>smoke</title><p id="smoke">rendered</p>' 2>/dev/null)"
 rm -rf "$profile_dir"
 
