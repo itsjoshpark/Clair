@@ -1,0 +1,232 @@
+# Builds Clair's engine, the patched Chromium, on the owner's Mac and publishes
+# it as the prerelease chromium-engine-<key> (change 1 design D10, D11). Started
+# by hand: gh workflow run engine.yml -f ref=<branch>
+name: Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch to build"
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: engine
+  cancel-in-progress: false
+
+env:
+  # Chromium's pinned LLD can't read the macOS 27 SDK (design Risks).
+  MACOS_SDK: /Library/Developer/CommandLineTools/SDKs/MacOSX26.2.sdk
+  # A fresh tree and its downloads cache take about 150 GB, and 30 GB of the
+  # internal disk must stay free (D11).
+  FRESH_TREE_GB: 150
+  RESERVE_GB: 30
+  # The build is stopped if free space falls below this while it runs.
+  FLOOR_GB: 10
+
+jobs:
+  engine:
+    name: Build and publish the engine
+    runs-on: [self-hosted, clair-release]
+    timeout-minutes: 2160
+    steps:
+      - name: Check the ref
+        env:
+          REF: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Only branches of this repository, never pull request refs (D9).
+          branch="${REF#refs/heads/}"
+          if [[ "$REF" == refs/pull/* || "$branch" == pull/* || ! "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::engine.yml builds only branches of this repository, not $REF"
+            exit 1
+          fi
+          if ! gh api "repos/$GITHUB_REPOSITORY/branches/$branch" --silent; then
+            echo "::error::$GITHUB_REPOSITORY has no branch named $branch"
+            exit 1
+          fi
+          echo "BRANCH=$branch" >> "$GITHUB_ENV"
+
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.BRANCH }}
+          submodules: true
+          persist-credentials: false
+          # build/ is the persistent engine workspace (D11).
+          clean: false
+
+      - name: Use Homebrew's tools first
+        run: echo /opt/homebrew/bin >> "$GITHUB_PATH"
+
+      - name: Work out the engine key
+        id: key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          key="$(./scripts/engine-key.sh)"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "KEY=$key" >> "$GITHUB_ENV"
+          echo "Engine key: $key"
+          echo "::group::Manifest"
+          ./scripts/engine-key.sh --manifest
+          echo "::endgroup::"
+          draft="$(gh release view "chromium-engine-$key" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [[ "$draft" == false ]]; then
+            echo "::notice::chromium-engine-$key is already published"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$draft" == true ]]; then
+            echo "Deleting the draft left by an earlier run"
+            gh release delete "chromium-engine-$key" --yes
+          fi
+          echo "published=false" >> "$GITHUB_OUTPUT"
+
+      - name: Check the workspace
+        id: workspace
+        if: ${{ steps.key.outputs.published != 'true' }}
+        run: |
+          # build/engine_key: the key of a finished compile. build/prepared_key:
+          # the key of a fetched, patched and configured tree that a rerun can
+          # resume compiling.
+          if [[ "$(cat build/engine_key 2>/dev/null)" == "$KEY" && -d build/src/out/Default/Clair.app ]]; then
+            echo "Workspace already holds a finished engine for $KEY"
+            echo "stages=" >> "$GITHUB_OUTPUT"
+          elif [[ "$(cat build/prepared_key 2>/dev/null)" == "$KEY" ]]; then
+            echo "Resuming the compile for $KEY"
+            echo "stages=compile" >> "$GITHUB_OUTPUT"
+          else
+            echo "Starting from fresh source for $KEY"
+            echo "stages=fetch prepare configure compile" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check free space
+        if: ${{ steps.workspace.outputs.stages != '' && steps.key.outputs.published != 'true' }}
+        env:
+          STAGES: ${{ steps.workspace.outputs.stages }}
+        run: |
+          free_gb="$(df -g . | awk 'NR == 2 { print $4 }')"
+          existing_gb=0
+          if [[ -d build ]]; then
+            existing_gb="$(du -sg build | cut -f 1)"
+          fi
+          # A fresh tree grows the workspace to about FRESH_TREE_GB. Resuming a
+          # compile adds at most what is left of that.
+          growth=$(( FRESH_TREE_GB - existing_gb ))
+          (( growth > 0 )) || growth=0
+          echo "Free: $free_gb GB. Workspace: $existing_gb GB. Expected growth: $growth GB. Reserve: $RESERVE_GB GB."
+          if (( free_gb - growth < RESERVE_GB )); then
+            echo "::error::Building ($STAGES) would leave about $(( free_gb - growth )) GB free, below the $RESERVE_GB GB reserve."
+            exit 1
+          fi
+
+      - name: Build
+        if: ${{ steps.workspace.outputs.stages != '' && steps.key.outputs.published != 'true' }}
+        env:
+          STAGES: ${{ steps.workspace.outputs.stages }}
+        run: |
+          # The build runs in its own process group so the disk guard and a
+          # cancelled job can stop all of it.
+          set -m
+          read -r -a stages <<<"$STAGES"
+          rm -f build/engine_key
+          if [[ "${stages[0]}" == fetch ]]; then
+            # The fetch stage also clears compile_status, but only once it runs.
+            rm -f build/prepared_key build/compile_status
+          fi
+          python3 --version
+          # caffeinate keeps the Mac awake for the length of the build.
+          caffeinate -i -s ./build.sh -s "$MACOS_SDK" "${stages[@]}" &
+          build_pid=$!
+          trap 'kill -TERM -- "-$build_pid" 2>/dev/null || true' EXIT INT TERM
+          prepared=false
+          while kill -0 "$build_pid" 2>/dev/null; do
+            # Record a configured tree as soon as the compile starts, so a rerun
+            # after a compile failure resumes instead of starting again.
+            if ! $prepared && [[ -f build/compile_status ]]; then
+              echo "$KEY" > build/prepared_key
+              prepared=true
+            fi
+            free_gb="$(df -g . | awk 'NR == 2 { print $4 }')"
+            if (( free_gb < FLOOR_GB )); then
+              echo "::error::Only $free_gb GB free; stopping the build before the disk fills."
+              exit 1
+            fi
+            sleep 30
+          done
+          trap - EXIT INT TERM
+          wait "$build_pid"
+          if [[ "$(cat build/compile_status 2>/dev/null)" != finished ]]; then
+            echo "::error::The compile did not finish."
+            exit 1
+          fi
+          echo "$KEY" > build/engine_key
+          df -h .
+
+      - name: Verify app identity
+        if: ${{ steps.key.outputs.published != 'true' }}
+        run: ./scripts/verify-app.sh build/src/out/Default/Clair.app
+
+      - name: Smoke test
+        if: ${{ steps.key.outputs.published != 'true' }}
+        run: |
+          # A throwaway home keeps the owner's own Clair data directory and
+          # keychain out of the test: Foundation resolves the home directory
+          # from CFFIXED_USER_HOME.
+          home="$RUNNER_TEMP/smoke-home"
+          rm -rf "$home" "$RUNNER_TEMP/smoke-output"
+          mkdir -p "$home/Library/Application Support"
+          HOME="$home" CFFIXED_USER_HOME="$home" ./.github/scripts/smoke-test.sh "$RUNNER_TEMP/smoke-output"
+          rm -rf "$home" "$RUNNER_TEMP/smoke-output"
+
+      - name: Package the engine
+        if: ${{ steps.key.outputs.published != 'true' }}
+        run: |
+          out="$RUNNER_TEMP/engine"
+          rm -rf "$out"
+          mkdir -p "$out"
+          zip="Clair-Chromium-Engine-$KEY-arm64.zip"
+          # ditto keeps the bundle's symlinks.
+          ditto -c -k --keepParent build/src/out/Default/Clair.app "$out/$zip"
+          (cd "$out" && shasum -a 256 "$zip" > "$zip.sha256")
+          chromium="$(cat ungoogled-chromium/chromium_version.txt)"
+          ./scripts/engine-key.sh --manifest > "$RUNNER_TEMP/manifest.txt"
+          jq -n \
+            --arg key "$KEY" \
+            --arg commit "$(git rev-parse HEAD)" \
+            --arg branch "$BRANCH" \
+            --arg ungoogled "$chromium-$(cat ungoogled-chromium/revision.txt)" \
+            --arg chromium "$chromium" \
+            --arg xcode "$(xcodebuild -version | awk 'NR == 1 { print $2 }')" \
+            --arg sdk "$(/usr/libexec/PlistBuddy -c 'Print :Version' "$MACOS_SDK/SDKSettings.plist")" \
+            --arg python "$(python3 -c 'import platform; print(platform.python_version())')" \
+            --arg built "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --rawfile manifest "$RUNNER_TEMP/manifest.txt" \
+            '{key: $key, commit: $commit, branch: $branch,
+              ungoogled_chromium: $ungoogled, chromium: $chromium,
+              xcode: $xcode, macos_sdk: $sdk, python: $python, built: $built,
+              manifest: ($manifest | split("\n") | map(select(length > 0)))}' \
+            > "$out/engine.json"
+          cat "$out/engine.json"
+          ls -lh "$out"
+
+      - name: Publish chromium-engine-${{ steps.key.outputs.key }}
+        if: ${{ steps.key.outputs.published != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="chromium-engine-$KEY"
+          notes="Internal build artifact for Clair's app builds, not for users. Engine key $KEY, built from $BRANCH at $(git rev-parse --short HEAD)."
+          # A draft stays invisible until every asset is uploaded.
+          gh release create "$tag" --draft --prerelease --latest=false \
+            --target "$(git rev-parse HEAD)" --title "$tag" --notes "$notes" \
+            "$RUNNER_TEMP"/engine/*
+          gh release edit "$tag" --draft=false --prerelease --latest=false
+          rm -rf "$RUNNER_TEMP/engine"
+          echo "::notice::Published $tag"

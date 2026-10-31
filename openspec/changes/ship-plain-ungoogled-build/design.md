@@ -272,14 +272,15 @@ Handling:
 - **`engine.yml`** (`workflow_dispatch`, input: the ref to build) runs on the owner's Mac:
   1. works out the key and stops early if `chromium-engine-<key>` already exists
   2. prepares the source in the persistent workspace on the Mac's internal disk (D11)
-  3. builds with the full release settings, under `caffeinate -i` so the Mac doesn't sleep during the build
-  4. runs the headless smoke test against the bare engine
+  3. builds with the full release settings, under `caffeinate -i -s` so the Mac doesn't sleep during the build. It stops the build if free space falls below 10 GB.
+  4. runs the headless smoke test against the bare engine, in a throwaway home (`HOME` and `CFFIXED_USER_HOME`) with `--use-mock-keychain`, so the owner's own Clair data directory and keychain are never touched
   5. zips the app and publishes `chromium-engine-<key>`
 - Because the key is computed from file contents, an engine built from a pull request branch is valid for the squash-merged commit on `main` as long as the engine inputs are the same.
 
 ### D11. Fast engine rebuilds on the owner's Mac
 
 - The Mac keeps a persistent engine workspace on its internal disk: the unpacked Chromium source, the downloads cache and `out/Default`. It is never deleted between runs, and is excluded from Time Machine and Spotlight.
+- **Rerun for the same key:** the workspace records the key of a configured tree (`build/prepared_key`) and of a finished compile (`build/engine_key`). A rerun after a failed compile resumes ninja in the same tree, and a rerun after a failed smoke test or upload doesn't compile at all.
 - **Same ungoogled-chromium tag, changed Clair patches or overlay:** `build.sh` reverts the previously applied Clair series and overlay and applies the new ones in place. Only files they touch change, so ninja rebuilds only the affected targets. The workspace records which key it currently holds.
 - **New ungoogled-chromium tag or changed ungoogled series:** a fresh source tree, which in practice means a full rebuild.
 - If an in-place update fails or leaves the tree in an unknown state, `build.sh` falls back to a fresh tree. Correctness wins over speed.
@@ -326,6 +327,8 @@ Handling:
   → The builder audits these reads before task 3.1 is done, and patches each one that must keep the Chromium version.
 - **[Risk] Chromium 156 doesn't build with Xcode 27's own SDK.**
   → Build the engine with Xcode 27 and a macOS 26.x SDK, as Crest does, and record the SDK in `engine.json`. PR #1's hosted chain keeps Xcode 26.6 until it is retired.
+- **[Risk] The owner's Mac builds with the newest Homebrew Python (3.15),** while the hosted patch check uses 3.13, and Chromium's build scripts are only known to work on 3.13.
+  → `engine.json` records the Python version. If an engine build fails in a Python step, install Python 3.13 on the Mac and build with it.
 - **[Risk] The `xcode-27` hosted image is a preview,** so it may queue or break.
   → Accepted, since Crest relies on it too. Fallback: `macos-26` with Xcode 27 installed in the job.
 - **[Risk] Main-menu changes:** Chromium may rebuild or reorder the main menu after `ClairUI` adds its items.
