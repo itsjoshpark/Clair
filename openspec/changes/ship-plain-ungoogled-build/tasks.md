@@ -70,14 +70,13 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
 ## 7. CI release workflow
 
-- [ ] 7.0 **(owner)** Set up the self-hosted runner on the owner's Mac. It needs:
-  - a dedicated macOS user
-  - a work directory and the persistent engine workspace on an external APFS SSD
-  - label `clair-release`, and a service that survives reboots
+- [ ] 7.0 **(owner)** Set up the self-hosted runner on the owner's Mac, under the owner's own macOS user. It needs:
+  - a work directory and the persistent engine workspace on the internal disk, excluded from Time Machine and Spotlight
+  - label `clair-release`; the owner starts the runner by hand (`./run.sh`) when needed, not as a service
   - the CI toolchain: Xcode 27.2 with its Metal toolchain, the macOS SDK the engine needs (see design Risks), brew packages and Python 3.13
   - "Require approval for all external contributors" turned on for fork PR workflows
 
-  Verify with a `workflow_dispatch` test job on `[self-hosted, clair-release]` that prints the toolchain versions and the SSD's free space.
+  Verify with a `workflow_dispatch` test job on `[self-hosted, clair-release]` that prints the toolchain versions and the internal disk's free space.
 - [ ] 7.1 **(owner)** Add the secrets to a `release` environment limited to `main`: the Developer ID `.p12` (base64) and its password, a CI keychain password, and the App Store Connect API key ID, issuer and `.p8`; `SPARKLE_ED_PRIVATE_KEY` is from 4.1. Verify that a workflow step reports each secret as present without printing any value.
 - [ ] 7.2 Add `release.yml`. It has inputs `bump` (patch, minor or major) and `dry_run`, and `concurrency: release`. Its jobs are:
   - `validate`, using the 6.3 script
@@ -85,7 +84,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
   - `quality`, which calls `quality.yml` unless it has already passed for the commit
 
   Verify that `validate` fails with an unedited `next.md`. Verify that a commit whose quality checks failed stops the run before packaging. Verify that a commit with no engine builds one first.
-- [ ] 7.3 Add the `package` job on the owner's Mac: `package.sh` with signing, notarization, stapling, the DMG, `verify-app.sh`, deltas and `sign_update`. In dry-run mode it uploads the DMG as a workflow artifact and stops. Verify that a dry run produces a notarized DMG and makes no tag, Release or appcast change.
+- [ ] 7.3 Add the `package` job on the owner's Mac: `package.sh` with signing, notarization, stapling, the DMG, `verify-app.sh`, deltas and `sign_update`. Signing uses the temporary keychain from D9. In dry-run mode it uploads the DMG as a workflow artifact and stops. Verify that a dry run produces a notarized DMG and makes no tag, Release or appcast change, and that after a dry run, and after one cancelled mid-signing, the user's keychain search list is as it was and `clair-signing.keychain-db` is gone.
 - [ ] 7.4 Add the `publish` job. It:
   - makes the release commit (`version.txt`, archived notes, a new `next.md`, the appcast entry)
   - checks that `main` hasn't moved since `validate`
@@ -118,9 +117,9 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 ## 10. Engine pipeline
 
 - [ ] 10.1 Write `scripts/engine-key.sh` and its test (D10). Verify that the test changes each covered input and sees a new key, changes Swift sources, `version.txt`, notes, workflows and `package.sh` and sees the same key, and that `--manifest` lists every covered file.
-- [ ] 10.2 Add `engine.yml` (`workflow_dispatch`, input: ref) on `[self-hosted, clair-release]`. It works out the key and stops if `chromium-engine-<key>` exists. Otherwise it builds with the release settings in the persistent workspace, runs the headless smoke test, and publishes the `chromium-engine-<key>` prerelease with `Clair-Chromium-Engine-<key>-arm64.zip`, its SHA-256 and `engine.json`. It creates the release as a draft and publishes it with `--latest=false` only after every upload succeeds. Verify that a first run publishes an engine, and that a second run for the same key stops in under a minute.
+- [ ] 10.2 Add `engine.yml` (`workflow_dispatch`, input: ref) on `[self-hosted, clair-release]`. It works out the key and stops if `chromium-engine-<key>` exists. Otherwise it builds with the release settings in the persistent workspace under `caffeinate -i`, runs the headless smoke test, and publishes the `chromium-engine-<key>` prerelease with `Clair-Chromium-Engine-<key>-arm64.zip`, its SHA-256 and `engine.json`. It creates the release as a draft and publishes it with `--latest=false` only after every upload succeeds. It refuses refs under `refs/pull/`. Verify that a first run publishes an engine, that a second run for the same key stops in under a minute, and that a `refs/pull/<n>/head` ref is refused.
 - [ ] 10.3 Make `build.sh` update the persistent workspace in place when the ungoogled-chromium pin is unchanged (D11), recording the key it holds, and fall back to a fresh tree otherwise. Verify that changing one Clair patch rebuilds only affected targets (ninja reports a small fraction of the full build), that the resulting engine matches a fresh-tree engine's smoke test, and that a deliberately corrupted workspace record triggers a fresh tree.
-- [ ] 10.4 Make `engine.yml` check free space on the SSD and refuse to start below a reserve. Verify by setting the reserve above the current free space.
+- [ ] 10.4 Make `engine.yml` estimate how much the coming build will grow the workspace (fresh tree or in place) and refuse to start if that would leave less than 30 GB free on the workspace's volume. It reports the free space before and after the build. Verify by setting the reserve above the current free space.
 - [ ] 10.5 **(owner)** Publish the first engine from `main` after PR #1 and #2 merge. Record the measured full-build time and a patch-fix rebuild time in `docs/building.md`.
 - [ ] 10.6 Remove the hosted compile phases (`build-phase.yml` and the compile part of `build.yml`) once 10.5 is done, keeping the fetch and patch job for the patch check. Verify that no hosted workflow runs ninja.
 
