@@ -73,7 +73,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [ ] 7.0 **(owner)** Set up the self-hosted runner on the owner's Mac, under the owner's own macOS user. It needs:
   - a work directory and the persistent engine workspace on the internal disk, excluded from Time Machine and Spotlight
   - label `clair-release`; the owner starts the runner by hand (`./run.sh`) when needed, not as a service
-  - the CI toolchain: Xcode 27.2 with its Metal toolchain, the macOS SDK the engine needs (see design Risks), brew packages, and Python 3.10 or newer with PySocks and httplib2 (the newest Homebrew Python; 3.13 if an engine build fails on it, see design Risks)
+  - the CI toolchain: Xcode 27.2 with its Metal toolchain, the macOS SDK the engine needs (see design Risks), brew packages, and Homebrew's Python 3.13 with PySocks and httplib2 (see design Risks)
   - "Require approval for all external contributors" turned on for fork PR workflows
 
   Verify with a `workflow_dispatch` test job on `[self-hosted, clair-release]` that prints the toolchain versions and the internal disk's free space.

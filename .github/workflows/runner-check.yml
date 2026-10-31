@@ -75,17 +75,15 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Python and Homebrew"
-          # engine.yml puts Homebrew first on PATH, so check its python3. Any
-          # Python 3.10 or newer may build; 3.13 is the fallback (design Risks).
-          PATH="/opt/homebrew/bin:$PATH"
-          if command -v python3 >/dev/null; then
-            python_version="$(python3 -c 'import platform; print(platform.python_version())')"
-            echo "Python $python_version: $(command -v python3)"
-            version_at_least "$python_version" 3.10 || fail "Python $python_version is older than 3.10"
-            python3 -c 'import socks, httplib2' 2>/dev/null ||
-              fail "Python $python_version lacks PySocks or httplib2 (python3 -m pip install --break-system-packages PySocks httplib2)"
+          # engine.yml builds with Homebrew's Python 3.13: gsutil, which gclient
+          # runs, supports only Python 3.9 to 3.14 (design Risks).
+          python=/opt/homebrew/opt/python@3.13/libexec/bin/python3
+          if [[ -x "$python" ]]; then
+            echo "Python $("$python" -c 'import platform; print(platform.python_version())'): $python"
+            "$python" -c 'import socks, httplib2' 2>/dev/null ||
+              fail "Python 3.13 lacks PySocks or httplib2 ($python -m pip install --break-system-packages PySocks httplib2)"
           else
-            fail "python3 is not on PATH (brew install python)"
+            fail "Python 3.13 is not installed (brew install python@3.13)"
           fi
           if command -v brew >/dev/null; then
             brew --version | head -1

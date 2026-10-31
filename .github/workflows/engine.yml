@@ -62,7 +62,11 @@ jobs:
           clean: false
 
       - name: Use Homebrew's tools first
-        run: echo /opt/homebrew/bin >> "$GITHUB_PATH"
+        # Python 3.13 comes last, so it goes first on PATH: gsutil, which
+        # gclient runs, supports only Python 3.9 to 3.14 (design Risks).
+        run: |
+          echo /opt/homebrew/bin >> "$GITHUB_PATH"
+          echo /opt/homebrew/opt/python@3.13/libexec/bin >> "$GITHUB_PATH"
 
       - name: Work out the engine key
         id: key
@@ -141,6 +145,10 @@ jobs:
             rm -f build/prepared_key build/compile_status
           fi
           python3 --version
+          if ! python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 13))'; then
+            echo "::error::python3 is not Python 3.13 (brew install python@3.13)"
+            exit 1
+          fi
           # caffeinate keeps the Mac awake for the length of the build.
           caffeinate -i -s ./build.sh -s "$MACOS_SDK" "${stages[@]}" &
           build_pid=$!
