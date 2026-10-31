@@ -110,6 +110,15 @@ jobs:
             echo "stages=fetch prepare configure compile" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check the Metal toolchain
+        if: ${{ steps.workspace.outputs.stages != '' && steps.key.outputs.published != 'true' }}
+        run: |
+          # ANGLE compiles its internal shaders with Xcode's metal tool.
+          if ! xcodebuild -showComponent MetalToolchain | grep -q "Status: installed"; then
+            echo "::error::The Metal toolchain is not installed. Install it in Xcode > Settings > Components, or with xcodebuild -downloadComponent MetalToolchain."
+            exit 1
+          fi
+
       - name: Check free space
         if: ${{ steps.workspace.outputs.stages != '' && steps.key.outputs.published != 'true' }}
         env:
