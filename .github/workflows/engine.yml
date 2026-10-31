@@ -11,6 +11,11 @@ on:
         required: true
         default: main
         type: string
+      clean:
+        description: "Compile from scratch, keeping the patched source. To rebuild a published engine, delete its release first."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -117,20 +122,30 @@ jobs:
       - name: Check the workspace
         id: workspace
         if: ${{ steps.key.outputs.published != 'true' }}
+        env:
+          CLEAN: ${{ inputs.clean }}
         run: |
           # build/engine_key: the key of a finished compile. build/prepared_key:
           # the key of a fetched, patched and configured tree that a rerun can
           # resume compiling. build/prepared_sdk: the SDK it was configured with.
-          if [[ "$(cat build/engine_key 2>/dev/null)" == "$KEY" && -d build/src/out/Default/Clair.app ]]; then
+          # mac_sdk_path is a symlink with a fixed name, so ninja doesn't see an
+          # SDK change: a tree whose SDK changed is compiled again from scratch.
+          echo "clean=false" >> "$GITHUB_OUTPUT"
+          if [[ "$CLEAN" != true && "$(cat build/engine_key 2>/dev/null)" == "$KEY" && -d build/src/out/Default/Clair.app ]]; then
             echo "Workspace already holds a finished engine for $KEY"
             echo "stages=" >> "$GITHUB_OUTPUT"
           elif [[ "$(cat build/prepared_key 2>/dev/null)" == "$KEY" ]]; then
-            if [[ "$(cat build/prepared_sdk 2>/dev/null)" == "$MACOS_SDK" ]]; then
+            if [[ "$CLEAN" == true ]]; then
+              echo "Compiling $KEY from scratch, as requested"
+              echo "stages=configure compile" >> "$GITHUB_OUTPUT"
+              echo "clean=true" >> "$GITHUB_OUTPUT"
+            elif [[ "$(cat build/prepared_sdk 2>/dev/null)" == "$MACOS_SDK" ]]; then
               echo "Resuming the compile for $KEY"
               echo "stages=compile" >> "$GITHUB_OUTPUT"
             else
-              echo "Resuming $KEY with a new SDK ($MACOS_SDK): configuring again"
+              echo "The SDK for $KEY is now $MACOS_SDK: compiling from scratch"
               echo "stages=configure compile" >> "$GITHUB_OUTPUT"
+              echo "clean=true" >> "$GITHUB_OUTPUT"
             fi
           else
             echo "Starting from fresh source for $KEY"
@@ -170,6 +185,7 @@ jobs:
         if: ${{ steps.workspace.outputs.stages != '' && steps.key.outputs.published != 'true' }}
         env:
           STAGES: ${{ steps.workspace.outputs.stages }}
+          CLEAN: ${{ steps.workspace.outputs.clean }}
         run: |
           # The build runs in its own process group so the disk guard and a
           # cancelled job can stop all of it.
@@ -183,6 +199,11 @@ jobs:
             # The tree stays prepared, but its SDK is recorded only once the
             # compile starts, so a failed configure is retried.
             rm -f build/prepared_sdk build/compile_status
+            if [[ "$CLEAN" == true ]]; then
+              # The configure stage recreates out/ from args.gn up.
+              echo "Deleting the build output in build/src/out"
+              rm -rf build/src/out
+            fi
           fi
           python3 --version
           if ! python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 13))'; then

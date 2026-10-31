@@ -326,7 +326,7 @@ Handling:
 - **[Risk] Chromium reads the outer bundle's version** in places that break when packaging writes the Clair version (D3).
   → The builder audits these reads before task 3.1 is done, and patches each one that must keep the Chromium version.
 - **[Risk] Chromium 156 doesn't build with Xcode 27's own SDK.**
-  → Build the engine with Xcode 27 and a macOS 26.x SDK, as Crest does, and record the SDK in `engine.json`. PR #1's hosted chain keeps Xcode 26.6 until it is retired. Software Update replaces the Command Line Tools' SDKs (26.2 became 26.5 between two runs), so `engine.yml` uses the newest installed 26.x SDK, 26.2 or later, and configures a resumed tree again when its SDK has changed.
+  → Build the engine with Xcode 27 and a macOS 26.x SDK, as Crest does, and record the SDK in `engine.json`. PR #1's hosted chain keeps Xcode 26.6 until it is retired. Software Update replaces the Command Line Tools' SDKs (26.2 became 26.5 between two runs), so `engine.yml` uses the newest installed 26.x SDK, 26.2 or later, and compiles a tree from scratch when its SDK has changed: `mac_sdk_path` is a symlink with a fixed name, so ninja doesn't see the change, and the first engine linked objects from both 26.2 and 26.5. The `clean` input forces the same from-scratch compile.
 - **[Risk] Chromium's tools lag new Python releases.** The first engine build, with Python 3.15, failed in the fetch stage: `gsutil`, which `gclient sync` runs, supports only Python 3.9 to 3.14.
   → `engine.yml` builds with Homebrew's Python 3.13, the version the hosted jobs use, and checks it before building. `engine.json` records the version.
 - **[Risk] The `xcode-27` hosted image is a preview,** so it may queue or break.
