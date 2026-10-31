@@ -87,7 +87,8 @@ jobs:
           fi
           if command -v brew >/dev/null; then
             brew --version | head -1
-            for formula in ninja esbuild typescript; do
+            # go: the prepare stage needs it to unpack the platform toolchains.
+            for formula in go ninja esbuild typescript; do
               brew list --versions "$formula" || fail "Homebrew formula $formula is not installed"
             done
           else
