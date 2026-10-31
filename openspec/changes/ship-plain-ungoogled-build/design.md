@@ -327,8 +327,8 @@ Handling:
   → The builder audits these reads before task 3.1 is done, and patches each one that must keep the Chromium version.
 - **[Risk] Chromium 156 doesn't build with Xcode 27's own SDK.**
   → Build the engine with Xcode 27 and a macOS 26.x SDK, as Crest does, and record the SDK in `engine.json`. PR #1's hosted chain keeps Xcode 26.6 until it is retired.
-- **[Risk] The owner's Mac builds with the newest Homebrew Python (3.15),** while the hosted patch check uses 3.13, and Chromium's build scripts are only known to work on 3.13.
-  → `engine.json` records the Python version. If an engine build fails in a Python step, install Python 3.13 on the Mac and build with it.
+- **[Risk] Chromium's tools lag new Python releases.** The first engine build, with Python 3.15, failed in the fetch stage: `gsutil`, which `gclient sync` runs, supports only Python 3.9 to 3.14.
+  → `engine.yml` builds with Homebrew's Python 3.13, the version the hosted jobs use, and checks it before building. `engine.json` records the version.
 - **[Risk] The `xcode-27` hosted image is a preview,** so it may queue or break.
   → Accepted, since Crest relies on it too. Fallback: `macos-26` with Xcode 27 installed in the job.
 - **[Risk] Main-menu changes:** Chromium may rebuild or reorder the main menu after `ClairUI` adds its items.
