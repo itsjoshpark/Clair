@@ -65,3 +65,17 @@ git add ungoogled-chromium
 ```
 
 Then open a pull request. If a macOS or Clair patch no longer applies, the fetch job names it. Fix that patch, using ungoogled-chromium-macos's and Helium's updates as references.
+
+## Engine build times
+
+Measured on the self-hosted Mac (M1 Pro, 32 GB, internal disk) for the first engine, `chromium-engine-70bf0b64d9e3cb3c` (Chromium 156.0.8078.73), on 2026-10-31:
+
+| Stage | Time |
+|---|---|
+| Fetch, prepare and configure, with `build/download_cache` already filled | 9 min |
+| Compile, 50,411 of 56,713 ninja actions | 3 h 34 min |
+| Full compile (extrapolated from the above) | about 4 h |
+| Verify, smoke test, package and publish | about 1 min |
+| A run whose engine is already published | 12 s |
+
+A patch-fix rebuild time will be added once `build.sh` updates the workspace in place (task 10.3).
