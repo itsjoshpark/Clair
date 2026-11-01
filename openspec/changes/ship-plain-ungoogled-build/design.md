@@ -274,7 +274,7 @@ Handling:
   2. prepares the source in the persistent workspace on the Mac's internal disk (D11)
   3. builds with the full release settings, under `caffeinate -i -s` so the Mac doesn't sleep during the build. It stops the build if free space falls below 10 GB.
   4. runs the headless smoke test against the bare engine, in a throwaway home (`HOME` and `CFFIXED_USER_HOME`) with `--use-mock-keychain`, so the owner's own Clair data directory and keychain are never touched
-  5. zips the app and publishes `chromium-engine-<key>`
+  5. zips the app into the workspace, and a second job on the same Mac publishes `chromium-engine-<key>` with a token of its own: the build job's token stopped working (HTTP 401) by the end of a four-hour compile
 - Because the key is computed from file contents, an engine built from a pull request branch is valid for the squash-merged commit on `main` as long as the engine inputs are the same.
 
 ### D11. Fast engine rebuilds on the owner's Mac
@@ -284,7 +284,7 @@ Handling:
 - **Same ungoogled-chromium tag, changed Clair patches or overlay:** `build.sh` reverts the previously applied Clair series and overlay and applies the new ones in place. Only files they touch change, so ninja rebuilds only the affected targets. The workspace records which key it currently holds.
 - **New ungoogled-chromium tag or changed ungoogled series:** a fresh source tree, which in practice means a full rebuild.
 - If an in-place update fails or leaves the tree in an unknown state, `build.sh` falls back to a fresh tree. Correctness wins over speed.
-- How the revert works (quilt, ungoogled's patch and domain-substitution revert tools, or a pristine copy) is the builder's choice. Domain substitution must be reverted or reapplied consistently.
+- The revert uses a pristine copy. After ungoogled-chromium's patches and the toolchains, `build.sh -k prepare` clones the tree to `build/base` with APFS `clonefile`, which costs no disk space until files change. `build.sh update` applies Clair's whole layer (its patch series, name and domain substitution, the icon) to a new clone of the base, then copies into the workspace only the files whose contents changed: those the previous or the new layer touched. Unchanged files keep their modification times, so ninja sees only real changes. The base is valid while the ungoogled-chromium commit, `downloads*.ini` and `retrieve_and_unpack_resource.py` are the same.
 - **Fixing a broken engine build from the development machine:** edit the patch, push the branch, start `engine.yml` with `gh workflow run`, and read its log with `gh run view --log`. A patch that no longer applies is caught earlier by the patch check (D12).
 
 ### D12. Checks: merge gate, patch check, quality checks
@@ -326,7 +326,7 @@ Handling:
 - **[Risk] Chromium reads the outer bundle's version** in places that break when packaging writes the Clair version (D3).
   → The builder audits these reads before task 3.1 is done, and patches each one that must keep the Chromium version.
 - **[Risk] Chromium 156 doesn't build with Xcode 27's own SDK.**
-  → Build the engine with Xcode 27 and a macOS 26.x SDK, as Crest does, and record the SDK in `engine.json`. PR #1's hosted chain keeps Xcode 26.6 until it is retired. Software Update replaces the Command Line Tools' SDKs (26.2 became 26.5 between two runs), so `engine.yml` uses the newest installed 26.x SDK, 26.2 or later, and compiles a tree from scratch when its SDK has changed: `mac_sdk_path` is a symlink with a fixed name, so ninja doesn't see the change, and the first engine linked objects from both 26.2 and 26.5. The `clean` input forces the same from-scratch compile.
+  → Build the engine with Xcode 27 and a macOS 26.x SDK, as Crest does, and record the SDK in `engine.json`. PR #1's hosted chain keeps Xcode 26.6 until it is retired. Software Update replaces the Command Line Tools' SDKs (26.2 became 26.5 between two runs), so `engine.yml` uses the newest installed 26.x SDK, 26.2 or later, and `build.sh configure` deletes `out/Default` when the SDK has changed: `mac_sdk_path` is a symlink with a fixed name, so ninja doesn't see the change, and the first engine linked objects from both 26.2 and 26.5. The `clean` input forces the same from-scratch compile.
 - **[Risk] Chromium's tools lag new Python releases.** The first engine build, with Python 3.15, failed in the fetch stage: `gsutil`, which `gclient sync` runs, supports only Python 3.9 to 3.14.
   → `engine.yml` builds with Homebrew's Python 3.13, the version the hosted jobs use, and checks it before building. `engine.json` records the version.
 - **[Risk] The `xcode-27` hosted image is a preview,** so it may queue or break.
@@ -339,8 +339,8 @@ Handling:
   → It runs only after 30 minutes without input, and `ClairHost` vetoes it while a download is in progress, an incognito window is open, or a tab is audible or capturing. The session is restored after the relaunch. The quality suite covers each veto.
 - **[Risk] Hosted-runner GUI tests are flaky.**
   → Tests wait on conditions rather than fixed times, and a test failure is retried once before it counts.
-- **[Risk] Disk on the owner's Mac:** a persistent workspace and its downloads cache take about 150 GB of the internal disk, which also holds macOS and the owner's files, so filling it affects the whole Mac.
-  → Before building, `engine.yml` estimates how much the build will grow the workspace (a fresh tree: about 150 GB, less the workspace it replaces; an in-place update: much less) and refuses to start if that would leave less than 30 GB free. It reports the free space before and after the build.
+- **[Risk] Disk on the owner's Mac:** a persistent workspace and its downloads cache take about 38 GB of the internal disk (measured on the first engine; 50 GB with a margin), which also holds macOS and the owner's files, so filling it affects the whole Mac.
+  → Before building, `engine.yml` estimates how much the build will grow the workspace (a fresh tree: about 50 GB, less the workspace it replaces; an in-place update: much less) and refuses to start if that would leave less than 30 GB free. It reports the free space before and after the build.
 - **[Risk] `main` moves during a long release.**
   → `concurrency: release`, plus the publish job's check that `main` hasn't moved before creating the Release. Avoid pushing to `main` while a release runs.
 - **[Risk] Helium's versioning and identity patches stop applying** on a new Chromium version.

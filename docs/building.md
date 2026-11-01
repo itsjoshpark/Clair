@@ -23,7 +23,7 @@ Building and running have different requirements: Clair runs on macOS 15.6 or la
 
 | | Engine (Chromium) | Native layer (`ClairUI`) |
 |---|---|---|
-| Mac | Apple Silicon, 32 GB of RAM or more, about 150 GB of free disk | Apple Silicon |
+| Mac | Apple Silicon, 32 GB of RAM or more, about 80 GB of free disk (a 40 GB workspace plus the 30 GB reserve) | Apple Silicon |
 | macOS | 26.6 or later, for Xcode 27.2 | 26.6 or later, for Xcode 27.2 |
 | Xcode | 27.2 or later, with its Metal toolchain (`xcodebuild -downloadComponent MetalToolchain`): ANGLE compiles its shaders with it | 27.2 or later: the project is in Xcode's JSON format (`project.xcproj`), which Xcode 26 can't open |
 | macOS SDK | 26.x, 26.2 or later, passed with `-s`: Chromium 156 needs 26.2, and its linker can't read the macOS 27 SDK that Xcode 27 ships. The Command Line Tools include a 26.x SDK (`/Library/Developer/CommandLineTools/SDKs/`) | Xcode's own |
@@ -44,6 +44,15 @@ cd Clair
 The stages can also be run one at a time: `./build.sh fetch prepare`, then `./build.sh configure`, then `./build.sh compile`. Run `./build.sh -h` for the options. The app is built at `build/src/out/Default/`.
 
 `prepare` refuses to run twice on the same source. Run `fetch` again to start from clean source. It re-clones only when the existing source has been modified.
+
+### Updating a prepared tree in place
+
+`engine.yml` builds in a workspace it keeps between runs, and passes `-k` so `prepare` keeps `build/base`: an APFS clone of the source as it is after ungoogled-chromium's patches and before Clair's. Cloning takes no extra disk space until files change. `./build.sh -k update` then brings a prepared tree up to date when only Clair's patches changed:
+
+1. It clones `build/base` to `build/next` and applies Clair's layer there: `patches/series`, the UI string rebranding, the icon and logos, and domain substitution. A patch that doesn't apply stops the update before `build/src` changes.
+2. It copies into `build/src` only the files whose contents differ, using the list of files the previous layer touched (`build/layer_files`) and the files the new one touched. Files that come out the same keep their modification times, so ninja rebuilds only the targets the change affects.
+
+`update` starts from fresh source (`fetch prepare`) instead when the tree has no base, when the ungoogled-chromium pin, `downloads*.ini` or `retrieve_and_unpack_resource.py` changed, or when an earlier update stopped partway. `configure` deletes `out/Default` when the macOS SDK changes, so no objects compiled with the old SDK are linked into the new engine.
 
 ## Editing patches
 
@@ -82,9 +91,22 @@ Measured on the self-hosted Mac (M1 Pro, 32 GB, internal disk) for the first eng
 | Stage | Time |
 |---|---|
 | Fetch, prepare and configure, with `build/download_cache` already filled | 9 min |
-| Compile, 50,411 of 56,713 ninja actions | 3 h 34 min |
-| Full compile (extrapolated from the above) | about 4 h |
+| Full compile from scratch, 57,495 ninja actions (rebuild of the same engine, 2026-10-31) | 3 h 58 min |
 | Verify, smoke test, package and publish | about 1 min |
 | A run whose engine is already published | 12 s |
 
 A patch-fix rebuild time will be added once `build.sh` updates the workspace in place (task 10.3).
+
+## Engine workspace size
+
+Measured with `du` in the same workspace after the full compile:
+
+| Part | Size |
+|---|---|
+| `build/src` without `out/` (the prepared source, including 4.6 GB of LLVM, 1.8 GB of Rust toolchain and 1.4 GB of `.git`) | 18.8 GB |
+| `build/src/out/Default` (7.4 GB of objects, 2.8 GB of dSYMs, the 0.37 GB `Clair.app`) | 18.2–19.3 GB |
+| `build/download_cache` | 0.9 GB |
+| Whole workspace | about 38 GB |
+| Published engine zip | 164 MB |
+
+`build/base`, the pristine clone kept by `build.sh -k`, shares its blocks with `build/src` through APFS and adds only the files Clair's layer changes, but `du` counts it in full. `engine.yml` sizes the workspace without it and allows 50 GB for a fresh tree, plus the 30 GB reserve.
