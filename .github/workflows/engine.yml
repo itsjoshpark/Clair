@@ -1,6 +1,7 @@
 # Builds Clair's engine, the patched Chromium, on the owner's Mac and publishes
 # it as the prerelease chromium-engine-<key> (change 1 design D10, D11). Started
-# by hand: gh workflow run engine.yml -f ref=<branch>
+# by hand: gh workflow run engine.yml -f ref=<branch>. Once the engine is
+# published, it re-runs the engine check of open pull requests waiting for it.
 name: Engine
 
 on:
@@ -335,3 +336,39 @@ jobs:
           gh release edit "$tag" --draft=false --prerelease --latest=false
           rm -rf "$out"
           echo "::notice::Published $tag"
+
+  recheck:
+    # Re-runs the engine check of each open pull request that is waiting for
+    # this engine (D12), so nobody has to re-run it by hand. Hosted, so the
+    # Mac's job never holds a token that can start pull request jobs.
+    name: Re-run the engine check on open pull requests
+    needs: [engine, publish]
+    if: ${{ always() && needs.engine.result == 'success' && (needs.publish.result == 'success' || needs.engine.outputs.published == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      checks: read
+      pull-requests: read
+    steps:
+      - name: Re-run the engine checks waiting for this engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          KEY: ${{ needs.engine.outputs.key }}
+        run: |
+          tag="chromium-engine-$KEY"
+          rerun=0
+          # A failed engine check names the engine it needs in an annotation.
+          while read -r number sha; do
+            while read -r id conclusion; do
+              [[ "$conclusion" == failure ]] || continue
+              if gh api "repos/$GH_REPO/check-runs/$id/annotations" --jq '.[].message' | grep -qxF "$tag"; then
+                echo "Re-running the engine check of #$number (job $id)"
+                gh run rerun --job "$id"
+                rerun=$((rerun + 1))
+              fi
+            done < <(gh api "repos/$GH_REPO/commits/$sha/check-runs?check_name=Engine%20check&filter=latest" \
+                       --jq '.check_runs[] | select(.app.slug == "github-actions") | "\(.id) \(.conclusion)"')
+          done < <(gh pr list --state open --limit 200 --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"')
+          echo "Re-ran $rerun engine check(s) waiting for $tag"

@@ -18,9 +18,9 @@ Never fetch Chromium or build it by hand on the development machine; only `engin
 
 - **Engine:** the patched Chromium. `scripts/engine-key.sh` hashes its inputs (ungoogled pin, `downloads.ini`, GN flags, `patches/`, `overlay/`, `utils/`, `native/ClairHost.h`, compiled-in branding, build scripts) into a key. `engine.yml` builds it only on the owner's self-hosted Mac (label `clair-release`, M1 Pro with 32 GB, internal disk), when the owner starts it, and publishes the prerelease `chromium-engine-<key>`. The Mac keeps its workspace, so a patch fix rebuilds incrementally. To rebuild after a fix: push the branch, then `gh workflow run engine.yml -f ref=<branch>`, and read the log. That runs `main`'s `engine.yml` against the branch; when the branch changes `engine.yml` itself, add `--ref <branch>`.
 - **App:** `ClairUI`, packaging, signing and Sparkle. It builds in minutes against the prebuilt engine for the current key.
-- **Merge gate** (`ci.yml`, required, minutes): the `scripts/*.test.sh` tests, `shellcheck -S warning`, `actionlint`, and `ClairUI`'s build and unit tests. A PR that changes the engine key also runs the patch check (`./build.sh fetch prepare` on a hosted runner, about 40 minutes), and can't merge until its engine is published.
+- **Merge gate** (`ci.yml`, required, minutes): the `scripts/*.test.sh` tests, `shellcheck -S warning`, `actionlint`, `ClairUI`'s build and unit tests, and the engine check. A PR that changes the engine key also runs the patch check (`./build.sh fetch prepare` on a hosted runner, about 20 minutes), and its engine check fails until its engine is published; `engine.yml` then re-runs it.
 - **Quality checks** (`quality.yml`): run after every merge to `main`. They package the app from the engine and run the runtime suite in `tests/runtime/`. A failure opens a `quality-failure` issue; fix it from there. No release ships with quality checks failing or unfinished.
-- **Patch check** (`build.yml`): until the engine check in `ci.yml` exists (task 11.2), every PR that isn't docs-only runs `./build.sh fetch prepare` on a hosted runner. No hosted workflow compiles Chromium.
+- **Patch check** (the `Patch check` job in `ci.yml`): runs only when a PR changes the engine key. No hosted workflow compiles Chromium.
 - The self-hosted Mac never runs pull request jobs, especially not fork PRs. Release secrets live in the `release` environment, and engine builds and quality checks never see them. Never run `.github/scripts/prepare-runner.sh` on the self-hosted runner: it deletes Xcode versions and simulators.
 - Every macOS job and the self-hosted Mac use Xcode 27 (hosted runner label `xcode-27`).
 - Read job logs with `gh run view --job <id> --log`, or with `gh api --allow-escape-sequences repos/itsjoshpark/Clair/actions/jobs/<id>/logs`. Fix what they show, then push.
@@ -31,7 +31,7 @@ Local work is limited to editing files, running the small script tests, and buil
 
 - Use Conventional Commits (`feat:`, `fix:`, `build:`, `ci:`, `docs:`, `chore:`…) for commits and PR titles. The PR title becomes the squash commit message.
 - Work on a branch and open a PR. Never push to `main`.
-- **Every push to an open PR restarts its patch check** and cancels the one in progress, including docs-only pushes, because `paths-ignore` compares the whole PR diff. A push never affects an `engine.yml` run, which checks out its branch when it starts.
+- **Every push to a PR that changes the engine key restarts its patch check** and cancels the one in progress, including docs-only pushes, because the check compares the whole PR's key with its base's. A push never affects an `engine.yml` run, which checks out its branch when it starts.
 - Once a PR's checks pass (CI, plus Build when it ran), squash-merge it with `gh pr merge --squash --delete-branch`. Then switch to `main`, pull, and delete the local branch.
 
 ## Repository layout
