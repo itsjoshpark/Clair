@@ -67,6 +67,7 @@ Clair/
   overlay/                     new Chromium source files, at their paths in the Chromium tree
   native/
     ClairHost.h                the contract between Chromium and the native layer
+    module.modulemap           ClairHost.h as the Swift module ClairHost
     ClairUI.xcodeproj/         Xcode project in the JSON format (project.xcproj): ClairUI.framework and its tests
     ClairUI/                   Swift sources
     ClairUITests/              unit tests that run without Chromium
@@ -84,6 +85,8 @@ Clair/
   .github/workflows/           ci.yml, engine.yml, quality.yml, release.yml
   LICENSE, LICENSE.ungoogled_chromium, CREDITS.md
 ```
+
+Chromium starts the native layer through `ClairHost.h`: it loads `ClairUI.framework`, takes the bundle's principal class (`NSPrincipalClass`, `ClairUIMain`), checks that it conforms to `ClairUIEntryPoint`, and calls `+startWithHost:` with its `ClairHost` implementation. The host reports a silent relaunch's blockers as a set of reasons rather than a yes or no, so `ClairUI` can log why an idle install waited.
 
 `build.sh` applies ungoogled-chromium's own series first, then `patches/series`, using ungoogled's `utils/patches.py`, then copies `overlay/` into the source tree. `overlay/` holds only new files. A change to an existing Chromium file is a patch, so every edit to upstream code is visible in `patches/`.
 

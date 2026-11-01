@@ -1,4 +1,7 @@
 # actionlint settings. clair-release is the owner's self-hosted Mac (design D9).
+# xcode-27 is GitHub's hosted macOS 27 and Xcode 27 image, a public preview that
+# actionlint doesn't list yet.
 self-hosted-runner:
   labels:
     - clair-release
+    - xcode-27

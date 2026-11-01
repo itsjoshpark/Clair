@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Prepare a GitHub-hosted macOS arm64 runner for building Clair: free disk
-# space, select Xcode and install the build toolchain.
+# Prepare a GitHub-hosted xcode-27 runner for the patch check: free disk space,
+# select Xcode and install the tools that fetching and patching need. Never run
+# it on the self-hosted Mac: it deletes Xcode versions and simulators.
 #
 # Based on ungoogled-chromium-macos's github_prepare_xcode.sh and
 # github_setup_env_toolchain.sh (BSD-3-Clause), see CREDITS.md.
@@ -8,24 +9,15 @@
 set -euo pipefail
 shopt -s extglob nullglob
 
-# The newest Xcode on the runner image. Chromium 156 needs the macOS 26.2 SDK or
-# newer. Pin an exact version: a build spans many jobs, and a different SDK
-# midway would rebuild everything.
-xcode_version="${CLAIR_XCODE_VERSION:-26.6}"
-xcode_path="/Applications/Xcode_${xcode_version}.app"
-
 echo "::group::Disk before cleanup"
 df -h /
 echo "::endgroup::"
 
 sudo mdutil -a -i off >/dev/null || true
 
-if [[ ! -d "$xcode_path" ]]; then
-  echo "::error::Xcode $xcode_version is not installed on this runner. Installed versions:"
-  ls -d /Applications/Xcode*.app
-  exit 1
-fi
-sudo xcode-select --switch "$xcode_path"
+# The patch check compiles no Chromium, but prepare compiles the app icon with
+# actool, which needs Xcode 26 or later. Hosted jobs use the xcode-27 image.
+xcode_path="$("$(dirname "$0")/select-xcode.sh")"
 # Remove every other Xcode and all simulators; they take tens of GB.
 for other in /Applications/Xcode_*.app; do
   if [[ "$other" != "$xcode_path" && ! -L "$other" ]]; then
@@ -38,9 +30,6 @@ if [[ -n "${ANDROID_HOME:-}" ]]; then
   sudo rm -rf "$ANDROID_HOME"
 fi
 sudo rm -rf ~/.dotnet /usr/local/share/dotnet ~/.ghcup /Users/runner/hostedtoolcache/CodeQL || true
-
-xcodebuild -version
-xcodebuild -downloadComponent MetalToolchain || true
 
 brew install go ninja coreutils esbuild typescript zstd
 pip3 install PySocks httplib2 --break-system-packages

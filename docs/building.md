@@ -50,6 +50,19 @@ The stages can also be run one at a time: `./build.sh fetch prepare`, then `./bu
 
 `update` starts from fresh source (`fetch prepare`) instead when the tree has no base, when the ungoogled-chromium pin, `downloads*.ini` or `retrieve_and_unpack_resource.py` changed, when an earlier update stopped partway, or when `build/base_key` is unreadable. The log names the reason, with the recorded and current base keys when they differ. `configure` deletes `out/Default` when the macOS SDK changes, so no objects compiled with the old SDK are linked into the new engine.
 
+## Building the native layer
+
+`ClairUI.framework`, Clair's Swift layer, builds with Xcode 27.2 or later and needs no Chromium checkout or engine:
+
+```sh
+xcodebuild -project native/ClairUI.xcodeproj -scheme ClairUI \
+  -destination "platform=macOS,arch=arm64" build test
+```
+
+Or open `native/ClairUI.xcodeproj` in Xcode. The project is in Xcode's JSON format (`project.xcproj`); don't add a `project.pbxproj`. Sources in `native/ClairUI/` and tests in `native/ClairUITests/` join their targets by being in those folders.
+
+`native/ClairHost.h` is the whole contract with Chromium. Swift imports it as the `ClairHost` module (`native/module.modulemap`). Chromium loads the framework, takes its principal class (`ClairUIMain`) and calls `+startWithHost:` with its host. The header is an engine input, so changing it needs a new engine; Swift sources aren't.
+
 ## Editing patches
 
 Clair's patch series is `patches/series`. Paths in it are relative to `patches/`, and it is applied after ungoogled-chromium's own series. To edit or add a patch, use quilt on a fetched, unpatched source tree:
