@@ -1,5 +1,6 @@
 # Fast checks for every push and pull request: release script tests, shell
-# script lint and workflow lint. The Chromium build itself is in build.yml.
+# script lint and workflow lint. The patch check is build.yml; the engine is
+# built only on the owner's Mac, by engine.yml.
 name: CI
 
 on:

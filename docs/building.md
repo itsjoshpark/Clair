@@ -4,16 +4,12 @@ Clair is ungoogled-chromium plus Clair's patches, built for Apple Silicon Macs. 
 
 ## Building in GitHub Actions (the usual way)
 
-Open a pull request. `.github/workflows/build.yml` then:
+The build is split in two (design D9–D12 of the active OpenSpec change):
 
-1. **Fetch** fetches and patches the source with `./build.sh fetch prepare` (the patch-only mode). A patch that doesn't apply fails this job, and the log names the patch. The same stage compiles Clair's icon and replaces Chromium's logos (see `resources/icon/README.md`); a logo path that no longer exists in Chromium also fails the job and is named in the log.
-2. **Phases 1–20** compile. Each phase runs `./build.sh -j 3 -t <seconds> compile` until about an hour before GitHub's 6-hour job limit, then hands the build directory to the next phase as an artifact. Phase 1 also runs `./build.sh -l configure`, which appends `flags.pr.gn`: hosted runners have 3 cores and 7 GB of memory, so pull request builds skip ThinLTO, debug symbols and dSYMs and link one binary at a time. Release builds use the full settings. Phases after the one that finishes are skipped.
-3. **The finishing phase** runs a headless smoke test, checks that the work tree is clean, and uploads `clair-unsigned-app`, a zip of the unsigned app. You can download it from the run's summary page.
-4. **Build result** fails the run if any phase failed, or if 20 phases weren't enough.
+- **The engine**, the patched Chromium, is built only on the owner's Mac by `.github/workflows/engine.yml`, when the owner starts it: `gh workflow run engine.yml -f ref=<branch>`. That uses `main`'s copy of `engine.yml`; add `--ref <branch>` when the branch changes the workflow itself. It publishes the prerelease `chromium-engine-<key>`, where the key is a hash of the engine's inputs (`scripts/engine-key.sh --manifest` lists them). Read its log with `gh run view --log`.
+- **The patch check**, `.github/workflows/build.yml`, runs `./build.sh fetch prepare` on a GitHub-hosted runner for each pull request. A patch that doesn't apply fails the job, and the log names the patch. The same stage compiles Clair's icon and replaces Chromium's logos (see `resources/icon/README.md`); a logo path that no longer exists in Chromium also fails the job and is named in the log. Pull requests that only touch Markdown, `docs/`, `openspec/` or `.sparkle/` skip it, and a new push to the same pull request cancels the check that's running.
 
-Pull requests that only touch Markdown, `docs/`, `openspec/` or `.sparkle/` skip the build. A new push to the same pull request cancels the build that's running.
-
-To run an unsigned app downloaded from CI, unzip it and remove the quarantine flag first: `xattr -dr com.apple.quarantine Chromium.app`.
+To try an engine, download it with `gh release download chromium-engine-<key>`, unzip it and remove the quarantine flag first: `xattr -dr com.apple.quarantine Clair.app`.
 
 ## Building locally
 
