@@ -191,15 +191,21 @@ stage_prepare() {
 }
 
 stage_update() {
-  local reason=""
+  local reason="" recorded current
   if [[ ! -e "$_prepared_stamp" ]]; then
     reason="build/src is not a prepared tree"
   elif [[ ! -d "$_base_dir" || ! -f "$_layer_file" || ! -f "$_base_key_file" ]]; then
     reason="the workspace has no base tree"
   elif [[ -e "$_updating_file" ]]; then
     reason="an earlier update did not finish"
-  elif [[ "$(cat "$_base_key_file")" != "$(base_key)" ]]; then
-    reason="the ungoogled-chromium pin or the downloads changed"
+  else
+    recorded="$(head -c 64 "$_base_key_file" | tr -d '\n')"
+    current="$(base_key)"
+    if [[ ! "$recorded" =~ ^[0-9a-f]{16}$ ]]; then
+      reason="build/base_key is not a base key (it may be corrupted)"
+    elif [[ "$recorded" != "$current" ]]; then
+      reason="build/base was made from other inputs (base key $recorded, now $current): the ungoogled-chromium commit, downloads*.ini, retrieve_and_unpack_resource.py or the base format changed"
+    fi
   fi
   if [[ -n "$reason" ]]; then
     echo "Can't update build/src in place: $reason. Starting from fresh source."
