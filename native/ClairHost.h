@@ -76,3 +76,5 @@ NS_SWIFT_NAME(ClairUIEntryPoint)
 NS_ASSUME_NONNULL_END
 
 #endif  // CLAIR_NATIVE_CLAIR_HOST_H_
+
+// engine-check test: throwaway, never merged
