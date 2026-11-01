@@ -94,8 +94,10 @@ Measured on the self-hosted Mac (M1 Pro, 32 GB, internal disk) for the first eng
 | Full compile from scratch, 57,495 ninja actions (rebuild of the same engine, 2026-10-31) | 3 h 58 min |
 | Verify, smoke test, package and publish | about 1 min |
 | A run whose engine is already published | 12 s |
+| Fresh tree that also creates `build/base` (`fetch prepare configure compile` with `-k`, PR #17) | 3 h 48 min for the Build step, 3 h 50 min for the run |
+| Patch fix in place (`update configure compile`: a one-line change to one `.cc` file, 2026-11-01) | 5 min 30 s for the Build step, 6 min 30 s from start to published |
 
-A patch-fix rebuild time will be added once `build.sh` updates the workspace in place (task 10.3).
+In the patch-fix run, the update took about 1.5 minutes (`sync_tree: 6 copied, 0 removed, 1459 unchanged`). After its first action, ninja's restat cut the work to 14 steps: the changed object, the framework relink and the library checks. Besides the patched file, the sync copies `chrome/app/theme/chromium/mac/Assets.car`, which `actool` doesn't build byte for byte the same, and a few grit `__pycache__` files. Neither costs a noticeable rebuild.
 
 ## Engine workspace size
 
