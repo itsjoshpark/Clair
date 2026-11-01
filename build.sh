@@ -121,6 +121,9 @@ apply_layer() {
   # Add Clair's new source files. Fails and names the file if one would shadow
   # a file that Chromium or a patch already has.
   "$_root_dir/scripts/apply-overlay.sh" "$tree" "$_root_dir/overlay"
+  # The native layer's contract (native/ClairHost.h) and the ungoogled-chromium
+  # version, for the hook's overlay files in chrome/browser/clair/.
+  "$_root_dir/scripts/install-native-contract.sh" "$tree" "$_root_dir"
   # Rebrand Chrome/Chromium as Clair in UI strings and their translations.
   python3 "$_root_dir/utils/name_substitution.py" --sub -t "$tree"
   # Replace Chromium's app icon and product logos with Clair's. Fails and names

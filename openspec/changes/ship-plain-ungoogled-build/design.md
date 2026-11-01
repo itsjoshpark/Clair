@@ -86,7 +86,7 @@ Clair/
   LICENSE, LICENSE.ungoogled_chromium, CREDITS.md
 ```
 
-Chromium starts the native layer through `ClairHost.h`: it loads `ClairUI.framework`, takes the bundle's principal class (`NSPrincipalClass`, `ClairUIMain`), checks that it conforms to `ClairUIEntryPoint`, and calls `+startWithHost:` with its `ClairHost` implementation. The host reports a silent relaunch's blockers as a set of reasons rather than a yes or no, so `ClairUI` can log why an idle install waited.
+Chromium starts the native layer through `ClairHost.h`: it loads `ClairUI.framework`, takes the bundle's principal class (`NSPrincipalClass`, `ClairUIMain`), checks that it conforms to `ClairUIEntryPoint`, and calls `+startWithHost:` with its `ClairHost` implementation. The host reports a silent relaunch's blockers as a set of reasons rather than a yes or no, so `ClairUI` can log why an idle install waited. The hook is one call in `ChromeBrowserMainPartsMac::PreCreateThreads`, right after `BuildMainMenu` (`patches/clair/native-layer-hook.patch`, which also lists the sources in `chrome/browser/BUILD.gn`). The loader and the host live in `overlay/chrome/browser/clair/clair_native_layer.{h,mm}`. `prepare` copies `ClairHost.h` next to them and writes the ungoogled-chromium version into `ungoogled_version.h` (`scripts/install-native-contract.sh`), since Chromium compiles no ungoogled version of its own. A missing or broken framework is logged, and the browser carries on without it.
 
 `build.sh` applies ungoogled-chromium's own series first, then `patches/series`, using ungoogled's `utils/patches.py`, then copies `overlay/` into the source tree. `overlay/` holds only new files. A change to an existing Chromium file is a patch, so every edit to upstream code is visible in `patches/`.
 

@@ -1,0 +1,37 @@
+# Clair's native-layer hook (change 1 design D1, task 9.2): start ClairUI.framework
+# once the main menu is built, and compile the loader and Chromium's ClairHost
+# implementation from overlay/chrome/browser/clair/. The logic lives there;
+# this patch only adds the call and the sources.
+
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -1523,6 +1523,10 @@
+       "browser_process_platform_part_mac.mm",
+       "chrome_browser_application_mac.mm",
+       "chrome_browser_main_mac.mm",
++      "clair/ClairHost.h",
++      "clair/clair_native_layer.h",
++      "clair/clair_native_layer.mm",
++      "clair/ungoogled_version.h",
+       "file_select_helper_mac.mm",
+       "fullscreen_mac.mm",
+       "global_keyboard_shortcuts_mac.mm",
+--- a/chrome/browser/chrome_browser_main_mac.mm
++++ b/chrome/browser/chrome_browser_main_mac.mm
+@@ -27,6 +27,7 @@
+ #include "chrome/browser/browser_process_platform_part.h"
+ #include "chrome/browser/buildflags.h"
+ #import "chrome/browser/chrome_browser_application_mac.h"
++#include "chrome/browser/clair/clair_native_layer.h"
+ #include "chrome/browser/first_run/first_run.h"
+ #include "chrome/browser/mac/install_from_dmg.h"
+ #include "chrome/browser/mac/metrics.h"
+@@ -164,6 +165,8 @@
+                         /*is_pwa=*/false,
+                         /*is_rtl=*/base::i18n::IsRTL());
+   [app_controller mainMenuCreated];
++  // Clair: start the native layer now that the main menu exists.
++  clair::StartNativeLayer();
+ 
+   return content::RESULT_CODE_NORMAL_EXIT;
+ }
