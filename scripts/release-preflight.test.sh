@@ -98,6 +98,18 @@ git -C "$repo" tag v0.1.9
 git -C "$repo" tag v0.1.10
 expect_output "uses the highest tag by version, not by name" "$repo" $'version=0.1.11\nbuild=6\ntag=v0.1.11' --bump patch
 
+# Engine prereleases (design D10) tag commits too, often newer than the last
+# release; they must never count as a version.
+make_repo "$repo" 5 ""
+git -C "$repo" tag v0.1.0 HEAD~2
+git -C "$repo" tag chromium-engine-0123456789abcdef
+git -C "$repo" tag -a chromium-engine-fedcba9876543210 -m "engine" HEAD~1
+expect_output "ignores chromium-engine-* tags newer than the latest v* tag" "$repo" $'version=0.1.1\nbuild=6\ntag=v0.1.1' --bump patch
+
+make_repo "$repo" 5 ""
+git -C "$repo" tag chromium-engine-0123456789abcdef
+expect_output "an engine tag alone is still a first release" "$repo" $'version=0.1.0\nbuild=6\ntag=v0.1.0' --bump patch
+
 # --- build number -----------------------------------------------------------
 make_repo "$repo" 5 "5"
 expect_output "build one above the newest appcast entry is allowed" "$repo" $'version=0.1.0\nbuild=6\ntag=v0.1.0' --bump patch
