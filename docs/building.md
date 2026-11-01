@@ -45,7 +45,7 @@ The stages can also be run one at a time: `./build.sh fetch prepare`, then `./bu
 
 `engine.yml` builds in a workspace it keeps between runs, and passes `-k` so `prepare` keeps `build/base`: an APFS clone of the source as it is after ungoogled-chromium's patches and before Clair's. Cloning takes no extra disk space until files change. `./build.sh -k update` then brings a prepared tree up to date when only Clair's patches changed:
 
-1. It clones `build/base` to `build/next` and applies Clair's layer there: `patches/series`, the UI string rebranding, the icon and logos, and domain substitution. A patch that doesn't apply stops the update before `build/src` changes.
+1. It clones `build/base` to `build/next` and applies Clair's layer there: `patches/series`, the overlay, the UI string rebranding, the icon and logos, and domain substitution. A patch that doesn't apply stops the update before `build/src` changes.
 2. It copies into `build/src` only the files whose contents differ, using the list of files the previous layer touched (`build/layer_files`) and the files the new one touched. Files that come out the same keep their modification times, so ninja rebuilds only the targets the change affects.
 
 `update` starts from fresh source (`fetch prepare`) instead when the tree has no base, when the ungoogled-chromium pin, `downloads*.ini` or `retrieve_and_unpack_resource.py` changed, when an earlier update stopped partway, or when `build/base_key` is unreadable. The log names the reason, with the recorded and current base keys when they differ. `configure` deletes `out/Default` when the macOS SDK changes, so no objects compiled with the old SDK are linked into the new engine.
@@ -67,6 +67,10 @@ quilt refresh
 ```
 
 Clair's series assumes ungoogled-chromium's patches are already applied. Apply those first with `python3 ../../ungoogled-chromium/utils/patches.py apply . ../../ungoogled-chromium/patches`, then use quilt for Clair's.
+
+## Adding new source files: the overlay
+
+New Chromium source files go in `overlay/`, at their paths in the Chromium tree, for example `overlay/chrome/browser/clair/clair_host.mm`. `prepare` copies them in right after `patches/series` (`scripts/apply-overlay.sh`). The overlay only adds files: one whose path already exists in Chromium, or that a patch creates, fails `prepare` and is named in the log. Changes to Chromium's existing files are patches. Wiring a new file into the build (a `BUILD.gn` dependency, a call site) is a patch too, so keep that patch to the hook and put the logic in the overlay.
 
 ## Updating the engine
 
