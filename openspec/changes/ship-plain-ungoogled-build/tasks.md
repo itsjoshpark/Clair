@@ -112,7 +112,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [x] 9.1 Write `native/ClairHost.h`: the entry point Chromium calls once the main menu exists, and a host protocol with graceful relaunch, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), and the Chromium and ungoogled-chromium versions. Verify that it compiles in an Objective-C++ unit and from Swift through a module map.
 - [ ] 9.2 Add `patches/clair/native-layer-hook.patch` plus overlay files under `overlay/chrome/browser/clair/`. Together they load `ClairUI.framework` from `Contents/Frameworks` after the main menu is built, implement the host protocol, and log and carry on when the framework is missing. Keep the patch to the call sites; the logic goes in the overlay. Verify that a bare engine starts and logs the missing framework, and that a packaged app loads it.
 - [x] 9.3 Add `native/ClairUI.xcodeproj` in Xcode 27.2's JSON format (`project.xcproj`, no `project.pbxproj`) for `ClairUI.framework` (Swift, macOS 15.6, arm64) and `ClairUITests`, with `ClairHost.h` exposed to Swift. Verify that `xcodebuild build test` succeeds on the development machine with no Chromium checkout, and that the project has no `project.pbxproj`.
-- [ ] 9.4 Make `package.sh` build `ClairUI` (or take a built copy) and embed it. Verify that a change to a Swift file alone produces a new package from the same `chromium-engine-<key>`.
+- [x] 9.4 Make `package.sh` build `ClairUI` (or take a built copy) and embed it. Verify that a change to a Swift file alone produces a new package from the same `chromium-engine-<key>`.
 
 ## 10. Engine pipeline
 

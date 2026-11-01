@@ -34,14 +34,14 @@ jobs:
       - name: Run script tests
         run: |
           failures=0
-          for test in scripts/*.test.sh; do
+          for test in scripts/*.test.sh package.test.sh; do
             echo "==> $test"
             "$test" || failures=$((failures + 1))
           done
           exit "$failures"
 
       - name: Lint shell scripts
-        run: shellcheck -S warning build.sh scripts/*.sh .github/scripts/*.sh
+        run: shellcheck -S warning build.sh package.sh package.test.sh scripts/*.sh .github/scripts/*.sh
 
       - name: Lint workflows
         run: actionlint
