@@ -13,9 +13,10 @@ Usage: ./build.sh [-d] [-k] [-j JOBS] [-s SDK_PATH] [-t SECONDS] [STAGE...]
 
 Stages (run in the order given; default: all):
   fetch      Retrieve the Chromium source into build/src
-  prepare    Prune binaries, apply all patches, rebrand UI strings, replace
-             the icon and logos, apply domain substitution and unpack platform
-             toolchains. "fetch prepare" is the patch-only mode.
+  prepare    Prune binaries, apply all patches, copy overlay/, rebrand UI
+             strings, replace the icon and logos, apply domain substitution
+             and unpack platform toolchains. "fetch prepare" is the
+             patch-only mode.
   update     Bring a tree prepared with -k up to date with Clair's patches
              in place, so ninja rebuilds only what changed. Falls back to
              "fetch prepare" when the tree can't be updated in place.
@@ -112,11 +113,14 @@ clear_base() {
   rm -f "$_base_key_file" "$_layer_file" "$_layer_stamp" "$_updating_file"
 }
 
-# Clair's layer: its patch series, UI string rebranding, the icon and logos,
-# and domain substitution, applied to the tree in $1.
+# Clair's layer: its patch series, the overlay, UI string rebranding, the icon
+# and logos, and domain substitution, applied to the tree in $1.
 apply_layer() {
   local tree="$1"
   python3 "$_main_repo/utils/patches.py" apply "$tree" "$_root_dir/patches"
+  # Add Clair's new source files. Fails and names the file if one would shadow
+  # a file that Chromium or a patch already has.
+  "$_root_dir/scripts/apply-overlay.sh" "$tree" "$_root_dir/overlay"
   # Rebrand Chrome/Chromium as Clair in UI strings and their translations.
   python3 "$_root_dir/utils/name_substitution.py" --sub -t "$tree"
   # Replace Chromium's app icon and product logos with Clair's. Fails and names
