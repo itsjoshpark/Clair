@@ -122,6 +122,14 @@ Chromium starts the native layer through `ClairHost.h`: it loads `ClairUI.framew
 - Everything that websites or extensions see (user agent, client hints, `minimum_chrome_version`) still uses the Chromium version.
 - **Build number** = `git rev-list --count` of the release commit, as in Front Row. It is never stored. A build from the release tag reproduces the same number. Builds that aren't releases use the count of `HEAD`.
 - Chromium may read the outer bundle's `CFBundleShortVersionString` elsewhere, for example when it locates its versioned framework directory, for app shims, or in `UpgradeDetector`. The builder finds every such read, using Helium's versioning and Sparkle patches as a map, and either confirms it is safe or patches it to use the Chromium version.
+- **Audit for Chromium 156.0.8078.73** (task 3.1): every read of `CFBundleShortVersionString` or `CFBundleVersion` outside tests and iOS. None needs a patch:
+  - `chrome_exe_main_mac.cc` finds `Clair Framework.framework/Versions/<version>` from the compiled-in `CHROME_VERSION_STRING`.
+  - `FileVersionInfo` (`base/file_version_info_apple.mm`) and Crashpad's `ver` annotation (`crashpad_mac.mm`) read the framework bundle's own `Info.plist`, which keeps the Chromium version. Crashpad is disabled anyway.
+  - `UpgradeDetector` reads the installed version through `updater::CurrentlyInstalledVersion()`. With `enable_updater=false` that is `updater_no_updater.cc`, which returns the compiled-in version; the outer-plist read in `browser_updater_client_util_mac.mm` isn't compiled.
+  - App shims (`app_mode_chrome_locator.mm`) ask for the Chromium version they were built with, then fall back to `Versions/Current`, which the engine has. The outer bundle's version is only a third fallback, for bundles without `Current`.
+  - `web_app_shortcut_creator.mm` and `bundle_info_plist.mm` write and read the shims' own plists. `updater_state_mac.mm` reads Keystone's version.
+
+  A package with `CFBundleShortVersionString` 0.1.0 and `CFBundleVersion` 1 renders a page headless from engine `e5d44f4b0c3f3aea`.
 
 **Alternatives considered:**
 - Passing the version to GN, as Helium does: rejected, because it makes the version an engine input.
