@@ -48,7 +48,7 @@ The stages can also be run one at a time: `./build.sh fetch prepare`, then `./bu
 1. It clones `build/base` to `build/next` and applies Clair's layer there: `patches/series`, the UI string rebranding, the icon and logos, and domain substitution. A patch that doesn't apply stops the update before `build/src` changes.
 2. It copies into `build/src` only the files whose contents differ, using the list of files the previous layer touched (`build/layer_files`) and the files the new one touched. Files that come out the same keep their modification times, so ninja rebuilds only the targets the change affects.
 
-`update` starts from fresh source (`fetch prepare`) instead when the tree has no base, when the ungoogled-chromium pin, `downloads*.ini` or `retrieve_and_unpack_resource.py` changed, or when an earlier update stopped partway. `configure` deletes `out/Default` when the macOS SDK changes, so no objects compiled with the old SDK are linked into the new engine.
+`update` starts from fresh source (`fetch prepare`) instead when the tree has no base, when the ungoogled-chromium pin, `downloads*.ini` or `retrieve_and_unpack_resource.py` changed, when an earlier update stopped partway, or when `build/base_key` is unreadable. The log names the reason, with the recorded and current base keys when they differ. `configure` deletes `out/Default` when the macOS SDK changes, so no objects compiled with the old SDK are linked into the new engine.
 
 ## Editing patches
 
