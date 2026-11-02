@@ -1,6 +1,7 @@
 # The merge gate, for every push and pull request: script tests, shell script
-# lint, workflow lint, and the native layer's build and unit tests. The patch check is build.yml; the engine is
-# built only on the owner's Mac, by engine.yml.
+# lint, workflow lint, the native layer's build and unit tests, and the engine
+# check (change 1 design D12). The engine is built only on the owner's Mac, by
+# engine.yml, which re-runs the engine check once it publishes an engine.
 name: CI
 
 on:
@@ -76,3 +77,119 @@ jobs:
             -destination "platform=macOS,arch=arm64" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGNING_ALLOWED=NO build test
+
+  engine-key:
+    name: Engine key
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+      changed: ${{ steps.key.outputs.changed }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          # The engine is built from the branch head, not the merge commit.
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare with the base
+        id: key
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Each commit's key comes from its own engine-key.sh, as engine.yml
+          # would compute it on that commit.
+          base="$RUNNER_TEMP/base"
+          git worktree add --detach --quiet "$base" "$BASE_SHA"
+          key="$(./scripts/engine-key.sh)"
+          base_key="$("$base/scripts/engine-key.sh" "$base")"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "Engine key: $key (base: $base_key)"
+          if [[ "$key" == "$base_key" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "::group::Changed engine inputs"
+            diff <("$base/scripts/engine-key.sh" --manifest "$base") <(./scripts/engine-key.sh --manifest) || true
+            echo "::endgroup::"
+          fi
+
+  patch-check:
+    # Fetches the Chromium source and applies every patch and the overlay, so a
+    # patch that no longer applies fails here, named in the log. It compiles no
+    # Chromium.
+    name: Patch check
+    needs: engine-key
+    if: ${{ needs.engine-key.outputs.changed == 'true' }}
+    runs-on: xcode-27
+    timeout-minutes: 120
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          submodules: true
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Prepare runner
+        run: ./.github/scripts/prepare-runner.sh
+
+      - name: Fetch and patch (patch-only mode)
+        run: ./build.sh fetch prepare
+
+  engine-check:
+    # The required check. A pull request that changes the engine key passes
+    # only once its patch check passes and chromium-engine-<key> is published.
+    # engine.yml re-runs this job, and only this job, after publishing, so it
+    # finds the job by its name and the key in its annotation.
+    name: Engine check
+    needs: [engine-key, patch-check]
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          KEY_RESULT: ${{ needs.engine-key.result }}
+          PATCH_RESULT: ${{ needs.patch-check.result }}
+          KEY: ${{ needs.engine-key.outputs.key }}
+          CHANGED: ${{ needs.engine-key.outputs.changed }}
+          BRANCH: ${{ github.head_ref }}
+          FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [[ "$KEY_RESULT" != success || ! "$KEY" =~ ^[0-9a-f]{16}$ ]]; then
+            echo "::error::The engine key could not be worked out; see the Engine key job."
+            exit 1
+          fi
+          if [[ "$CHANGED" != true ]]; then
+            echo "Engine key unchanged ($KEY): this pull request needs no new engine."
+            exit 0
+          fi
+          tag="chromium-engine-$KEY"
+          echo "::notice title=Engine needed::$tag"
+          if [[ "$PATCH_RESULT" != success ]]; then
+            echo "::error::The patch check did not pass ($PATCH_RESULT); see its log."
+            exit 1
+          fi
+          draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [[ "$draft" == false ]]; then
+            echo "$tag is published."
+            exit 0
+          fi
+          if [[ "$FORK" == true ]]; then
+            how="push this pull request's commits to a branch of $GH_REPO, then run: gh workflow run engine.yml -f ref=<that branch>"
+          else
+            how="gh workflow run engine.yml -f ref=$BRANCH"
+          fi
+          echo "::error::$tag is not published. This pull request changes the engine, so it can't merge until the owner builds it: $how"
+          exit 1
