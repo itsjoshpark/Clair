@@ -274,6 +274,44 @@ else
   echo "         hdiutil couldn't mount it"
 fi
 
+# --- hdiutil failures ----------------------------------------------------------------
+stub_bin="$workdir/stub-bin"
+mkdir "$stub_bin"
+printf '#!/bin/bash\nexit 0\n' >"$stub_bin/sleep"
+cat >"$stub_bin/hdiutil" <<EOF
+#!/bin/bash
+count="\$(cat "$workdir/hdiutil-count" 2>/dev/null || echo 0)"
+echo "\$((count + 1))" >"$workdir/hdiutil-count"
+if ((count < HDIUTIL_FAILURES)); then
+  echo "hdiutil: create failed - Resource busy" >&2
+  exit 1
+fi
+exec /usr/bin/hdiutil "\$@"
+EOF
+chmod +x "$stub_bin/sleep" "$stub_bin/hdiutil"
+
+echo 0 >"$workdir/hdiutil-count"
+out="$workdir/out-retry"
+if HDIUTIL_FAILURES=2 PATH="$stub_bin:$PATH" run_package --version 0.1.0 --build 7 "$engine/Clair.app" "$out" \
+    && [[ -f "$out/Clair-0.1.0-arm64.dmg" && "$(cat "$workdir/hdiutil-count")" == 3 ]]; then
+  check "tries hdiutil again when it fails" pass
+else
+  check "tries hdiutil again when it fails" fail
+  echo "$output" | tail -5 | sed 's/^/         /'
+fi
+
+echo 0 >"$workdir/hdiutil-count"
+out="$workdir/out-busy"
+if HDIUTIL_FAILURES=99 PATH="$stub_bin:$PATH" run_package --version 0.1.0 --build 7 "$engine/Clair.app" "$out"; then
+  check "stops after three hdiutil failures, showing its error" fail
+elif [[ "$output" == *"Resource busy"* && "$output" == *"couldn't create the DMG"* \
+    && "$(cat "$workdir/hdiutil-count")" == 3 ]]; then
+  check "stops after three hdiutil failures, showing its error" pass
+else
+  check "stops after three hdiutil failures, showing its error" fail
+  echo "$output" | tail -5 | sed 's/^/         /'
+fi
+
 # --- refusals ---------------------------------------------------------------------
 expect_refusal "refuses an output directory that already has Clair.app" "already exists" \
   --version 0.1.0 --build 7 --no-dmg "$engine/Clair.app" "$workdir/out1"
