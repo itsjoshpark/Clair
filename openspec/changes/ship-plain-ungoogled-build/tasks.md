@@ -34,7 +34,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
 ## 3. Versioning
 
-- [ ] 3.1 Add `version.txt` set to `0.1.0`. Make `package.sh` write `CFBundleShortVersionString` from `version.txt` and `CFBundleVersion` from `git rev-list --count HEAD` (or the release's build number) into `Clair.app/Contents/Info.plist`. Before that, audit every place Chromium reads the outer bundle's version, using Helium's versioning and Sparkle patches as a map, and patch any read that must keep the Chromium version (D3). Verify both plist values in a packaged app, and that it launches and loads its framework.
+- [x] 3.1 Add `version.txt` set to `0.1.0`. Make `package.sh` write `CFBundleShortVersionString` from `version.txt` and `CFBundleVersion` from `git rev-list --count HEAD` (or the release's build number) into `Clair.app/Contents/Info.plist`. Before that, audit every place Chromium reads the outer bundle's version, using Helium's versioning and Sparkle patches as a map, and patch any read that must keep the Chromium version (D3). Verify both plist values in a packaged app, and that it launches and loads its framework.
 - [ ] 3.2 Adapt Helium's `add-helium-versioning.patch` so the About page and `chrome://version` read the Clair version and build number from the main bundle's `Info.plist` at run time. They also show the Chromium version and ungoogled-chromium revision, labelled as the engine. Verify by opening About Clair in two packages of the same engine with different `version.txt` values.
 - [ ] 3.3 Verify that the engine version reaches the web unchanged. `navigator.userAgent` and client hints should match an ungoogled-chromium build of the same tag and not contain `0.1.0`. A test extension with `minimum_chrome_version` set to `150` should install.
 - [ ] 3.4 Extend `scripts/verify-app.sh` to check the version: the short version matches `version.txt`, and the build number is an integer. Verify that it passes on a packaged app.
@@ -110,9 +110,9 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 ## 9. Native layer
 
 - [x] 9.1 Write `native/ClairHost.h`: the entry point Chromium calls once the main menu exists, and a host protocol with graceful relaunch, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), and the Chromium and ungoogled-chromium versions. Verify that it compiles in an Objective-C++ unit and from Swift through a module map.
-- [ ] 9.2 Add `patches/clair/native-layer-hook.patch` plus overlay files under `overlay/chrome/browser/clair/`. Together they load `ClairUI.framework` from `Contents/Frameworks` after the main menu is built, implement the host protocol, and log and carry on when the framework is missing. Keep the patch to the call sites; the logic goes in the overlay. Verify that a bare engine starts and logs the missing framework, and that a packaged app loads it.
+- [x] 9.2 Add `patches/clair/native-layer-hook.patch` plus overlay files under `overlay/chrome/browser/clair/`. Together they load `ClairUI.framework` from `Contents/Frameworks` after the main menu is built, implement the host protocol, and log and carry on when the framework is missing. Keep the patch to the call sites; the logic goes in the overlay. Verify that a bare engine starts and logs the missing framework, and that a packaged app loads it.
 - [x] 9.3 Add `native/ClairUI.xcodeproj` in Xcode 27.2's JSON format (`project.xcproj`, no `project.pbxproj`) for `ClairUI.framework` (Swift, macOS 15.6, arm64) and `ClairUITests`, with `ClairHost.h` exposed to Swift. Verify that `xcodebuild build test` succeeds on the development machine with no Chromium checkout, and that the project has no `project.pbxproj`.
-- [ ] 9.4 Make `package.sh` build `ClairUI` (or take a built copy) and embed it. Verify that a change to a Swift file alone produces a new package from the same `chromium-engine-<key>`.
+- [x] 9.4 Make `package.sh` build `ClairUI` (or take a built copy) and embed it. Verify that a change to a Swift file alone produces a new package from the same `chromium-engine-<key>`.
 
 ## 10. Engine pipeline
 

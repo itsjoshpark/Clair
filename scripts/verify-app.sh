@@ -73,7 +73,10 @@ while IFS= read -r -d '' helper; do
     fail "helper $(basename "$helper") has identifier '$helper_id', expected a $bundle_id. prefix"
     bad_helpers=$((bad_helpers + 1))
   fi
-done < <(find "$app/Contents" -name '*.app' -type d -print0)
+done < <(find "$app/Contents" -path "$app/Contents/Frameworks/Sparkle.framework" -prune \
+           -o -name '*.app' -type d -print0)
+# Sparkle's Updater.app keeps Sparkle's own identifier: it is Sparkle's code,
+# embedded unchanged and signed as itself.
 if (( bad_helpers == 0 )); then
   pass "all $helpers helper apps use the $bundle_id. prefix"
 fi

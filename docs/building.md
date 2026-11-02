@@ -65,6 +65,17 @@ Or open `native/ClairUI.xcodeproj` in Xcode. The project is in Xcode's JSON form
 
 On the Chromium side, `patches/clair/native-layer-hook.patch` calls `clair::StartNativeLayer()` once the main menu is built. The loader and Chromium's host live in `overlay/chrome/browser/clair/`, and `prepare` copies `ClairHost.h` beside them (`scripts/install-native-contract.sh`). The engine looks for `Contents/Frameworks/ClairUI.framework`; a bare engine has none, logs `ClairUI: no framework at …` and runs without it.
 
+## Packaging Clair.app
+
+`package.sh` turns an engine into `Clair.app` and its DMG in about a minute, with no Chromium checkout:
+
+```sh
+gh release download chromium-engine-<key> -p '*.zip'
+./package.sh Clair-Chromium-Engine-<key>-arm64.zip build/package
+```
+
+It builds `ClairUI` (or takes `--clairui <framework>`), fetches Sparkle with `scripts/fetch-sparkle.sh`, writes the version from `version.txt`, the build number from `git rev-list --count HEAD` and Sparkle's keys into `Info.plist`, signs every nested bundle inside out, and writes `Clair-<version>-arm64.dmg`. Without `--identity`, it signs ad hoc and without the hardened runtime: an ad hoc signature has no Team ID, so library validation would refuse every framework. Ad hoc packages are for testing on your own Mac. Remove the quarantine flag before opening one you downloaded. `./package.test.sh` checks it against a stand-in engine.
+
 ## Editing patches
 
 Clair's patch series is `patches/series`. Paths in it are relative to `patches/`, and it is applied after ungoogled-chromium's own series. To edit or add a patch, use quilt on a fetched, unpatched source tree:

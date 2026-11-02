@@ -93,6 +93,16 @@ expect "a helper with a foreign identifier fails" fail "$app" "Clair Helper.app 
 app="$(make_app "$workdir/universal" Clair dev.joshuapark.Clair Clair 15.6 dev.joshuapark.Clair.helper universal.bin)"
 expect "a universal (x86_64 + arm64) binary fails" fail "$app" "expected only arm64"
 
+app="$(make_app "$workdir/sparkle" Clair dev.joshuapark.Clair Clair 15.6 dev.joshuapark.Clair.helper arm64.bin)"
+updater="$app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+write_plist "$updater/Contents/Info.plist" org.sparkle-project.Sparkle.Updater Updater ""
+expect "Sparkle's Updater.app keeps Sparkle's identifier" pass "$app" "helper apps use"
+
+app="$(make_app "$workdir/stray" Clair dev.joshuapark.Clair Clair 15.6 dev.joshuapark.Clair.helper arm64.bin)"
+stray="$app/Contents/Frameworks/Other.framework/Updater.app"
+write_plist "$stray/Contents/Info.plist" org.sparkle-project.Sparkle.Updater Updater ""
+expect "an app outside Sparkle.framework still needs Clair's prefix" fail "$app" "Updater.app has identifier"
+
 if "$verify" "$workdir/missing.app" >/dev/null 2>&1; then
   check "rejects a missing app" fail
 else
