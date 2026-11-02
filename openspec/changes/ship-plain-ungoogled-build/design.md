@@ -216,7 +216,7 @@ The following are secrets of a `release` environment that is limited to `main`:
 - `SPARKLE_ED_PRIVATE_KEY`
 
 Handling:
-- The Sparkle key is generated once, locally, with `generate_keys`. Its public half is committed. The private half goes into the secret and into an offline backup.
+- The Sparkle key is generated once, locally, with `generate_keys`. Its public half is committed. The private half goes into the secret and into a backup in the owner's 1Password.
 - Scripts pass secrets only through stdin or temporary keychains, never as command-line arguments, and run with `set +x` around any step that uses them.
 - Engine builds, the merge gate and the quality checks get no secrets. Quality checks sign ad hoc, and use a test-only EdDSA key pair committed under `tests/` for their own test appcasts. That test key is never trusted by a shipped build.
 
@@ -357,7 +357,7 @@ Handling:
 - **[Risk] Helium's versioning and identity patches stop applying** on a new Chromium version.
   → They live in Clair's tree, so Clair can fix them without waiting for Helium. Helium's upstream fixes are a reference.
 - **[Risk] The Sparkle private key is lost or leaked.** Losing it strands every installed copy; leaking it lets someone else push updates.
-  → Keep an offline backup. The key exists only in the secret store and the backup. If it's lost, the only recovery is asking users to reinstall by hand, so the backup is essential.
+  → Keep a backup in the owner's 1Password. The key exists only in the secret store and the backup. If it's lost, the only recovery is asking users to reinstall by hand, so the backup is essential.
 - **[Trade-off] Engine pull requests can't merge until the owner has built their engine.**
   → Accepted, so that `main` always has an engine and its quality checks always run.
 - **[Trade-off] Extensions:** without Web Store URLs, extension installs work but feel clumsy in this release.
