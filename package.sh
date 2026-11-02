@@ -270,8 +270,18 @@ if $dmg; then
   mkdir "$staging"
   ditto "$out/$product.app" "$staging/$product.app"
   ln -s /Applications "$staging/Applications"
-  hdiutil create -quiet -volname "$product" -srcfolder "$staging" -fs HFS+ -format ULFO "$dmg_path" ||
-    die "hdiutil couldn't create the DMG"
+  # hdiutil create fails now and then on the hosted runners, so try it again.
+  created=false
+  for attempt in 1 2 3; do
+    if hdiutil create -volname "$product" -srcfolder "$staging" -fs HFS+ -format ULFO "$dmg_path" >/dev/null; then
+      created=true
+      break
+    fi
+    echo "package: hdiutil create failed (attempt $attempt of 3)" >&2
+    rm -f "$dmg_path"
+    [[ "$attempt" == 3 ]] || sleep 5
+  done
+  $created || die "hdiutil couldn't create the DMG"
   if [[ -n "$identity" ]]; then
     codesign --sign "$identity" --timestamp "$dmg_path"
   fi
