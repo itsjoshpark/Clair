@@ -19,7 +19,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [ ] 1.3 Port `build.sh` for arm64 only. It applies ungoogled's series, then `patches/series`, then domain substitution, and writes `args.gn`. Add a patch-only mode (`./build.sh fetch prepare`). Verify that the CI fetch job finishes the patch-only mode on clean source, and that a throwaway commit changing one line of context in one patch makes the job fail and name that patch.
 - [x] 1.4 Add `build/` and the other generated paths to `.gitignore`, and add `CREDITS.md` listing ungoogled-chromium and ungoogled-chromium-macos with their licenses. Verify that `git status` stays clean after a build.
 - [x] 1.5 Do a full CI build with no Clair patches yet, through `build.yml` and its chained `build-phase.yml` jobs on a pull request (PR #1). Verify that a phase reports `finished`, that the headless smoke test renders a page, that the build leaves the work tree clean, and that the unsigned app artifact is uploaded. This is the baseline.
-- [ ] 1.6 Make `build.sh prepare` copy `overlay/` into the source tree after the patches, and refuse an overlay file whose path already exists in the Chromium tree. Verify with a test overlay file that it appears in the prepared tree, and that an overlay file shadowing an existing Chromium file fails the prepare step and names the file.
+- [x] 1.6 Make `build.sh prepare` copy `overlay/` into the source tree after the patches, and refuse an overlay file whose path already exists in the Chromium tree. Verify with a test overlay file that it appears in the prepared tree, and that an overlay file shadowing an existing Chromium file fails the prepare step and names the file.
 - [ ] 1.7 Write `docs/building.md`: how the engine and app builds are split, the engine key, starting `engine.yml` and reading its log from the development machine, building the native layer with Xcode, and the quilt workflow for editing patches. Verify that a contributor can follow it to rebuild an engine after changing one patch.
 
 ## 2. App identity
@@ -66,7 +66,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [x] 6.3 Add the release validation script. It works out the version from the latest `v*` tag plus the bump, sets the build number to `rev-list --count HEAD` + 1, checks that this is greater than the newest appcast entry, and checks that `next.md` is present and edited and that `<version>.md` doesn't exist. Add tests. Verify that the tests cover `0.1.0` → `0.1.1` for a patch bump, `0.1.3` → `0.2.0` for a minor bump, and each refusal case.
 - [ ] 6.4 Add the delta script. It downloads the DMGs of up to three previous releases, runs `BinaryDelta create`, and signs each asset with `sign_update`, using tools from the pinned Sparkle release tarball, checked against its sha512. Verify with two local packages that the delta applies (`BinaryDelta apply`), and that the result passes `codesign --verify`.
 - [x] 6.5 Add `ci.yml`, which runs the script tests and shellcheck on pushes and pull requests. Verify that a run is green.
-- [ ] 6.6 Check that the release validation script ignores `chromium-engine-*` tags and prereleases. Verify with a test that has an `chromium-engine-0123456789abcdef` tag newer than the latest `v*` tag.
+- [x] 6.6 Check that the release validation script ignores `chromium-engine-*` tags and prereleases. Verify with a test that has an `chromium-engine-0123456789abcdef` tag newer than the latest `v*` tag.
 
 ## 7. CI release workflow
 
@@ -109,9 +109,9 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
 ## 9. Native layer
 
-- [ ] 9.1 Write `native/ClairHost.h`: the entry point Chromium calls once the main menu exists, and a host protocol with graceful relaunch, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), and the Chromium and ungoogled-chromium versions. Verify that it compiles in an Objective-C++ unit and from Swift through a module map.
+- [x] 9.1 Write `native/ClairHost.h`: the entry point Chromium calls once the main menu exists, and a host protocol with graceful relaunch, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), and the Chromium and ungoogled-chromium versions. Verify that it compiles in an Objective-C++ unit and from Swift through a module map.
 - [ ] 9.2 Add `patches/clair/native-layer-hook.patch` plus overlay files under `overlay/chrome/browser/clair/`. Together they load `ClairUI.framework` from `Contents/Frameworks` after the main menu is built, implement the host protocol, and log and carry on when the framework is missing. Keep the patch to the call sites; the logic goes in the overlay. Verify that a bare engine starts and logs the missing framework, and that a packaged app loads it.
-- [ ] 9.3 Add `native/ClairUI.xcodeproj` in Xcode 27.2's JSON format (`project.xcproj`, no `project.pbxproj`) for `ClairUI.framework` (Swift, macOS 15.6, arm64) and `ClairUITests`, with `ClairHost.h` exposed to Swift. Verify that `xcodebuild build test` succeeds on the development machine with no Chromium checkout, and that the project has no `project.pbxproj`.
+- [x] 9.3 Add `native/ClairUI.xcodeproj` in Xcode 27.2's JSON format (`project.xcproj`, no `project.pbxproj`) for `ClairUI.framework` (Swift, macOS 15.6, arm64) and `ClairUITests`, with `ClairHost.h` exposed to Swift. Verify that `xcodebuild build test` succeeds on the development machine with no Chromium checkout, and that the project has no `project.pbxproj`.
 - [ ] 9.4 Make `package.sh` build `ClairUI` (or take a built copy) and embed it. Verify that a change to a Swift file alone produces a new package from the same `chromium-engine-<key>`.
 
 ## 10. Engine pipeline

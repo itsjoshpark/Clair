@@ -1,5 +1,5 @@
-# Fast checks for every push and pull request: release script tests, shell
-# script lint and workflow lint. The patch check is build.yml; the engine is
+# The merge gate, for every push and pull request: script tests, shell script
+# lint, workflow lint, and the native layer's build and unit tests. The patch check is build.yml; the engine is
 # built only on the owner's Mac, by engine.yml.
 name: CI
 
@@ -18,12 +18,15 @@ concurrency:
 jobs:
   scripts:
     name: Script tests and lint
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - name: Check out
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Select Xcode
+        run: ./.github/scripts/select-xcode.sh
 
       - name: Install tools
         run: brew install cmark-gfm shellcheck actionlint librsvg
@@ -45,3 +48,31 @@ jobs:
 
       - name: Check the appcast is well-formed
         run: xmllint --noout .sparkle/appcast.xml
+
+  native:
+    name: Native layer build and tests
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode
+        run: ./.github/scripts/select-xcode.sh
+
+      - name: Check the project is in Xcode's JSON format
+        run: |
+          test -f native/ClairUI.xcodeproj/project.xcproj
+          if [[ -e native/ClairUI.xcodeproj/project.pbxproj ]]; then
+            echo "::error::native/ClairUI.xcodeproj has a project.pbxproj; keep only the JSON project.xcproj"
+            exit 1
+          fi
+
+      - name: Build and test ClairUI (unsigned)
+        run: |
+          xcodebuild -project native/ClairUI.xcodeproj -scheme ClairUI \
+            -destination "platform=macOS,arch=arm64" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO build test

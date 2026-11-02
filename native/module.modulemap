@@ -1,0 +1,6 @@
+// The ClairHost contract (ClairHost.h) as a Clang module, so Swift can
+// import it. Chromium includes the header directly and doesn't use this file.
+module ClairHost {
+  header "ClairHost.h"
+  export *
+}
