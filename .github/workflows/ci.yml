@@ -34,7 +34,7 @@ jobs:
       - name: Run script tests
         run: |
           failures=0
-          for test in scripts/*.test.sh package.test.sh; do
+          for test in scripts/*.test.sh ./package.test.sh; do
             echo "==> $test"
             "$test" || failures=$((failures + 1))
           done
