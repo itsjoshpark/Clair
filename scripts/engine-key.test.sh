@@ -39,8 +39,10 @@ covered=(
   overlay/chrome/browser/clair/clair_host.mm
   utils/name_substitution.py
   native/ClairHost.h
+  scripts/apply-overlay.sh
   scripts/compile-icon.sh
   scripts/replace-icon-resources.sh
+  scripts/install-native-contract.sh
   resources/icon/AppIcon.icon/icon.json
   resources/icon/logos/chrome/app/theme/chromium/product_logo_16.png
   resources/icon/vector_icons/chrome/app/vector_icons/product.icon

@@ -52,8 +52,11 @@ echo "$(basename "$app") rendered the smoke-test page."
 if [[ "$(basename "$app")" == "Clair.app" ]]; then
   # Headless mode would use a temporary profile, so launch the app normally
   # (the runner has a GUI session) until the default profile appears.
+  # Its log shows whether the native-layer hook ran (task 9.2).
+  browser_log="$(mktemp)"
   "$app/Contents/MacOS/$executable" --no-first-run --use-mock-keychain \
-    --no-default-browser-check about:blank >/dev/null 2>&1 &
+    --no-default-browser-check --enable-logging=stderr about:blank \
+    >"$browser_log" 2>&1 &
   browser_pid=$!
   for _ in $(seq 1 60); do
     [[ -d "$support/Clair/Default" ]] && break
@@ -71,6 +74,16 @@ if [[ "$(basename "$app")" == "Clair.app" ]]; then
     exit 1
   fi
   echo "The default profile was created in $support/Clair."
+
+  # A bare engine has no ClairUI.framework: the hook must log that and carry on.
+  if ! grep -q "ClairUI: no framework at .*/Contents/Frameworks/ClairUI.framework; running without the native layer" "$browser_log"; then
+    echo "::error::The engine did not log the missing ClairUI.framework"
+    grep -i clairui "$browser_log" || tail -20 "$browser_log"
+    rm -f "$browser_log"
+    exit 1
+  fi
+  echo "The engine logged the missing ClairUI.framework and carried on."
+  rm -f "$browser_log"
 fi
 
 mkdir -p "$output_dir"
