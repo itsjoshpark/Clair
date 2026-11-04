@@ -80,11 +80,6 @@ enum Harness {
     ] {
       try? FileManager.default.removeItem(at: home.appending(path: path))
     }
-    let downloads = home.appending(path: "Downloads")
-    for file in (try? FileManager.default.contentsOfDirectory(atPath: downloads.path)) ?? []
-    where file.hasSuffix(".crdownload") || file.hasPrefix("slow") {
-      try? FileManager.default.removeItem(at: downloads.appending(path: file))
-    }
     try run("/usr/bin/security", ["delete-generic-password", "-s", "Clair Safe Storage"])
   }
 }
@@ -102,10 +97,10 @@ func require(_ condition: Bool, _ message: String) throws {
 /// A private copy of the package, started by path, so an update can replace it
 /// and a test can't affect the next one.
 ///
-/// XCUITest sees an app only when it launched it through this URL: the app in a
-/// temporary directory has no bundle identifier that Launch Services will look
-/// up, and a handle by bundle identifier stops the test. `ui` therefore doesn't
-/// follow a relaunch, so what comes after one is checked over DevTools.
+/// XCUITest sees the app only when it launched it through this URL. On the
+/// hosted runner, a handle by bundle identifier reports a copy in a temporary
+/// directory as not running, or stops the test. `ui` therefore doesn't follow a
+/// relaunch, so what comes after one is checked over DevTools.
 @MainActor
 final class Browser {
   let workDirectory: URL

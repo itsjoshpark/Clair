@@ -53,7 +53,6 @@ class RuntimeTestCase: XCTestCase {
 final class AppTests: RuntimeTestCase {
   func testLaunchesAndRendersALocalPage() async throws {
     let browser = try await startBrowser()
-    print("Tabs at launch: \(try await browser.pageTargets().map(\.url))")
     let tab = try await browser.open(page)
     defer { tab.close() }
     let height = try await tab.evaluate(
@@ -206,7 +205,7 @@ enum NetLog {
     var hosts = Set<String>()
     let patterns = [
       #"[a-z][a-z0-9+.-]*://(?:[^/"@\s]*@)?([A-Za-z0-9.-]+)"#,
-      #""host":\s*"([A-Za-z0-9.-]+)"#,
+      #""host":\s*"(?![a-z]+://)([A-Za-z0-9.-]+)"#,
     ]
     for pattern in patterns {
       guard let regex = try? NSRegularExpression(pattern: pattern) else {
@@ -341,13 +340,19 @@ final class IdleInstallTests: RuntimeTestCase {
 
   func testDownloadInProgressPreventsIdleInstall() async throws {
     let browser = try await startWithWaitingUpdate()
+    // ungoogled-chromium asks where to save every download, and a save panel
+    // would leave the download waiting. This setting lasts as long as the session.
+    let folder = browser.workDirectory.appending(path: "downloads")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let session = try await browser.browserSession()
+    defer { session.close() }
+    try await session.send(
+      "Browser.setDownloadBehavior", ["behavior": "allow", "downloadPath": folder.path])
+
     let tab = try await browser.open(page)
     defer { tab.close() }
     _ = try await tab.evaluate("location.href = '/slow-download'; 1")
-    let started = await Harness.wait(for: 30) {
-      FileManager.default.homeDirectoryForCurrentUser
-        .appending(path: "Downloads").contents.contains { $0.hasSuffix(".crdownload") }
-    }
+    let started = await Harness.wait(for: 30) { !folder.contents.isEmpty }
     try require(started, "The download didn't start")
     try await assertStaysRunning(browser, reason: "a download in progress")
 
