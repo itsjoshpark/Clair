@@ -70,7 +70,7 @@ jobs:
         id: suite
         run: |
           status=0
-          ./tests/runtime/run.sh test "$RUNNER_TEMP/runtime" -only-testing:ClairRuntimeTests/DiagnosticTests || status=$?
+          ./tests/runtime/run.sh test "$RUNNER_TEMP/runtime" || status=$?
           {
             echo "failures<<END_OF_FAILURES"
             cat "$RUNNER_TEMP/runtime/failures.txt"

@@ -53,6 +53,7 @@ class RuntimeTestCase: XCTestCase {
 final class AppTests: RuntimeTestCase {
   func testLaunchesAndRendersALocalPage() async throws {
     let browser = try await startBrowser()
+    print("Tabs at launch: \(try await browser.pageTargets().map(\.url))")
     let tab = try await browser.open(page)
     defer { tab.close() }
     let height = try await tab.evaluate(
@@ -67,7 +68,7 @@ final class AppTests: RuntimeTestCase {
     let browser = try await startBrowser(feed: upToDateFeed)
     browser.ui.activate()
     let clair = browser.ui.menuBars.menuBarItems["Clair"]
-    XCTAssertTrue(clair.waitForExistence(timeout: 30), "There's no Clair menu")
+    try require(clair.waitForExistence(timeout: 30), "There's no Clair menu")
     clair.click()
     for title in ["About Clair", "Hide Clair", "Quit Clair", "Check for Updates…"] {
       XCTAssertTrue(
@@ -167,9 +168,11 @@ final class AppTests: RuntimeTestCase {
     let log = directory.appending(path: "netlog.json")
     let browser = try await startBrowser(feed: upToDateFeed, arguments: ["--log-net-log=\(log.path)"])
     try await Task.sleep(for: .seconds(60))
-    browser.stop()
-    let finished = await Harness.wait(for: 30) { try browser.runningProcessID() == nil }
-    XCTAssertTrue(finished, "Clair didn't quit")
+    // Proves the log records requests. It comes after the idle period, and the
+    // page is local.
+    let tab = try await browser.open(page)
+    tab.close()
+    try await browser.quit()
 
     let contents = try String(contentsOf: log, encoding: .utf8)
     // The events come after the constants, which name hosts that nothing asked for.
@@ -178,6 +181,7 @@ final class AppTests: RuntimeTestCase {
     }
     let hosts = NetLog.hosts(in: String(contents[events.upperBound...]))
     print("Hosts in the net log: \(hosts.sorted())")
+    XCTAssertTrue(hosts.contains("localhost"), "The net log didn't record the test page's request")
     let google = hosts.filter(NetLog.isGoogleService)
     XCTAssertTrue(google.isEmpty, "An idle first launch contacted \(google.sorted())")
   }
@@ -224,24 +228,24 @@ final class UpdateMenuTests: RuntimeTestCase {
   func testCheckReportsUpToDate() async throws {
     try skipAutomaticCheck()
     let browser = try await startBrowser(feed: upToDateFeed)
-    browser.chooseUpdateItem(titled: "Check for Updates…")
-    XCTAssertNotNil(browser.alert(titled: "Clair is up to date"), "No up-to-date alert")
-    browser.clickAlertButton("OK")
+    try browser.chooseUpdateItem(titled: "Check for Updates…")
+    try browser.requireAlert(titled: "Clair is up to date")
+    try browser.clickAlertButton("OK")
   }
 
   func testCheckReportsReadyAndItemChanges() async throws {
     try skipAutomaticCheck()
     let browser = try await startBrowser(feed: updateFeed)
-    browser.chooseUpdateItem(titled: "Check for Updates…")
+    try browser.chooseUpdateItem(titled: "Check for Updates…")
     let ready = "Clair \(fixture.updateVersion) is ready"
-    XCTAssertNotNil(browser.alert(titled: ready, within: 180), "No \"\(ready)\" alert")
-    browser.clickAlertButton("Later")
+    try browser.requireAlert(titled: ready, within: 180)
+    try browser.clickAlertButton("Later")
     XCTAssertTrue(
       browser.updateItemExists(titled: "Update Available…", within: 30),
       "The update item doesn't read \"Update Available…\"")
-    browser.chooseUpdateItem(titled: "Update Available…")
-    XCTAssertNotNil(browser.alert(titled: ready), "Update Available… doesn't show the ready alert")
-    browser.clickAlertButton("Later")
+    try browser.chooseUpdateItem(titled: "Update Available…")
+    try browser.requireAlert(titled: ready)
+    try browser.clickAlertButton("Later")
   }
 
   /// Restart and Update goes through ClairHost's relaunch: the same windows and
@@ -258,14 +262,14 @@ final class UpdateMenuTests: RuntimeTestCase {
       third.close()
     }
     let windowsBefore = try await browser.windowCount()
-    XCTAssertGreaterThanOrEqual(windowsBefore, 2)
+    try require(windowsBefore >= 2, "The second window didn't open")
     let before = try await browser.pageTargets().map(\.url).filter { $0.contains("?") }
 
-    browser.chooseUpdateItem(titled: "Check for Updates…")
+    try browser.chooseUpdateItem(titled: "Check for Updates…")
     let ready = "Clair \(fixture.updateVersion) is ready"
-    XCTAssertNotNil(browser.alert(titled: ready, within: 180), "No \"\(ready)\" alert")
+    try browser.requireAlert(titled: ready, within: 180)
     let oldProcess = try browser.runningProcessID()
-    browser.clickAlertButton("Restart and Update")
+    try browser.clickAlertButton("Restart and Update")
 
     try await waitForRelaunch(of: browser, from: oldProcess)
     XCTAssertEqual(browser.installedVersion, fixture.updateVersion, "The update didn't install")
@@ -289,7 +293,7 @@ extension RuntimeTestCase {
       }
       return try await !browser.pageTargets().isEmpty
     }
-    XCTAssertTrue(relaunched, "Clair didn't relaunch within \(Int(seconds)) seconds")
+    try require(relaunched, "Clair didn't relaunch within \(Int(seconds)) seconds")
   }
 }
 
@@ -303,7 +307,7 @@ final class IdleInstallTests: RuntimeTestCase {
   /// Starts Clair and waits until a background check has an update waiting.
   private func startWithWaitingUpdate() async throws -> Browser {
     let browser = try await startBrowser(feed: updateFeed, idleSeconds: idleSeconds)
-    XCTAssertTrue(
+    try require(
       browser.updateItemExists(titled: "Update Available…", within: 180),
       "No update was waiting after three minutes")
     return browser
@@ -344,7 +348,7 @@ final class IdleInstallTests: RuntimeTestCase {
       FileManager.default.homeDirectoryForCurrentUser
         .appending(path: "Downloads").contents.contains { $0.hasSuffix(".crdownload") }
     }
-    XCTAssertTrue(started, "The download didn't start")
+    try require(started, "The download didn't start")
     try await assertStaysRunning(browser, reason: "a download in progress")
 
     let process = try browser.runningProcessID()
@@ -356,10 +360,10 @@ final class IdleInstallTests: RuntimeTestCase {
   func testIncognitoWindowPreventsIdleInstall() async throws {
     let browser = try await startWithWaitingUpdate()
     browser.ui.activate()
-    XCTAssertTrue(browser.ui.windows.firstMatch.waitForExistence(timeout: 30), "Clair shows no window")
+    try require(browser.ui.windows.firstMatch.waitForExistence(timeout: 30), "Clair shows no window")
     browser.ui.typeKey("n", modifierFlags: [.command, .shift])
     let opened = await Harness.wait(for: 30) { browser.ui.windows.count >= 2 }
-    XCTAssertTrue(opened, "No incognito window opened")
+    try require(opened, "No incognito window opened")
     try await assertStaysRunning(browser, reason: "an incognito window")
 
     let process = try browser.runningProcessID()
@@ -372,7 +376,7 @@ final class IdleInstallTests: RuntimeTestCase {
     let tab = try await browser.open("\(fixture.baseURL)/pages/audio.html")
     defer { tab.close() }
     let state = try await tab.evaluate("startTone()") as? String
-    XCTAssertEqual(state, "running", "The test tone didn't start")
+    try require(state == "running", "The test tone didn't start")
     try await assertStaysRunning(browser, reason: "an audible tab")
 
     let process = try browser.runningProcessID()

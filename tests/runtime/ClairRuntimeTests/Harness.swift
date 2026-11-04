@@ -89,20 +89,29 @@ enum Harness {
   }
 }
 
+/// A failed step that later ones depend on. It throws rather than stopping the
+/// test with `continueAfterFailure = false`, which hangs an async test: XCTest
+/// raises an exception through the continuation, and the test then sits until
+/// its time allowance runs out.
+func require(_ condition: Bool, _ message: String) throws {
+  if !condition {
+    throw HarnessError(message)
+  }
+}
+
 /// A private copy of the package, started by path, so an update can replace it
 /// and a test can't affect the next one.
 ///
-/// It's started directly rather than with XCUIApplication.launch(), which adds
-/// `-ApplePersistenceIgnoreState YES`: Chromium would open "YES" as a URL. The
-/// accessibility queries find it through its bundle identifier, which keeps
-/// working after a relaunch.
+/// XCUITest sees an app only when it launched it through this URL: the app in a
+/// temporary directory has no bundle identifier that Launch Services will look
+/// up, and a handle by bundle identifier stops the test. `ui` therefore doesn't
+/// follow a relaunch, so what comes after one is checked over DevTools.
 @MainActor
 final class Browser {
   let workDirectory: URL
   let userDataDirectory: URL?
   let appPath: URL
-  let ui = XCUIApplication(bundleIdentifier: Harness.bundleID)
-  private var process: Process?
+  let ui: XCUIApplication
 
   /// With `defaultDataDirectory`, Clair runs with its real data directory and
   /// keychain. Otherwise it gets a throwaway directory and a mock keychain.
@@ -114,9 +123,7 @@ final class Browser {
     // A clone on APFS, so it's instant.
     try FileManager.default.copyItem(at: Fixture.directory.appending(path: "Clair.app"), to: appPath)
     userDataDirectory = defaultDataDirectory ? nil : workDirectory.appending(path: "data")
-    try Harness.run(
-      "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
-      ["-f", appPath.path])
+    ui = XCUIApplication(url: appPath)
   }
 
   /// The directory Clair writes DevToolsActivePort into.
@@ -130,48 +137,41 @@ final class Browser {
   func start(
     feed: String? = nil, idleSeconds: Int = 3600, arguments: [String] = []
   ) async throws {
+    // run.sh uploads these logs when the suite fails.
+    let logs = Fixture.directory.appending(path: "logs")
+    try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
     var launchArguments = [
       "--no-first-run", "--no-default-browser-check", "--remote-debugging-port=0",
-      "--autoplay-policy=no-user-gesture-required", "--enable-logging=stderr",
+      "--autoplay-policy=no-user-gesture-required", "--enable-logging",
+      "--log-file=\(logs.appending(path: "clair-\(UUID().uuidString).log").path)",
     ]
     if let userDataDirectory {
       launchArguments += ["--user-data-dir=\(userDataDirectory.path)", "--use-mock-keychain"]
     }
-    let process = Process()
-    process.executableURL = appPath.appending(path: "Contents/MacOS/Clair")
-    process.arguments = launchArguments + arguments
-    var environment = ProcessInfo.processInfo.environment.filter {
-      ["HOME", "PATH", "TMPDIR", "USER", "LOGNAME"].contains($0.key)
-    }
-    environment["CLAIR_TEST_UPDATE_IDLE_SECONDS"] = String(idleSeconds)
+    ui.launchArguments = launchArguments + arguments
+    ui.launchEnvironment["CLAIR_TEST_UPDATE_IDLE_SECONDS"] = String(idleSeconds)
     if let feed {
-      environment["CLAIR_TEST_FEED_URL"] = feed
+      ui.launchEnvironment["CLAIR_TEST_FEED_URL"] = feed
     }
-    process.environment = environment
-    // run.sh uploads these logs when the suite fails.
-    let logs = Fixture.directory.appending(path: "logs")
-    try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
-    let log = logs.appending(path: "clair-\(UUID().uuidString).log")
-    FileManager.default.createFile(atPath: log.path, contents: nil)
-    let logHandle = try FileHandle(forWritingTo: log)
-    process.standardOutput = logHandle
-    process.standardError = logHandle
-    try process.run()
-    self.process = process
+    ui.launch()
     let answered = await Harness.wait(for: 120) {
       _ = try await self.devToolsPort()
       return try await !self.pageTargets().isEmpty
     }
-    XCTAssertTrue(answered, "Clair didn't answer over DevTools within two minutes")
+    try require(answered, "Clair didn't answer over DevTools within two minutes")
   }
 
-  func stop() {
-    process?.terminate()
-    process = nil
+  /// Quits the way the user would, so Clair finishes writing its logs.
+  func quit() async throws {
+    let browser = try await browserSession()
+    defer { browser.close() }
+    _ = try? await browser.send("Browser.close")
+    let finished = await Harness.wait(for: 60) { try self.runningProcessID() == nil }
+    try require(finished, "Clair didn't quit")
   }
 
   func cleanUp() {
-    stop()
+    // Harness.reset() ends whatever is still running, including after a relaunch.
     try? FileManager.default.removeItem(at: workDirectory)
   }
 
@@ -271,13 +271,13 @@ final class Browser {
     ui.menuBars.menuItems.matching(NSPredicate(format: "title BEGINSWITH %@", prefix)).firstMatch
   }
 
-  func chooseUpdateItem(titled prefix: String) {
+  func chooseUpdateItem(titled prefix: String) throws {
     ui.activate()
     let clair = ui.menuBars.menuBarItems["Clair"]
-    XCTAssertTrue(clair.waitForExistence(timeout: 30), "There's no Clair menu")
+    try require(clair.waitForExistence(timeout: 30), "There's no Clair menu")
     clair.click()
     let item = updateItem(titled: prefix)
-    XCTAssertTrue(item.waitForExistence(timeout: 10), "The Clair menu has no \(prefix) item")
+    try require(item.waitForExistence(timeout: 10), "The Clair menu has no \(prefix) item")
     item.click()
   }
 
@@ -287,15 +287,14 @@ final class Browser {
     updateItem(titled: prefix).waitForExistence(timeout: seconds)
   }
 
-  /// The update alert with this title, once it's showing.
-  func alert(titled title: String, within seconds: TimeInterval = 60) -> XCUIElement? {
-    let text = ui.staticTexts[title]
-    return text.waitForExistence(timeout: seconds) ? text : nil
+  /// Requires the update alert with this title to show.
+  func requireAlert(titled title: String, within seconds: TimeInterval = 60) throws {
+    try require(ui.staticTexts[title].waitForExistence(timeout: seconds), "No \"\(title)\" alert")
   }
 
-  func clickAlertButton(_ title: String) {
+  func clickAlertButton(_ title: String) throws {
     let button = ui.buttons[title]
-    XCTAssertTrue(button.waitForExistence(timeout: 10), "The alert has no \(title) button")
+    try require(button.waitForExistence(timeout: 10), "The alert has no \(title) button")
     button.click()
   }
 }
