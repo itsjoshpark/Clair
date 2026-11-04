@@ -180,6 +180,18 @@ reject() {
   fi
 }
 
+echo "<p>First.</p>" >"$workdir/first-notes.html"
+# The first release adds to the committed appcast, which has no items.
+first="$workdir/first.xml"
+cp "$script_dir/../.sparkle/appcast.xml" "$first"
+if "$append" --appcast "$first" --version 0.1.0 --build 5 --url "https://e.com/a.dmg" --signature "S==" --length 1 \
+    --notes "$workdir/first-notes.html" --pub-date "Mon, 01 Jan 2026 00:00:00 +0000" --minimum-system-version 15.6 \
+    && grep -q '<sparkle:version>5</sparkle:version>' "$first"; then
+  check "adds the first release to the committed appcast" pass
+else
+  check "adds the first release to the committed appcast" fail
+fi
+
 reject "rejects a non-numeric length"      --version 2.11.0 --build 206 --url "https://e.com/a.dmg" --signature "S==" --length abc
 reject "rejects a length with a quote"     --version 2.11.0 --build 206 --url "https://e.com/a.dmg" --signature "S==" --length '1" x="2'
 reject "rejects an empty length"           --version 2.11.0 --build 206 --url "https://e.com/a.dmg" --signature "S==" --length ""

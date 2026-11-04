@@ -173,10 +173,18 @@ fi
 
 if [[ "$(plist_value "$info" SUFeedURL)" == "https://github.com/itsjoshpark/Clair/raw/main/.sparkle/appcast.xml" \
     && "$(plist_value "$info" SUEnableAutomaticChecks)" == true \
+    && "$(plist_value "$info" SUAutomaticallyUpdate)" == true \
+    && "$(plist_value "$info" SUScheduledCheckInterval)" == 86400 \
     && "$(plist_value "$info" SUPublicEDKey)" == "pfIShU4dEXqPd5ObYNfDBiQWcXozk7estwzTnF9BamQ=" ]]; then
-  check "writes SUFeedURL, SUEnableAutomaticChecks and SUPublicEDKey" pass
+  check "writes SUFeedURL, the automatic update keys and SUPublicEDKey" pass
 else
-  check "writes SUFeedURL, SUEnableAutomaticChecks and SUPublicEDKey" fail
+  check "writes SUFeedURL, the automatic update keys and SUPublicEDKey" fail
+fi
+
+if [[ "$(plist_value "$info" ClairNonOfficialPackage)" == true ]]; then
+  check "marks an ad hoc package as non-official" pass
+else
+  check "marks an ad hoc package as non-official" fail
 fi
 
 if [[ -f "$app/Contents/Frameworks/ClairUI.framework/Versions/A/ClairUI" && -f "$app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" ]]; then
@@ -309,6 +317,37 @@ elif [[ "$output" == *"Resource busy"* && "$output" == *"couldn't create the DMG
   check "stops after three hdiutil failures, showing its error" pass
 else
   check "stops after three hdiutil failures, showing its error" fail
+  echo "$output" | tail -5 | sed 's/^/         /'
+fi
+
+# --- signing with an identity -----------------------------------------------------
+# No Developer ID here: stand-ins accept the identity and sign ad hoc instead.
+identity_bin="$workdir/identity-bin"
+mkdir "$identity_bin"
+cat >"$identity_bin/security" <<'EOF'
+#!/bin/bash
+echo '  1) 0000000000000000000000000000000000000000 "Test Identity"'
+EOF
+cat >"$identity_bin/codesign" <<'EOF'
+#!/bin/bash
+args=()
+while (( $# > 0 )); do
+  case "$1" in
+    --sign) args+=(--sign -); shift 2 ;;
+    --timestamp) shift ;;
+    --requirements|--options) shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+exec /usr/bin/codesign "${args[@]}"
+EOF
+chmod +x "$identity_bin/security" "$identity_bin/codesign"
+out="$workdir/out-identity"
+if PATH="$identity_bin:$PATH" run_package --version 0.1.0 --build 7 --no-dmg --identity "Test Identity" "$engine/Clair.app" "$out" \
+    && [[ -f "$out/Clair.app/Contents/Info.plist" && -z "$(plist_value "$out/Clair.app/Contents/Info.plist" ClairNonOfficialPackage)" ]]; then
+  check "leaves the non-official mark off a package signed with an identity" pass
+else
+  check "leaves the non-official mark off a package signed with an identity" fail
   echo "$output" | tail -5 | sed 's/^/         /'
 fi
 

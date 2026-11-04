@@ -59,6 +59,8 @@ xcodebuild -project native/ClairUI.xcodeproj -scheme ClairUI \
   -destination "platform=macOS,arch=arm64" build test
 ```
 
+The scheme fetches Sparkle first, with `scripts/fetch-sparkle.sh`, into `build/sparkle`, which is where the project looks for `Sparkle.framework`.
+
 Or open `native/ClairUI.xcodeproj` in Xcode. The project is in Xcode's JSON format (`project.xcproj`); don't add a `project.pbxproj`. Sources in `native/ClairUI/` and tests in `native/ClairUITests/` join their targets by being in those folders.
 
 `native/ClairHost.h` is the whole contract with Chromium. Swift imports it as the `ClairHost` module (`native/module.modulemap`). Chromium loads the framework, takes its principal class (`ClairUIMain`) and calls `+startWithHost:` with its host. The header is an engine input, so changing it needs a new engine; Swift sources aren't.
