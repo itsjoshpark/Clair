@@ -40,6 +40,7 @@ Local work is limited to editing files, running the small script tests, and buil
 - `ungoogled-chromium/`: a submodule pinned to an ungoogled-chromium tag. Bump the tag to update the engine.
 - `patches/series`: Clair's patch series, applied after ungoogled's. Paths in it are relative to `patches/`:
   - `ungoogled-chromium-macos/`: copied from ungoogled-chromium-macos
+  - `helium/`: adapted from Helium (GPLv3)
   - `clair/`: Clair's own patches
 
   Keep original patch headers.
