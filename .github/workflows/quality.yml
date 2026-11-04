@@ -6,7 +6,7 @@ name: Quality
 
 on:
   push:
-    branches: ["main", "feat/quality-checks"]
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       report_issue:

@@ -327,7 +327,7 @@ Handling:
   - with an update waiting and a simulated idle period, Clair installs and relaunches, and doesn't while a download is in progress, an incognito window is open, or a tab is audible
   - relaunching through `ClairHost` restores the open windows and tabs
 
-  The runtime suite runs the app through the macOS accessibility APIs (XCUITest, launching `Clair.app` by path) for native UI. It uses the Chrome DevTools Protocol (`--remote-debugging-port`, quality-check builds only) for page state.
+  The runtime suite runs the app through the macOS accessibility APIs (XCUITest, launching `Clair.app` by path with `XCUIApplication(url:)`) for native UI. It uses the Chrome DevTools Protocol (`--remote-debugging-port`, passed only by the tests) for page state. XCUITest doesn't see a copy of Clair it didn't launch itself, so anything after a relaunch is checked over DevTools. The test runner needs `sudo automationmodetool enable-automationmode-without-authentication` and its app sandbox turned off, and the suite refuses to run anywhere but a hosted runner, since it deletes Clair's data and keychain item for the current user.
 - **On failure:** the quality run fails visibly on the `main` commit and opens or updates a GitHub issue labelled `quality-failure`. The issue names the commit, the failing tests and the run link, so an agent can be sent to fix it.
 - **Releases** run the quality checks for their own commit (D5) and stop on a failure. They never wait on, or skip, a run that's still in progress.
 - **Not covered:** visual appearance, layout and animation, which are checked by hand in the running app.
@@ -344,7 +344,7 @@ Handling:
   → Build the engine with Xcode 27 and a macOS 26.x SDK, as Crest does, and record the SDK in `engine.json`. PR #1's hosted chain keeps Xcode 26.6 until it is retired. Software Update replaces the Command Line Tools' SDKs (26.2 became 26.5 between two runs), so `engine.yml` uses the newest installed 26.x SDK, 26.2 or later, and `build.sh configure` deletes `out/Default` when the SDK has changed: `mac_sdk_path` is a symlink with a fixed name, so ninja doesn't see the change, and the first engine linked objects from both 26.2 and 26.5. The `clean` input forces the same from-scratch compile.
 - **[Risk] Chromium's tools lag new Python releases.** The first engine build, with Python 3.15, failed in the fetch stage: `gsutil`, which `gclient sync` runs, supports only Python 3.9 to 3.14.
   → `engine.yml` builds with Homebrew's Python 3.13, the version the hosted jobs use, and checks it before building. `engine.json` records the version.
-- **[Risk] The `xcode-27` hosted image is a preview,** so it may queue or break.
+- **[Risk] The `xcode-27` hosted image is a preview,** so it may queue or break. Measured on the first quality runs: 2 of 5 failed after 15 minutes with "The job was not acquired by Runner of type hosted", and a re-run worked. Such a run tested nothing, so it neither opens nor closes the `quality-failure` issue, and has to be re-run by hand.
   → Accepted, since Crest relies on it too. Fallback: `macos-26` with Xcode 27 installed in the job.
 - **[Risk] Main-menu changes:** Chromium may rebuild or reorder the main menu after `ClairUI` adds its items.
   → The quality suite checks the items. Fallback: a one-line hook in `main_menu_builder.mm` that calls into `ClairUI`.
@@ -389,4 +389,3 @@ Handling:
 ## Open Questions
 
 - Engine build times on the owner's Mac: a full build, and a typical in-place patch fix. Measured on the first engine builds.
-- Whether hosted runners' desktop sessions allow the keychain and accessibility access the runtime suite needs without prompts. Checked in the first quality run.
