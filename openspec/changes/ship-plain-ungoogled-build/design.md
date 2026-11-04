@@ -195,7 +195,7 @@ notes check or build it  the engine  plist, sign, tag, GitHub
   - notarizes with `notarytool` and staples the app
   - builds the DMG, then signs, notarizes and staples the DMG
   - runs `scripts/verify-app.sh`
-  - downloads the DMGs of the last three releases and makes `BinaryDelta` files
+  - downloads the DMGs of the last three releases and makes `BinaryDelta` files (`scripts/make-deltas.sh`), applying each one and checking the result with `codesign` before keeping it
   - signs every asset with `sign_update`
   - dry run: uploads the DMG as a workflow artifact and stops
 - **publish:**
@@ -230,10 +230,12 @@ Handling:
   - bundle and helper IDs
   - `LSMinimumSystemVersion` is 15.6
   - every Mach-O is arm64 only (checked with `lipo`)
-  - `CFBundleShortVersionString` matches `version.txt` and `CFBundleVersion` is an integer
+  - `CFBundleShortVersionString` matches `version.txt`, or `--version` for a release package (built before the release commit updates `version.txt`), and `CFBundleVersion` is an integer
   - `SUFeedURL` and `SUPublicEDKey` are present
   - no "Chromium" in `CFBundleName`
-  - in `package` only: `codesign --verify --strict`, `spctl --assess` and `stapler validate` pass
+  - in `package` only: `codesign --verify --strict`, `spctl --assess` and `stapler validate` pass for the app and, with `--dmg`, the DMG; the signature is Clair's team with the hardened runtime; `SUPublicEDKey` is the committed key, not the test-only one; and the package isn't marked non-official
+
+  Every check runs by default, so a release can't skip one by accident. The quality checks pass `--skip-signing`, and `engine.yml` passes `--engine` for the identity checks alone.
 - **Runtime behaviour** is covered by the quality checks (D12).
 - **A manual release checklist** keeps only what the quality checks can't do on a hosted runner: a clean Mac's first open of the notarized DMG, default-browser registration, the real Developer ID update path (deltas, install on quit, Restart and Update, install while idle), and Sparkle's rejection of a release signed by a different team.
 

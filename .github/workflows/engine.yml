@@ -256,7 +256,7 @@ jobs:
 
       - name: Verify app identity
         if: ${{ steps.key.outputs.published != 'true' }}
-        run: ./scripts/verify-app.sh build/src/out/Default/Clair.app
+        run: ./scripts/verify-app.sh --engine build/src/out/Default/Clair.app
 
       - name: Smoke test
         if: ${{ steps.key.outputs.published != 'true' }}

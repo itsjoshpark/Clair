@@ -2,7 +2,8 @@
 # Turns an engine into Clair.app (change 1 design D3, D4, D5): embeds
 # ClairUI.framework and Sparkle.framework, writes the Clair version, the build
 # number and Sparkle's keys into Info.plist, signs every nested bundle inside
-# out without --deep, and builds the DMG.
+# out without --deep, builds the DMG, and notarizes and staples both when it's
+# given an App Store Connect API key.
 #
 #   package.sh [options] <engine> <out-dir>
 #
@@ -24,9 +25,10 @@
 #                        from the keychain search list. Without it, the app is
 #                        signed ad hoc and marked non-official (ClairUI's test
 #                        overrides work only there).
-#   --no-dmg             stop after signing the app
-#
-# Notarization and stapling come later (task 5.2).
+#   --notary-key <file>  the App Store Connect API key's .p8. Together with the
+#   --notary-key-id <id> next two, this notarizes and staples the app, and then
+#   --notary-issuer <id> the DMG built from it. Needs --identity.
+#   --no-dmg             stop after signing the app (and notarizing it)
 
 set -euo pipefail
 
@@ -41,12 +43,12 @@ die() {
 }
 
 usage() {
-  sed -n '/^#   package.sh/,/^# Notarization/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '/^#   package.sh/,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
 clairui="" sparkle="" version="" build="" public_key_file="$root/.sparkle/public-ed-key.txt"
-identity="" dmg=true
+identity="" dmg=true notary_key="" notary_key_id="" notary_issuer=""
 args=()
 while (( $# > 0 )); do
   case "$1" in
@@ -56,6 +58,9 @@ while (( $# > 0 )); do
     --build) build="${2-}"; shift 2 || usage ;;
     --public-key) public_key_file="${2-}"; shift 2 || usage ;;
     --identity) identity="${2-}"; shift 2 || usage ;;
+    --notary-key) notary_key="${2-}"; shift 2 || usage ;;
+    --notary-key-id) notary_key_id="${2-}"; shift 2 || usage ;;
+    --notary-issuer) notary_issuer="${2-}"; shift 2 || usage ;;
     --no-dmg) dmg=false; shift ;;
     -h|--help) usage ;;
     -*) die "unknown option: $1" ;;
@@ -89,6 +94,18 @@ fi
 if [[ -n "$identity" ]]; then
   security find-identity -v -p codesigning | grep -qF "\"$identity\"" ||
     die "no valid signing identity named \"$identity\" in the keychain search list"
+fi
+
+notarizing=false
+if [[ -n "$notary_key$notary_key_id$notary_issuer" ]]; then
+  [[ -n "$notary_key" && -n "$notary_key_id" && -n "$notary_issuer" ]] ||
+    die "notarizing needs --notary-key, --notary-key-id and --notary-issuer together"
+  [[ -n "$identity" ]] || die "notarizing needs --identity: Apple refuses an ad hoc signature"
+  [[ -f "$notary_key" ]] || die "no App Store Connect API key at $notary_key"
+  [[ "$notary_key_id" =~ ^[A-Z0-9]{10}$ ]] || die "the notary key ID must be 10 letters and digits: $notary_key_id"
+  [[ "$notary_issuer" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] ||
+    die "the notary issuer must be a UUID: $notary_issuer"
+  notarizing=true
 fi
 
 [[ -e "$engine" ]] || die "no engine at $engine"
@@ -271,6 +288,43 @@ done
 mv "$app" "$out/$product.app"
 echo "package: $out/$product.app ($version, build $build, $([[ -n "$identity" ]] && echo "signed by $identity" || echo "signed ad hoc"))"
 
+# --- notarization -----------------------------------------------------------------
+# The key goes to notarytool as a file and IDs, never as a keychain profile, so
+# nothing stays on the Mac (design D11).
+notary_auth=(--key "$notary_key" --key-id "$notary_key_id" --issuer "$notary_issuer")
+
+# Waits for Apple's verdict on SUBMISSION, and shows Apple's log if it refuses.
+# The verdict comes from the result itself rather than notarytool's exit status,
+# so that anything other than "Accepted" stops the package.
+notarize() {
+  local submission="$1" name result status id
+  name="$(basename "$submission")"
+  result="$work/notary-$name.json"
+  echo "package: notarizing $name" >&2
+  xcrun notarytool submit "$submission" "${notary_auth[@]}" --wait --timeout 1h --output-format json >"$result" || true
+  status="$(plutil -extract status raw -o - "$result" 2>/dev/null || true)"
+  if [[ "$status" != Accepted ]]; then
+    id="$(plutil -extract id raw -o - "$result" 2>/dev/null || true)"
+    if [[ -n "$id" ]]; then
+      xcrun notarytool log "$id" "${notary_auth[@]}" >&2 || true
+    fi
+    die "Apple didn't accept $name (status: ${status:-no result})"
+  fi
+}
+
+staple() {
+  xcrun stapler staple "$1" >&2 || die "couldn't staple $(basename "$1")"
+  xcrun stapler validate "$1" >&2 || die "the ticket stapled to $(basename "$1") doesn't validate"
+}
+
+if $notarizing; then
+  # Apple takes an app only as an archive; the ticket goes on the app itself.
+  ditto -c -k --keepParent "$out/$product.app" "$work/$product.zip"
+  notarize "$work/$product.zip"
+  staple "$out/$product.app"
+  echo "package: notarized and stapled $product.app"
+fi
+
 # --- DMG --------------------------------------------------------------------------
 if $dmg; then
   dmg_path="$out/$product-$version-arm64.dmg"
@@ -293,6 +347,11 @@ if $dmg; then
   $created || die "hdiutil couldn't create the DMG"
   if [[ -n "$identity" ]]; then
     codesign --sign "$identity" --timestamp "$dmg_path"
+  fi
+  if $notarizing; then
+    notarize "$dmg_path"
+    staple "$dmg_path"
+    echo "package: notarized and stapled $(basename "$dmg_path")"
   fi
   echo "package: $dmg_path"
 fi
