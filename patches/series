@@ -28,3 +28,4 @@ helium/change-keychain-name.patch
 clair/branding.patch
 clair/native-layer-hook.patch
 clair/versioning.patch
+clair/update-relaunch-hook.patch

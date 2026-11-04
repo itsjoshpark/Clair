@@ -14,6 +14,11 @@ namespace clair {
 // without the native layer.
 void StartNativeLayer();
 
+// Whether Clair was relaunched while another app was active and should stay
+// behind it. Holds until the user brings Clair forward, or for a minute after
+// start-up, by which time the restored windows are showing.
+bool ShouldStayInBackground();
+
 }  // namespace clair
 
 #endif  // CHROME_BROWSER_CLAIR_CLAIR_NATIVE_LAYER_H_
