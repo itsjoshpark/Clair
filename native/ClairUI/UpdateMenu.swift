@@ -37,3 +37,4 @@ final class UpdateMenu: NSObject {
     onChoose()
   }
 }
+// Throwaway: a Swift-only pull request for task 11.1. Never merged.
