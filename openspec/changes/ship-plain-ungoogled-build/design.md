@@ -251,7 +251,7 @@ Handling:
 ### D8. Attribution and licensing
 
 - Each copied patch keeps its original header. Clair's changes to it are marked.
-- `CREDITS.md` lists ungoogled-chromium, ungoogled-chromium-macos, Helium, Sparkle and Front Row's release scripts, with their licenses, and Crest for any file adapted from it.
+- `CREDITS.md` lists ungoogled-chromium, ungoogled-chromium-macos, Helium and Sparkle, with their licenses, and Crest for any file adapted from it.
 - Files adapted from Crest keep MPL-2.0 for those files, which is compatible with GPLv3. Crest's own BrowserWindow code adapts Mori's (MIT), so that provenance is kept too if Clair adapts it.
 - The combined work is GPLv3. Code from BSD-3, MIT and MPL-2.0 sources keeps its own license.
 
