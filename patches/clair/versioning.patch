@@ -1,3 +1,4 @@
+# Throwaway line to change the engine key.
 # Show Clair's version on the About page and chrome://version (change 1 design
 # D3, task 3.2): the Clair version and build number, read from the main bundle's
 # Info.plist at run time by overlay/chrome/browser/clair/clair_version.mm, and
