@@ -60,6 +60,11 @@ NS_SWIFT_NAME(ClairHost)
 // apply, so the user can cancel, for example while a download is running.
 - (void)relaunch;
 
+// Tells Chromium that Sparkle's installer is waiting for Clair to quit and will
+// then replace the app. From now on, any relaunch reopens Clair only once that
+// has happened, so the new version opens, and opens once.
+- (void)updateWillInstallOnQuit;
+
 @end
 
 // What ClairUI.framework's principal class (NSPrincipalClass) implements.

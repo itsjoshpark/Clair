@@ -1,0 +1,53 @@
+# Clair's update relaunch hook (change 1 design D4, task 4.6): Chromium's
+# relauncher reopens the app only once a waiting Sparkle update has replaced it.
+# Without this, the relauncher would reopen the old app while the installer is
+# replacing it. The logic lives in overlay/chrome/browser/mac/; this patch only
+# adds the calls and the sources.
+
+--- a/chrome/browser/mac/BUILD.gn
++++ b/chrome/browser/mac/BUILD.gn
+@@ -54,6 +54,7 @@
+   public = [
+     "auth_session_request.h",
+     "chrome_browser_main_extra_parts_mac.h",
++    "clair_update_relaunch.h",
+     "code_sign_clone_manager.h",
+     "dock.h",
+     "exception_processor.h",
+@@ -78,6 +79,7 @@
+   sources = [
+     "auth_session_request.mm",
+     "chrome_browser_main_extra_parts_mac.mm",
++    "clair_update_relaunch.mm",
+     "code_sign_clone_manager.mm",
+     "dock.mm",
+     "exception_processor.mm",
+--- a/chrome/browser/mac/relauncher.mm
++++ b/chrome/browser/mac/relauncher.mm
+@@ -32,6 +32,7 @@
+ #include "base/process/launch.h"
+ #include "base/strings/stringprintf.h"
+ #include "base/strings/sys_string_conversions.h"
++#include "chrome/browser/mac/clair_update_relaunch.h"
+ #include "chrome/browser/mac/install_from_dmg.h"
+ #include "chrome/common/chrome_switches.h"
+ #include "content/public/common/content_paths.h"
+@@ -92,6 +93,8 @@
+   }
+ 
+   std::vector<std::string> relauncher_args;
++  // Clair: reopen the app only once a waiting update has replaced it.
++  clair::AddUpdateRelauncherArgument(relauncher_args);
+   return RelaunchAppAtPathWithHelper(child_path, base::apple::OuterBundlePath(),
+                                      relauncher_args, args);
+ }
+@@ -339,6 +342,9 @@
+       return 1;
+     }
+ 
++    // Clair: reopen the app only once a waiting update has replaced it.
++    clair::WaitForUpdateInstall(args, relaunch_executable);
++
+     base::mac::LaunchApplication(
+         base::FilePath(relaunch_executable), relaunch_args, /*url_specs=*/{},
+         {.activate = activate,

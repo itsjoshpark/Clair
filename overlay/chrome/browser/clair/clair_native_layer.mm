@@ -17,6 +17,8 @@
 #include "chrome/browser/clair/ungoogled_version.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lifetime/browser_shutdown.h"
+#include "chrome/browser/mac/clair_update_relaunch.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/browser/profiles/profile.h"
@@ -79,6 +81,17 @@
   // Chromium's own relaunch: it restores the session, and its quit flow still
   // asks about downloads in progress.
   chrome::AttemptRelaunch();
+  // The quit flow asks about downloads in a nested run loop, so by now the user
+  // may have said no. Chromium would keep the relaunch requested, and the next
+  // plain quit would reopen Clair.
+  if (!browser_shutdown::IsTryingToQuit()) {
+    browser_shutdown::SetTryingToQuit(false);
+  }
+}
+
+- (void)updateWillInstallOnQuit {
+  CHECK([NSThread isMainThread]);
+  clair::NoteUpdateWillInstallOnQuit();
 }
 
 @end

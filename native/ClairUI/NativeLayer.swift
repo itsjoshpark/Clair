@@ -29,7 +29,7 @@ final class NativeLayer {
     guard Bundle.main.bundleIdentifier == "dev.joshuapark.Clair" else {
       return
     }
-    let updates = UpdateController(configuration: .current)
+    let updates = UpdateController(host: host, configuration: .current)
     updates.start()
     self.updates = updates
   }

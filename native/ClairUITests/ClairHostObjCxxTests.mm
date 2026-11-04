@@ -26,6 +26,8 @@
 }
 - (void)relaunch {
 }
+- (void)updateWillInstallOnQuit {
+}
 @end
 
 @interface ClairHostObjCxxTests : XCTestCase

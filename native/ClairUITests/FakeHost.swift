@@ -11,6 +11,7 @@ final class FakeHost: NSObject, ClairHost {
   let ungoogledChromiumVersion: String
   var blockers: RelaunchBlockers = []
   private(set) var relaunchCount = 0
+  private(set) var updateWillInstallOnQuitCount = 0
 
   init(chromiumVersion: String = "156.0.8078.73", ungoogledChromiumVersion: String = "156.0.8078.73-1") {
     self.chromiumVersion = chromiumVersion
@@ -23,5 +24,9 @@ final class FakeHost: NSObject, ClairHost {
 
   func relaunch() {
     relaunchCount += 1
+  }
+
+  func updateWillInstallOnQuit() {
+    updateWillInstallOnQuitCount += 1
   }
 }
