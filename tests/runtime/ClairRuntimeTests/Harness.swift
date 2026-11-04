@@ -306,6 +306,7 @@ struct HarnessError: Error, CustomStringConvertible {
 final class DevToolsSession {
   private let task: URLSessionWebSocketTask
   private var lastID = 0
+  private static let replyAllowance = Duration.seconds(30)
 
   init(url: URL) throws {
     task = URLSession.shared.webSocketTask(with: url)
@@ -317,30 +318,43 @@ final class DevToolsSession {
     task.cancel(with: .normalClosure, reason: nil)
   }
 
+  /// Sends a command and waits for its reply. A target that dies, such as a tab
+  /// whose renderer crashed, never replies, so the wait is limited: this cancels
+  /// the connection, and every later command on it fails at once.
   @discardableResult
   func send(_ method: String, _ parameters: [String: Any] = [:]) async throws -> [String: Any] {
     lastID += 1
     let id = lastID
     let message: [String: Any] = ["id": id, "method": method, "params": parameters]
     let data = try JSONSerialization.data(withJSONObject: message)
-    try await task.send(.string(String(decoding: data, as: UTF8.self)))
-    while true {
-      let reply = try await task.receive()
-      let text: Data
-      switch reply {
-      case .string(let string): text = Data(string.utf8)
-      case .data(let data): text = data
-      @unknown default: continue
+    let task = task
+    let watchdog = Task {
+      try await Task.sleep(for: Self.replyAllowance)
+      task.cancel(with: .goingAway, reason: nil)
+    }
+    defer { watchdog.cancel() }
+    do {
+      try await task.send(.string(String(decoding: data, as: UTF8.self)))
+      while true {
+        let reply = try await task.receive()
+        let text: Data
+        switch reply {
+        case .string(let string): text = Data(string.utf8)
+        case .data(let data): text = data
+        @unknown default: continue
+        }
+        guard let object = try JSONSerialization.jsonObject(with: text) as? [String: Any],
+          object["id"] as? Int == id
+        else {
+          continue
+        }
+        if let error = object["error"] as? [String: Any] {
+          throw HarnessError("\(method) failed: \(error)")
+        }
+        return object["result"] as? [String: Any] ?? [:]
       }
-      guard let object = try JSONSerialization.jsonObject(with: text) as? [String: Any],
-        object["id"] as? Int == id
-      else {
-        continue
-      }
-      if let error = object["error"] as? [String: Any] {
-        throw HarnessError("\(method) failed: \(error)")
-      }
-      return object["result"] as? [String: Any] ?? [:]
+    } catch let error as URLError {
+      throw HarnessError("\(method) got no reply: \(error.localizedDescription)")
     }
   }
 
