@@ -101,8 +101,9 @@ fi
 
 # Sparkle picks updates by CFBundleVersion. A build number that does not exceed
 # the newest entry is never offered, so refuse rather than publish a dud.
-newest="$(grep -o '<sparkle:version>[0-9]*</sparkle:version>' "$appcast" |
-  grep -o '[0-9]*' | sort -n | tail -1)"
+# An appcast with no releases yet has no entries for grep to find.
+newest="$({ grep -o '<sparkle:version>[0-9]*</sparkle:version>' "$appcast" || true; } |
+  { grep -o '[0-9]*' || true; } | sort -n | tail -1)"
 if [[ -n "$newest" ]] && (( build <= newest )); then
   die "build $build does not exceed the newest entry in the appcast ($newest)"
 fi

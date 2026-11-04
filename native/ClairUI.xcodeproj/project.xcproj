@@ -41,6 +41,10 @@
         "DYLIB_COMPATIBILITY_VERSION": "1",
         "DYLIB_CURRENT_VERSION": "1",
         "DYLIB_INSTALL_NAME_BASE": "@rpath",
+        "FRAMEWORK_SEARCH_PATHS": [
+          "$(inherited)",
+          "$(SRCROOT)/../build/sparkle",
+        ],
         "GENERATE_INFOPLIST_FILE": "YES",
         "INFOPLIST_KEY_NSPrincipalClass": "ClairUIMain",
         "INSTALL_PATH": "$(LOCAL_LIBRARY_DIR)/Frameworks",
@@ -67,7 +71,15 @@
         "resources",
       ],
       "build-settings": {
+        "FRAMEWORK_SEARCH_PATHS": [
+          "$(inherited)",
+          "$(SRCROOT)/../build/sparkle",
+        ],
         "GENERATE_INFOPLIST_FILE": "YES",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "$(SRCROOT)/../build/sparkle",
+        ],
         "PRODUCT_BUNDLE_IDENTIFIER": "dev.joshuapark.Clair.ClairUITests",
         "PRODUCT_NAME": "$(TARGET_NAME)",
       },

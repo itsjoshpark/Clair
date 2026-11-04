@@ -22,7 +22,8 @@
 #                        has no SUPublicEDKey and Sparkle installs no update.
 #   --identity <name>    the Developer ID Application identity to sign with,
 #                        from the keychain search list. Without it, the app is
-#                        signed ad hoc.
+#                        signed ad hoc and marked non-official (ClairUI's test
+#                        overrides work only there).
 #   --no-dmg             stop after signing the app
 #
 # Notarization and stapling come later (task 5.2).
@@ -165,8 +166,16 @@ plist_set CFBundleShortVersionString string "$version"
 plist_set CFBundleVersion string "$build"
 plist_set SUFeedURL string "$feed_url"
 plist_set SUEnableAutomaticChecks bool true
+plist_set SUAutomaticallyUpdate bool true
+plist_set SUScheduledCheckInterval integer 86400
 if [[ -n "$public_key" ]]; then
   plist_set SUPublicEDKey string "$public_key"
+fi
+# Only ClairUI's test overrides read this, so an ad hoc package can use a local
+# appcast. A release package doesn't have the key, and its signature keeps it
+# from being added.
+if [[ -z "$identity" ]]; then
+  plist_set ClairNonOfficialPackage bool true
 fi
 
 # --- signing ------------------------------------------------------------------------

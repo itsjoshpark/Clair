@@ -3,6 +3,7 @@
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
 import ClairHost
+import Foundation
 import os
 
 /// The running native layer. Chromium starts it once per launch, and it keeps
@@ -15,8 +16,22 @@ final class NativeLayer {
 
   let host: any ClairHost
 
+  /// Sparkle, once the layer is running inside Clair.app.
+  private(set) var updates: UpdateController?
+
   init(host: any ClairHost) {
     self.host = host
+  }
+
+  /// Runs what only makes sense inside the app: not in a unit test's process,
+  /// whose main bundle isn't Clair.
+  private func startInApp() {
+    guard Bundle.main.bundleIdentifier == "dev.joshuapark.Clair" else {
+      return
+    }
+    let updates = UpdateController(configuration: .current)
+    updates.start()
+    self.updates = updates
   }
 
   /// Starts the native layer with Chromium's host. A second call keeps the
@@ -29,6 +44,7 @@ final class NativeLayer {
     }
     let layer = NativeLayer(host: host)
     current = layer
+    layer.startInApp()
     logger.info(
       "ClairUI started with Chromium \(host.chromiumVersion, privacy: .public) (ungoogled-chromium \(host.ungoogledChromiumVersion, privacy: .public))"
     )
