@@ -40,10 +40,9 @@ Local work is limited to editing files, running the small script tests, and buil
 - `ungoogled-chromium/`: a submodule pinned to an ungoogled-chromium tag. Bump the tag to update the engine.
 - `patches/series`: Clair's patch series, applied after ungoogled's. Paths in it are relative to `patches/`:
   - `ungoogled-chromium-macos/`: copied from ungoogled-chromium-macos
-  - `helium/`: adapted from Helium (GPLv3)
   - `clair/`: Clair's own patches
 
-  Keep original patch headers, and credit sources in `CREDITS.md`.
+  Keep original patch headers.
 - `overlay/`: new Chromium source files at their paths in the Chromium tree, copied in after the patches. Only new files; edits to existing files are patches.
 - `native/`: `ClairHost.h` (the contract between Chromium and `ClairUI`), the `ClairUI` Xcode project (JSON format, `project.xcproj`, Xcode 27.2 or later) and the Swift sources and unit tests.
 - `package.sh`: turns an engine into `Clair.app`: embeds `ClairUI` and Sparkle, writes the version and Sparkle keys into `Info.plist`, signs, and builds the DMG.
