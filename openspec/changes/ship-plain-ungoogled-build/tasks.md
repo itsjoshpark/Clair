@@ -55,9 +55,9 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 ## 5. Signing, notarization and packaging
 
 - [ ] 5.1 Write `package.sh`, ported from ungoogled-macos's `sign_and_package_app.sh` with Clair names. It takes an engine artifact, embeds `ClairUI.framework` and `Sparkle.framework`, writes the plist values (3.1, 4.2), and signs each helper with its own ID, the hardened runtime and entitlements. It signs `ClairUI`, Sparkle's `Autoupdate` and `Updater.app` separately, without `--deep`. Without signing credentials, it signs ad hoc. Verify that `codesign --verify --strict` passes for the app and every nested bundle in both modes.
-- [ ] 5.2 Add notarization with `notarytool` (App Store Connect API key) and stapling for the app and the DMG. Verify that `stapler validate` passes for both, and that `spctl --assess --type execute` names Clair's Developer ID team.
+- [x] 5.2 Add notarization with `notarytool` (App Store Connect API key) and stapling for the app and the DMG. Verify that `stapler validate` passes for both, and that `spctl --assess --type execute` names Clair's Developer ID team.
 - [ ] 5.3 Build the DMG with `Clair.app`, an `/Applications` link and a background. Verify that mounting it shows that layout. Verify that on a Mac or user account that has never run Clair, it opens after only the standard downloaded-from-the-internet prompt.
-- [ ] 5.4 Extend `scripts/verify-app.sh` with the `codesign`, `spctl` and `stapler` checks and a check that the Sparkle keys are present. Verify that it passes on a notarized package.
+- [x] 5.4 Extend `scripts/verify-app.sh` with the `codesign`, `spctl` and `stapler` checks and a check that the Sparkle keys are present. Verify that it passes on a notarized package.
 
 ## 6. Release tooling scripts
 
