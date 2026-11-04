@@ -294,7 +294,10 @@ if ((count < HDIUTIL_FAILURES)); then
   echo "hdiutil: create failed - Resource busy" >&2
   exit 1
 fi
-exec /usr/bin/hdiutil "\$@"
+# The stand-in for a successful create: real hdiutil fails now and then on the
+# hosted runners, and this test would give it only one attempt. The DMG tests
+# above already cover the real thing.
+: >"\${!#}"
 EOF
 chmod +x "$stub_bin/sleep" "$stub_bin/hdiutil"
 
