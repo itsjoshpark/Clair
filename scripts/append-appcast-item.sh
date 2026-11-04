@@ -6,8 +6,6 @@
 # delta update from an earlier build:
 #
 #   --delta FROM_BUILD,URL,SIGNATURE,LENGTH     (up to three)
-#
-# Adapted from Front Row's scripts/append-appcast-item.sh (GPLv3).
 
 set -euo pipefail
 

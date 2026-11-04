@@ -6,8 +6,6 @@
 #
 #   check-release-credentials.sh --keychain <file> --key <p8-file> --key-id <id>
 #                                --issuer <id>
-#
-# Adapted from Front Row's release workflow (GPLv3).
 
 set -euo pipefail
 
