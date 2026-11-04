@@ -66,7 +66,7 @@ Every pull request SHALL run a merge gate on GitHub-hosted runners that compiles
 - **THEN** its checks finish within 10 minutes, and no job fetches Chromium source
 
 ### Requirement: Patch check for engine changes
-A pull request that changes the engine key SHALL also run a patch check on a GitHub-hosted runner. The check fetches the pinned Chromium source and applies ungoogled-chromium's series, Clair's series, the overlay and domain substitution, without compiling. Such a pull request SHALL NOT merge until its patch check passes and `chromium-engine-<key>` is published for its head commit's key.
+A pull request that changes the engine key SHALL also run a patch check on a GitHub-hosted runner, unless `chromium-engine-<key>` is already published for its head commit's key when the run starts. The check fetches the pinned Chromium source and applies ungoogled-chromium's series, Clair's series, the overlay and domain substitution, without compiling. Such a pull request SHALL NOT merge until `chromium-engine-<key>` is published for its head commit's key and its patch check, if it ran, has passed.
 
 #### Scenario: Patch no longer applies
 - **WHEN** a pull request bumps the ungoogled-chromium tag and one Clair patch no longer applies
@@ -75,6 +75,10 @@ A pull request that changes the engine key SHALL also run a patch check on a Git
 #### Scenario: Engine not yet built
 - **WHEN** an engine pull request's patch check passes but its engine has not been published
 - **THEN** the engine check fails with a message naming the key and the command to build it, and the pull request can't merge
+
+#### Scenario: Engine already published
+- **WHEN** a pull request changes the engine key and `chromium-engine-<key>` is already published for its head commit's key
+- **THEN** the patch check is skipped and the engine check passes
 
 ### Requirement: Quality checks after merge
 Every push to `main` SHALL run quality checks on a GitHub-hosted runner. They package the app from the published engine and the commit's native layer, run the static app checks, and run the automated runtime suite against the packaged app. The checks MAY also be started by hand on any branch. They SHALL NOT block merging. A failure on `main` SHALL be reported in a GitHub issue that names the commit, the failing tests and the run, so the failure can be assigned and fixed.
