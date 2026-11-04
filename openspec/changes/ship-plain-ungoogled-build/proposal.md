@@ -43,8 +43,8 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
 - Publish updates the same way as Front Row (`itsjoshpark/FrontRow`):
   - The appcast is committed at `.sparkle/appcast.xml`, and `SUFeedURL` points to `https://github.com/itsjoshpark/Clair/raw/main/.sparkle/appcast.xml`.
   - DMGs are hosted on GitHub Releases.
-  - A manually triggered release workflow takes a patch/minor/major choice. The build number is the commit count.
-  - Release notes are written in `.sparkle/notes/next.md`.
+  - A manually triggered release workflow takes an auto, patch, minor or major choice. The build number is the commit count.
+  - Release notes are Changie fragments in `.changes/unreleased/`, added with the pull request that makes the change. A release batches them into `.changes/<version>.md` and `CHANGELOG.md`, and `auto` picks the bump from their kinds.
   - The release commit is tagged first and pushed to `main` only after the release and its DMG exist.
 - Extend that pattern where Clair differs:
   - Delta updates against the last few releases (the DMG is about 110 MB, and deltas are about 40 MB). CI downloads the previous releases' apps, runs `BinaryDelta`, and writes `<sparkle:deltas>` entries.
@@ -80,6 +80,7 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
   - ungoogled-chromium (BSD-3)
   - patches derived from ungoogled-chromium-macos (BSD-3) and Helium (GPLv3)
   - Sparkle 2 (MIT)
+  - Changie (MIT), pinned in the release workflow, for release notes and versioning
   - Xcode 27.2 and the Metal toolchain on every machine and runner, with the native layer in Xcode's JSON project format
 - **Accounts and secrets:**
   - Apple Developer Program membership (Developer ID certificate, notarization credentials) stored as GitHub Actions secrets
