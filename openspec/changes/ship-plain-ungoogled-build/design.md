@@ -208,7 +208,7 @@ notes check or build it  the engine  plist, sign, tag, GitHub
   - creates the release commit in the Front Row way: `changie batch <version>` and `changie merge` write `.changes/<version>.md`, `CHANGELOG.md` and `version.txt`, and `append-appcast-item.sh`, extended for `<sparkle:deltas>` and a minimum system version of 15.6, writes the appcast entry
   - tags it `v<version>`
   - creates the GitHub Release with the DMG, deltas, SHA-256 checksums and notes (Clair version, build number, ungoogled-chromium tag, engine key)
-  - pushes to `main` only after the Release exists
+  - pushes to `main` only after the Release exists, using a deploy key, because `main`'s required checks apply to everyone else (admins included) and `GITHUB_TOKEN` can't bypass them
   - before pushing, checks that `main` hasn't moved since `validate`. If it has, it aborts before creating the Release, so the appcast never points at missing files.
 - Jobs on the owner's Mac check out into a `release/` folder inside the workspace. The workspace root holds the persistent engine workspace (D11), which a normal checkout's clean would delete.
 - The release commit changes only `version.txt`, `.changes/`, `CHANGELOG.md` and the appcast. None of these is an engine input, so the release commit has the same engine key as the commit the quality checks ran on.
@@ -217,6 +217,9 @@ notes check or build it  the engine  plist, sign, tag, GitHub
 - Release builds on hosted runners: rejected after measuring. 7 GB RAM is too little for an official ThinLTO link. See D9.
 - Depot (about $34 per release build) or GitHub's larger runners (Team plan organizations only): kept as fallbacks if the self-hosted Mac becomes impractical.
 - Committing the version before the build: rejected. A failed build would leave a released-looking commit on `main`.
+- Pushing the release commit with `GITHUB_TOKEN`, as Front Row does: not possible here, because Clair's `main` has required checks. A ruleset requires them from everyone and lets deploy keys bypass them, so only `publish`, through the `release` environment, can push past them.
+- A release pull request, as Changie's own repository uses: rejected. The appcast still has to reach `main` after the Release exists, so it wouldn't remove the need to bypass the checks, and a failed build would leave a released-looking commit on `main`.
+- An admin token with enforcement off for admins: rejected. The token expires, and admins could then skip the checks.
 - fastlane, as Front Row uses: rejected. Its main lane archives an Xcode project, while Clair signs a prebuilt engine bundle by bundle in `package.sh`. Its keychain lane assumes a throwaway runner, while Clair's runs on the owner's Mac and must clean up after itself (D11). Its notarization lane staples only the DMG, while the spec staples the app too. That leaves little to gain for adding Ruby and Bundler to the owner's Mac.
 
 ### D6. Signing, notarization and secrets
@@ -225,6 +228,7 @@ The following are secrets of a `release` environment that is limited to `main`:
 - the Developer ID Application certificate as base64 `.p12`, and its password: `DEVELOPER_ID_CERT_P12_BASE64`, `DEVELOPER_ID_CERT_PASSWORD`
 - notarization credentials, an App Store Connect API key with its `.p8` as base64: `AC_API_KEY_P8_BASE64`, `AC_API_KEY_ID`, `AC_API_ISSUER_ID`
 - `SPARKLE_ED_PRIVATE_KEY`
+- the private half of the deploy key that pushes release commits to `main`: `RELEASE_DEPLOY_KEY`
 
 The names match Front Row's. The temporary keychain's password isn't a secret: each job generates its own (D11).
 

@@ -252,6 +252,8 @@ jobs:
     needs: [validate, package]
     if: ${{ !cancelled() && needs.package.result == 'success' && !inputs.dry-run }}
     runs-on: [self-hosted, clair-release]
+    # For the deploy key, the one thing allowed to push past main's required checks.
+    environment: release
     timeout-minutes: 60
     permissions:
       contents: write
@@ -264,6 +266,7 @@ jobs:
         with:
           path: release
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - name: Use Homebrew's tools
         working-directory: .
