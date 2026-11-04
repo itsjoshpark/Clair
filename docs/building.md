@@ -80,6 +80,29 @@ gh release download chromium-engine-<key> -p '*.zip'
 
 It builds `ClairUI` (or takes `--clairui <framework>`), fetches Sparkle with `scripts/fetch-sparkle.sh`, writes the version from `version.txt`, the build number from `git rev-list --count HEAD` and Sparkle's keys into `Info.plist`, signs every nested bundle inside out, and writes `Clair-<version>-arm64.dmg`. Without `--identity`, it signs ad hoc and without the hardened runtime: an ad hoc signature has no Team ID, so library validation would refuse every framework. Ad hoc packages are for testing on your own Mac. Remove the quarantine flag before opening one you downloaded. `./package.test.sh` checks it against a stand-in engine.
 
+## Quality checks
+
+`.github/workflows/quality.yml` runs after every merge to `main`, and takes about 15 minutes. It downloads `chromium-engine-<key>`, packages the app ad hoc, runs `scripts/verify-app.sh` and then the runtime suite in `tests/runtime/`. If there's no engine for the commit's key, it fails with "no engine for <key>" and the command to build it.
+
+To run it on a branch, once `quality.yml` is on `main`:
+
+```sh
+gh workflow run quality.yml --ref <branch>
+```
+
+Add `-f report_issue=true` to report the result to the `quality-failure` issue, as a run on `main` does. Without it, only runs on `main` touch the issue. A failure opens the issue or comments on it, and a later pass closes it.
+
+The suite covers the tests in design D12. `ClairRuntimeTests/` holds the XCUITest bundle, which drives the native UI through the accessibility APIs and reads page state over the Chrome DevTools Protocol. `tests/runtime/run.sh` prepares a package of the commit, a newer package to update to, the test appcasts signed with the test-only key (`docs/updates.md`), and a local web server. It retries a failed test once before the test counts.
+
+`run.sh` runs only on hosted runners, because the tests delete Clair's data directory, preferences and keychain item for the current user. To debug a failure, read the failing test's message in the job log. The failed run's `runtime-results` artifact has the result bundle, each launch's Clair log, the web server's log and Sparkle's log. To run part of the suite, pass xcodebuild's options through `run.sh test`, for example `-only-testing:ClairRuntimeTests/UpdateMenuTests`.
+
+A few things in the suite look odd, for reasons that aren't obvious:
+
+- **Launching:** XCUITest sees Clair only when it launches it with `XCUIApplication(url:)`. That handle doesn't follow a relaunch, so tests read the state after a relaunch over DevTools.
+- **Failed steps:** tests never set `continueAfterFailure = false`. In an async test, that hangs until the test's 10-minute allowance runs out. Steps that later ones depend on call `require()`, which throws.
+- **The test runner's sandbox:** Xcode sandboxes UI test runners by default, and `ClairRuntimeTests.entitlements` turns that off, so the tests can reset Clair's state.
+- **Downloads:** ungoogled-chromium asks where to save every download, so the download test sets a folder over DevTools.
+
 ## Editing patches
 
 Clair's patch series is `patches/series`. Paths in it are relative to `patches/`, and it is applied after ungoogled-chromium's own series. To edit or add a patch, use quilt on a fetched, unpatched source tree:
