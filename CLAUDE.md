@@ -47,6 +47,7 @@ Local work is limited to editing files, running the small script tests, and buil
 - `native/`: `ClairHost.h` (the contract between Chromium and `ClairUI`), the `ClairUI` Xcode project (JSON format, `project.xcproj`, Xcode 27.2 or later) and the Swift sources and unit tests.
 - `package.sh`: turns an engine into `Clair.app`: embeds `ClairUI` and Sparkle, writes the version and Sparkle keys into `Info.plist`, signs, and builds the DMG.
 - `build.sh`: the staged engine build (`fetch`, `prepare`, `configure`, `compile`), used by `engine.yml` and the patch check. See `docs/building.md`.
+- `tests/runtime/`: the runtime suite (XCUITest and the Chrome DevTools Protocol) that `quality.yml` runs. It deletes Clair's data for the current user, so it runs only on hosted runners.
 - `.github/scripts/`: CI helpers (runner preparation, packing and unpacking the build directory, the smoke test).
 - `scripts/`: release tooling (appcast entries with deltas, release notes rendering, version bump, release preflight), each with a `*.test.sh`.
 - `.sparkle/`: `appcast.xml`, served from `main` as Sparkle's feed, and the `notes/` release-notes flow (`next.md`, `TEMPLATE.md`).

@@ -353,8 +353,8 @@ final class DevToolsSession {
         }
         return object["result"] as? [String: Any] ?? [:]
       }
-    } catch let error as URLError {
-      throw HarnessError("\(method) got no reply: \(error.localizedDescription)")
+    } catch is URLError, is CancellationError {
+      throw HarnessError("\(method) got no reply within \(Self.replyAllowance)")
     }
   }
 
