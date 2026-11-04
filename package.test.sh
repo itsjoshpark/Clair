@@ -3,8 +3,9 @@
 #
 # Packages a stand-in engine, ClairUI and Sparkle made of small real Mach-O
 # files, so it works offline and needs no Chromium (needs clang from Xcode or
-# the Command Line Tools). Signs ad hoc only; Developer ID signing is checked
-# by the release dry run.
+# the Command Line Tools). Signs ad hoc only, with stand-ins for Apple's notary
+# service; real Developer ID signing and notarization are checked by the release
+# dry run.
 
 set -uo pipefail
 
@@ -236,11 +237,11 @@ else
   check "an ad hoc package runs without the hardened runtime" fail
 fi
 
-if "$root/scripts/verify-app.sh" "$app" >/dev/null 2>&1; then
+if "$root/scripts/verify-app.sh" --skip-signing --version 1.2.3 "$app" >/dev/null 2>&1; then
   check "the package passes verify-app.sh" pass
 else
   check "the package passes verify-app.sh" fail
-  "$root/scripts/verify-app.sh" "$app" 2>&1 | grep FAIL | sed 's/^/         /'
+  "$root/scripts/verify-app.sh" --skip-signing --version 1.2.3 "$app" 2>&1 | grep FAIL | sed 's/^/         /'
 fi
 
 if [[ "$(plist_value "$engine/Clair.app/Contents/Info.plist" CFBundleShortVersionString)" == 156.0.8078.73 \
@@ -353,6 +354,135 @@ else
   check "leaves the non-official mark off a package signed with an identity" fail
   echo "$output" | tail -5 | sed 's/^/         /'
 fi
+
+# --- notarization -----------------------------------------------------------------
+# No Apple here: stand-ins log each call, and staple the app by leaving a mark in
+# it, as the real ticket goes into the bundle.
+notary_bin="$workdir/notary-bin"
+mkdir "$notary_bin"
+cp "$identity_bin/security" "$identity_bin/codesign" "$notary_bin/"
+cat >"$notary_bin/xcrun" <<EOF
+#!/bin/bash
+echo "\$*" >>"$workdir/notary.log"
+case "\$1 \$2" in
+  "notarytool submit")
+    echo "\$*" >>"$workdir/submitted.log"
+    if [[ "\$(basename "\$3")" == *"\${NOTARY_REJECT-none}"* ]]; then
+      echo '{"id":"rejected-id","status":"Invalid","message":"Processing complete"}'
+    else
+      if [[ "\$3" == *.zip ]]; then ditto -x -k "\$3" "$workdir/submitted-app"; fi
+      echo '{"id":"accepted-id","status":"Accepted","message":"Processing complete"}'
+    fi
+    ;;
+  "notarytool log") echo "Apple's log for \$3: the signature is invalid" ;;
+  "stapler staple")
+    if [[ -d "\$3" ]]; then echo stapled >"\$3/Contents/CodeResources"; else echo "\$3" >>"$workdir/stapled-files.log"; fi
+    ;;
+  "stapler validate") [[ -z "\${STAPLE_INVALID-}" ]] ;;
+  *) exit 64 ;;
+esac
+EOF
+chmod +x "$notary_bin/xcrun"
+notary_key="$workdir/AuthKey_ABCDE12345.p8"
+echo "not a real key" >"$notary_key"
+notary_issuer=01234567-89ab-cdef-0123-456789abcdef
+notary_args=(--identity "Test Identity" --notary-key "$notary_key" --notary-key-id ABCDE12345 --notary-issuer "$notary_issuer")
+
+: >"$workdir/notary.log"
+out="$workdir/out-notary"
+if PATH="$notary_bin:$PATH" run_package --version 0.1.0 --build 7 "${notary_args[@]}" "$engine/Clair.app" "$out"; then
+  check "notarizes with an API key" pass
+else
+  check "notarizes with an API key" fail
+  echo "$output" | tail -5 | sed 's/^/         /'
+fi
+order="$(awk '{ print $1, $2 }' "$workdir/notary.log" | tr '\n' ',')"
+expected="notarytool submit,stapler staple,stapler validate,notarytool submit,stapler staple,stapler validate,"
+if [[ "$order" == "$expected" ]]; then
+  check "submits, staples and validates the app, then the DMG" pass
+else
+  check "submits, staples and validates the app, then the DMG" fail
+  echo "         $order"
+fi
+if [[ "$(sed -n 1p "$workdir/submitted.log")" == *"/Clair.zip --key $notary_key --key-id ABCDE12345 --issuer $notary_issuer --wait"* \
+    && "$(sed -n 2p "$workdir/submitted.log")" == *"/Clair-0.1.0-arm64.dmg --key $notary_key --key-id ABCDE12345 --issuer $notary_issuer --wait"* ]]; then
+  check "passes the key as a file and IDs, with no keychain profile" pass
+else
+  check "passes the key as a file and IDs, with no keychain profile" fail
+  sed 's/^/         /' "$workdir/submitted.log"
+fi
+if [[ -f "$workdir/submitted-app/Clair.app/Contents/Info.plist" ]]; then
+  check "submits an archive holding Clair.app" pass
+else
+  check "submits an archive holding Clair.app" fail
+fi
+if ! grep -q keychain-profile "$workdir/notary.log"; then
+  check "never uses a keychain profile" pass
+else
+  check "never uses a keychain profile" fail
+fi
+mount="$workdir/mount-notary"
+mkdir "$mount"
+if [[ "$(cat "$out/Clair.app/Contents/CodeResources" 2>/dev/null)" == stapled \
+    && "$(cat "$workdir/stapled-files.log" 2>/dev/null)" == */Clair-0.1.0-arm64.dmg ]]; then
+  check "staples the app and the DMG" pass
+else
+  check "staples the app and the DMG" fail
+fi
+if hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mount" "$out/Clair-0.1.0-arm64.dmg" 2>/dev/null; then
+  if [[ "$(cat "$mount/Clair.app/Contents/CodeResources" 2>/dev/null)" == stapled ]]; then
+    check "builds the DMG from the stapled app" pass
+  else
+    check "builds the DMG from the stapled app" fail
+  fi
+  hdiutil detach -quiet "$mount" || true
+else
+  check "builds the DMG from the stapled app" fail
+  echo "         hdiutil couldn't mount it"
+fi
+
+out="$workdir/out-notary-no-dmg"
+: >"$workdir/notary.log"
+if PATH="$notary_bin:$PATH" run_package --version 0.1.0 --build 7 --no-dmg "${notary_args[@]}" "$engine/Clair.app" "$out" \
+    && [[ "$(grep -c 'notarytool submit' "$workdir/notary.log")" == 1 && ! -e "$out/Clair-0.1.0-arm64.dmg" ]]; then
+  check "--no-dmg notarizes only the app" pass
+else
+  check "--no-dmg notarizes only the app" fail
+  echo "$output" | tail -5 | sed 's/^/         /'
+fi
+
+expect_notary_failure() {
+  local description="$1" message="$2" dir="$3"
+  if PATH="$notary_bin:$PATH" run_package --version 0.1.0 --build 7 "${notary_args[@]}" "$engine/Clair.app" "$dir"; then
+    check "$description" fail
+    echo "         succeeded: $output"
+  elif [[ "$output" == *"$message"* ]]; then
+    check "$description" pass
+  else
+    check "$description" fail
+    echo "$output" | tail -5 | sed 's/^/         /'
+  fi
+}
+NOTARY_REJECT=Clair.zip expect_notary_failure "stops when Apple rejects the app, naming the status" "didn't accept Clair.zip (status: Invalid)" "$workdir/out-rejected-app"
+NOTARY_REJECT=Clair.zip expect_notary_failure "shows Apple's log for a rejection" "Apple's log for rejected-id" "$workdir/out-rejected-log"
+if [[ ! -e "$workdir/out-rejected-app/Clair-0.1.0-arm64.dmg" ]]; then
+  check "builds no DMG when the app is rejected" pass
+else
+  check "builds no DMG when the app is rejected" fail
+fi
+NOTARY_REJECT=.dmg expect_notary_failure "stops when Apple rejects the DMG" "didn't accept Clair-0.1.0-arm64.dmg (status: Invalid)" "$workdir/out-rejected-dmg"
+STAPLE_INVALID=1 expect_notary_failure "stops when the stapled ticket doesn't validate" "doesn't validate" "$workdir/out-staple"
+
+PATH="$notary_bin:$PATH" expect_refusal "refuses notarization without the key ID and issuer" "together" \
+  --version 0.1.0 --build 7 --identity "Test Identity" --notary-key "$notary_key" "$engine/Clair.app" "$workdir/out3"
+expect_refusal "refuses to notarize an ad hoc package" "needs --identity" \
+  --version 0.1.0 --build 7 --notary-key "$notary_key" --notary-key-id ABCDE12345 --notary-issuer "$notary_issuer" "$engine/Clair.app" "$workdir/out3"
+PATH="$notary_bin:$PATH" expect_refusal "refuses a missing API key file" "no App Store Connect API key" \
+  --version 0.1.0 --build 7 --identity "Test Identity" --notary-key "$workdir/none.p8" --notary-key-id ABCDE12345 --notary-issuer "$notary_issuer" "$engine/Clair.app" "$workdir/out3"
+PATH="$notary_bin:$PATH" expect_refusal "refuses a malformed key ID" "10 letters and digits" \
+  --version 0.1.0 --build 7 --identity "Test Identity" --notary-key "$notary_key" --notary-key-id 'x;y' --notary-issuer "$notary_issuer" "$engine/Clair.app" "$workdir/out3"
+PATH="$notary_bin:$PATH" expect_refusal "refuses a malformed issuer" "must be a UUID" \
+  --version 0.1.0 --build 7 --identity "Test Identity" --notary-key "$notary_key" --notary-key-id ABCDE12345 --notary-issuer nope "$engine/Clair.app" "$workdir/out3"
 
 # --- refusals ---------------------------------------------------------------------
 expect_refusal "refuses an output directory that already has Clair.app" "already exists" \

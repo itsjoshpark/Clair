@@ -64,7 +64,7 @@ jobs:
         run: ./tests/runtime/run.sh prepare "$ENGINE_ZIP" "$RUNNER_TEMP/engine/engine.json" "$RUNNER_TEMP/runtime"
 
       - name: Verify the app (no signing checks)
-        run: ./scripts/verify-app.sh "$RUNNER_TEMP/runtime/Clair.app"
+        run: ./scripts/verify-app.sh --skip-signing "$RUNNER_TEMP/runtime/Clair.app"
 
       - name: Run the runtime suite
         id: suite

@@ -78,11 +78,11 @@ gh release download chromium-engine-<key> -p '*.zip'
 ./package.sh Clair-Chromium-Engine-<key>-arm64.zip build/package
 ```
 
-It builds `ClairUI` (or takes `--clairui <framework>`), fetches Sparkle with `scripts/fetch-sparkle.sh`, writes the version from `version.txt`, the build number from `git rev-list --count HEAD` and Sparkle's keys into `Info.plist`, signs every nested bundle inside out, and writes `Clair-<version>-arm64.dmg`. Without `--identity`, it signs ad hoc and without the hardened runtime: an ad hoc signature has no Team ID, so library validation would refuse every framework. Ad hoc packages are for testing on your own Mac. Remove the quarantine flag before opening one you downloaded. `./package.test.sh` checks it against a stand-in engine.
+It builds `ClairUI` (or takes `--clairui <framework>`), fetches Sparkle with `scripts/fetch-sparkle.sh`, writes the version from `version.txt`, the build number from `git rev-list --count HEAD` and Sparkle's keys into `Info.plist`, signs every nested bundle inside out, and writes `Clair-<version>-arm64.dmg`. Without `--identity`, it signs ad hoc and without the hardened runtime: an ad hoc signature has no Team ID, so library validation would refuse every framework. Ad hoc packages are for testing on your own Mac. Remove the quarantine flag before opening one you downloaded. With `--identity` and an App Store Connect API key (`--notary-key`, `--notary-key-id`, `--notary-issuer`), it also notarizes and staples the app, then the DMG built from it. `./package.test.sh` checks it against a stand-in engine and stand-ins for Apple's tools.
 
 ## Quality checks
 
-`.github/workflows/quality.yml` runs after every merge to `main`, and takes about 15 minutes. It downloads `chromium-engine-<key>`, packages the app ad hoc, runs `scripts/verify-app.sh` and then the runtime suite in `tests/runtime/`. If there's no engine for the commit's key, it fails with "no engine for <key>" and the command to build it.
+`.github/workflows/quality.yml` runs after every merge to `main`, and takes about 15 minutes. It downloads `chromium-engine-<key>`, packages the app ad hoc, runs `scripts/verify-app.sh --skip-signing` and then the runtime suite in `tests/runtime/`. If there's no engine for the commit's key, it fails with "no engine for <key>" and the command to build it.
 
 To run it on a branch, once `quality.yml` is on `main`:
 
