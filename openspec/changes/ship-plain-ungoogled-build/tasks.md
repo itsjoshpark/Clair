@@ -66,7 +66,9 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [x] 6.3 Add the release validation script. It works out the version from the latest `v*` tag plus the bump, sets the build number to `rev-list --count HEAD` + 1, checks that this is greater than the newest appcast entry, and checks that `next.md` is present and edited and that `<version>.md` doesn't exist. Add tests. Verify that the tests cover `0.1.0` → `0.1.1` for a patch bump, `0.1.3` → `0.2.0` for a minor bump, and each refusal case.
 - [x] 6.4 Add the delta script. It downloads the DMGs of up to three previous releases, runs `BinaryDelta create`, and signs each asset with `sign_update`, using tools from the pinned Sparkle release tarball, checked against its sha512. Verify with two local packages that the delta applies (`BinaryDelta apply`), and that the result passes `codesign --verify`.
 - [x] 6.5 Add `ci.yml`, which runs the script tests and shellcheck on pushes and pull requests. Verify that a run is green.
-- [x] 6.6 Check that the release validation script ignores `chromium-engine-*` tags and prereleases. Verify with a test that has an `chromium-engine-0123456789abcdef` tag newer than the latest `v*` tag.
+- [x] 6.6 Check that the release validation script ignores `chromium-engine-*` tags and prereleases. Verify with a test that has an `chromium-engine-0123456789abcdef` tag newer than the latest `v*` tag. Replaced by 6.8: the version no longer comes from tags.
+- [ ] 6.7 Adopt Changie v1.26.0, adapted from Front Row: `.changie.yaml` (kinds `New`, `Changed`, `Fixed` and `Updated`, with a replacement that stamps `version.txt`), `.changes/header.tpl.md` and `.changes/README.md`. Remove `.sparkle/notes/` and `scripts/bump-version.sh` with its test. Update `render-notes.sh`'s usage, `CLAUDE.md` and the docs. Verify in a throwaway repository that a `New` fragment gives `0.1.0`, that `changie batch 0.1.0` and `changie merge` write `.changes/0.1.0.md`, `CHANGELOG.md` and `version.txt`, and that `scripts/engine-key.test.sh` sees the same key when `.changie.yaml`, `.changes/` or `CHANGELOG.md` changes.
+- [ ] 6.8 Cut `scripts/release-preflight.sh` down to D5's `validate` checks, taking `--release-type` and getting the version from `changie next`. Remove 6.6's test. Verify that the tests cover `New` → minor and `Fixed` → patch with `auto`, each explicit bump, a first release of `0.1.0` with no leading `v`, and each refusal: no fragments, existing notes, an existing tag, and a build number that doesn't increase.
 
 ## 7. CI release workflow
 
@@ -78,15 +80,15 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
   Verify with a `workflow_dispatch` test job on `[self-hosted, clair-release]` that prints the toolchain versions and the internal disk's free space.
 - [x] 7.1 **(owner)** Add the secrets to a `release` environment limited to `main`: the Developer ID `.p12` (base64) and its password, a CI keychain password, and the App Store Connect API key ID, issuer and `.p8`; `SPARKLE_ED_PRIVATE_KEY` is from 4.1. Verify that a workflow step reports each secret as present without printing any value.
-- [ ] 7.2 Add `release.yml`. It has inputs `bump` (patch, minor or major) and `dry_run`, and `concurrency: release`. Its jobs are:
+- [ ] 7.2 Add `release.yml`. It has inputs `release-type` (auto, patch, minor or major) and `dry-run`, and `concurrency: release`. Its jobs are:
   - `validate`, using the 6.3 script
   - `engine`, which downloads `chromium-engine-<key>`, or calls `engine.yml` and waits when it isn't published
   - `quality`, which calls `quality.yml` unless it has already passed for the commit
 
-  Verify that `validate` fails with an unedited `next.md`. Verify that a commit whose quality checks failed stops the run before packaging. Verify that a commit with no engine builds one first.
-- [ ] 7.3 Add the `package` job on the owner's Mac: `package.sh` with signing, notarization, stapling, the DMG, `verify-app.sh`, deltas and `sign_update`. Signing uses the temporary keychain from D9. In dry-run mode it uploads the DMG as a workflow artifact and stops. Verify that a dry run produces a notarized DMG and makes no tag, Release or appcast change, and that after a dry run, and after one cancelled mid-signing, the user's keychain search list is as it was and `clair-signing.keychain-db` is gone.
+  Verify that `validate` fails with no fragments in `.changes/unreleased/`. Verify that a commit whose quality checks failed stops the run before packaging. Verify that a commit with no engine builds one first.
+- [ ] 7.3 Add the `package` job on the owner's Mac. It first checks the credentials (D5), with a script and its test. Then it runs `package.sh` with signing, notarization, stapling, the DMG, `verify-app.sh`, deltas and `sign_update`. Signing uses the temporary keychain from D9. In dry-run mode it uploads the DMG as a workflow artifact and stops. Verify that the credential script's test covers a missing identity, an expired certificate, a rejected API key and a warning with under 30 days left, and that a bad API key stops a real run before `package.sh`. Verify that a dry run produces a notarized DMG and makes no tag, Release or appcast change, and that after a dry run, and after one cancelled mid-signing, the user's keychain search list is as it was and `clair-signing.keychain-db` is gone.
 - [ ] 7.4 Add the `publish` job. It:
-  - makes the release commit (`version.txt`, archived notes, a new `next.md`, the appcast entry)
+  - makes the release commit (`changie batch` and `changie merge` for `.changes/<version>.md`, `CHANGELOG.md` and `version.txt`, then the appcast entry)
   - checks that `main` hasn't moved since `validate`
   - tags `v<version>`
   - creates the GitHub Release: the DMG, deltas, SHA-256 checksums, and notes with the Clair version, build number, ungoogled-chromium tag and engine key
@@ -94,7 +96,8 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
   Verify with a rehearsal on a throwaway fork. The Release should exist before the appcast push, and when `main` moves mid-release, the run should abort with no Release created.
 - [ ] 7.5 Check secret hygiene. Verify that searching the full logs and every published asset of a dry run and a rehearsal finds neither the Sparkle private key nor the certificate password. Verify that `engine.yml` and `quality.yml` runs have no access to the `release` environment.
-- [ ] 7.6 Write `docs/releasing.md`: how to start a release, writing `next.md`, the manual release checklist (from 8.1), key backup and the rollback policy. Verify by following it for the first release.
+- [ ] 7.6 Write `docs/releasing.md`: how to start a release, adding Changie fragments, the manual release checklist (from 8.1), key backup and the rollback policy. Verify by following it for the first release.
+- [ ] 7.7 Replace the release secrets with D6's names from the owner's 1Password, removing `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`, `CI_KEYCHAIN_PASSWORD`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8`, and update `release-secrets-check.yml`. Verify that the check reports each new name as present on `main`, and that the environment lists no old name.
 
 ## 8. First release and end-to-end verification
 
