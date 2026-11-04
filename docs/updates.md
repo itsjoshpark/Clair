@@ -46,6 +46,8 @@ The environment doesn't survive a relaunch, because Launch Services starts the n
 
 Testing updates replaces the app in place, so work in a throwaway directory. Pass `--user-data-dir` and `--use-mock-keychain` so your own data and keychain aren't touched. Chromium keeps both flags across a relaunch.
 
+The rest of Sparkle's state is outside those flags, under the real bundle ID: `~/Library/Preferences/dev.joshuapark.Clair.plist` and `~/Library/Caches/dev.joshuapark.Clair`. On a Mac where you also use a real Clair, test on another user account.
+
 1. Download an engine, and package an old and a new version with the test key:
 
    ```sh
