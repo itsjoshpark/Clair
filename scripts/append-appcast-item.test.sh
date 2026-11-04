@@ -1,7 +1,5 @@
 #!/bin/bash
 # Tests for append-appcast-item.sh. Run directly: ./scripts/append-appcast-item.test.sh
-#
-# Adapted from Front Row's scripts/append-appcast-item.test.sh (GPLv3).
 
 set -uo pipefail
 
