@@ -24,7 +24,7 @@ With `auto`, a `New` fragment bumps the minor version and the other kinds bump t
 | `engine` | Mac | Builds the engine only if `chromium-engine-<key>` isn't published, which can take about 4 hours |
 | `quality` | Hosted | Runs the quality checks only if they haven't already passed for the commit |
 | `package` | Mac, `release` environment | Checks the credentials, then signs, notarizes and staples the app and the DMG, verifies them, makes the deltas and signs every asset |
-| `publish` | Mac | Makes the release commit, tags it, creates the GitHub Release, and pushes to `main` |
+| `publish` | Mac, `release` environment | Makes the release commit, tags it, creates the GitHub Release, and pushes to `main` |
 
 A dry run stops after `package` and leaves the DMG as a workflow artifact. It adds no tag, Release or appcast change.
 
@@ -43,7 +43,7 @@ The quality checks can't cover these, so run them on the dry-run DMG, on a clean
 
 ## Secrets
 
-The `release` environment is limited to `main`, and only the `package` job uses it. `.github/workflows/release-secrets-check.yml` reports each secret as present without printing it.
+The `release` environment is limited to `main`, and only the `package` and `publish` jobs use it. `.github/workflows/release-secrets-check.yml` reports each secret as present without printing it.
 
 | Secret | What it is | Backup |
 |---|---|---|
@@ -52,6 +52,9 @@ The `release` environment is limited to `main`, and only the `package` job uses 
 | `AC_API_KEY_P8_BASE64` | The App Store Connect API key's `.p8`, as base64. Apple only lets you download it once | 1Password |
 | `AC_API_KEY_ID`, `AC_API_ISSUER_ID` | The API key's IDs | 1Password |
 | `SPARKLE_ED_PRIVATE_KEY` | The EdDSA key that signs updates. See [Keys](updates.md#keys) | 1Password |
+| `RELEASE_DEPLOY_KEY` | The private half of the deploy key that pushes release commits to `main` | 1Password |
+
+`main`'s ruleset requires the merge gate's checks from everyone, admins included. Deploy keys are the only exception, and the release's should be the repository's only deploy key with write access. To replace it, add a new one, update the secret and remove the old one.
 
 GitHub secrets can't be read back, so 1Password is the only way to restore them. Losing the certificate only means creating a new one under the same team, but losing the EdDSA key strands every installed copy.
 

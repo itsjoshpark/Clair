@@ -122,7 +122,7 @@ The release process SHALL offer a dry-run mode that packages, signs and notarize
 - **THEN** a signed, notarized DMG is available as a workflow artifact, and no tag, release or appcast change is made
 
 ### Requirement: Secrets never exposed
-Signing certificates, notarization credentials and the Sparkle EdDSA private key SHALL be provided only as encrypted secrets of a `release` environment that is limited to `main`. They MUST NOT appear in the repository, in build logs, in any published artifact, or on the self-hosted runner's disk after a job ends.
+Signing certificates, notarization credentials, the Sparkle EdDSA private key and the deploy key that pushes release commits SHALL be provided only as encrypted secrets of a `release` environment that is limited to `main`. They MUST NOT appear in the repository, in build logs, in any published artifact, or on the self-hosted runner's disk after a job ends.
 
 #### Scenario: Inspecting a release's logs and assets
 - **WHEN** a release run's logs and every published asset are searched for the private key or the certificate password
