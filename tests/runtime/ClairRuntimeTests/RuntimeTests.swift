@@ -316,8 +316,9 @@ final class IdleInstallTests: RuntimeTestCase {
   private func assertStaysRunning(_ browser: Browser, reason: String) async throws {
     let process = try browser.runningProcessID()
     try await Task.sleep(for: .seconds(idleSeconds * 3))
-    XCTAssertEqual(try browser.runningProcessID(), process, "Clair relaunched despite \(reason)")
-    XCTAssertEqual(browser.installedVersion, fixture.version, "The update installed despite \(reason)")
+    // A relaunch here makes the rest of the test pointless, so this stops it.
+    try require(try browser.runningProcessID() == process, "Clair relaunched despite \(reason)")
+    try require(browser.installedVersion == fixture.version, "The update installed despite \(reason)")
   }
 
   /// Checks that Clair installs the update once nothing stands in the way.
