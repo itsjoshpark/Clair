@@ -214,9 +214,9 @@ notes check or build it  the engine  plist, sign, tag, GitHub
 ### D6. Signing, notarization and secrets
 
 The following are secrets of a `release` environment that is limited to `main`:
-- the Developer ID Application certificate as base64 `.p12`, and its password
-- a CI keychain password
-- notarization credentials: an App Store Connect API key (key ID, issuer, `.p8`)
+- the Developer ID Application certificate as base64 `.p12`, and its password: `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`
+- a CI keychain password: `CI_KEYCHAIN_PASSWORD`
+- notarization credentials, an App Store Connect API key: `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_P8`
 - `SPARKLE_ED_PRIVATE_KEY`
 
 Handling:
