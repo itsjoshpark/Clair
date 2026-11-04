@@ -61,11 +61,13 @@ create() {
   {
     printf 'create-keychain -p %s %s\n' "$(quoted "$password")" "$(quoted "$keychain")"
     printf 'unlock-keychain -p %s %s\n' "$(quoted "$password")" "$(quoted "$keychain")"
-    printf 'import %s -k %s -P %s -T /usr/bin/codesign\n' \
+    # The copy's name has no .p12 for security to work the format out from.
+    printf 'import %s -f pkcs12 -k %s -P %s -T /usr/bin/codesign\n' \
       "$(quoted "$p12")" "$(quoted "$keychain")" "$(quoted "$DEVELOPER_ID_CERT_PASSWORD")"
     printf 'set-key-partition-list -S apple-tool:,apple:,codesign: -s -k %s %s\n' \
       "$(quoted "$password")" "$(quoted "$keychain")"
-  } | security -i >/dev/null
+  } | security -i >/dev/null ||
+    die "security couldn't create the keychain or import the certificate. Check DEVELOPER_ID_CERT_P12_BASE64 and DEVELOPER_ID_CERT_PASSWORD."
 
   # Six hours, with no lock on sleep: notarization can take a while.
   security set-keychain-settings -t 21600 "$keychain"
@@ -76,8 +78,6 @@ create() {
   done < <(saved_paths)
   security list-keychains -d user -s "${paths[@]}"
 
-  # Interactive mode's exit status says nothing about its commands, so this is the
-  # check that they worked.
   security find-identity -v -p codesigning "$keychain" | grep -q '"Developer ID Application' ||
     die "no Developer ID Application identity in the keychain. Check DEVELOPER_ID_CERT_P12_BASE64 and DEVELOPER_ID_CERT_PASSWORD."
 }

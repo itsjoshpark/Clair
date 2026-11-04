@@ -31,7 +31,8 @@ echo "\$*" >>"$workdir/args.log"
 case "\$1" in
   -i)
     cat >>"$workdir/stdin.log"
-    [[ -n "\${NO_CREATE-}" ]] || : >"$workdir/clair.keychain-db"
+    [[ -z "\${INTERACTIVE_FAILS-}" ]] || exit 1
+    : >"$workdir/clair.keychain-db"
     ;;
   list-keychains)
     if [[ "\$4" == -s ]]; then
@@ -84,6 +85,12 @@ if ! grep -qF "$secret" "$workdir/args.log" && ! grep -v '^find-identity' "$work
 else
   check "no password is ever an argument" fail
   sed 's/^/         /' "$workdir/args.log"
+fi
+if grep -qE '^import ".*/developer-id\.[^"]*" -f pkcs12 ' "$workdir/stdin.log"; then
+  check "names the certificate's format, since its temporary name has no extension" pass
+else
+  check "names the certificate's format, since its temporary name has no extension" fail
+  grep import "$workdir/stdin.log" | sed 's/^/         /'
 fi
 if grep -qF -- '-P "p\"a\\ss w$rd!" -T /usr/bin/codesign' "$workdir/stdin.log"; then
   check "quotes the certificate's password for security's own parser" pass
@@ -140,6 +147,17 @@ if [[ "$(cat "$workdir/list")" == "$(cat "$workdir/list-before")" && ! -e "$keyc
 else
   check "delete cleans up after a failed create" fail
 fi
+
+start_list
+if INTERACTIVE_FAILS=1 run create "$keychain" "$saved"; then
+  check "fails when security can't import the certificate, saying what to check" fail
+elif [[ "$output" == *"couldn't create the keychain or import the certificate"* ]]; then
+  check "fails when security can't import the certificate, saying what to check" pass
+else
+  check "fails when security can't import the certificate, saying what to check" fail
+  echo "$output" | sed 's/^/         /'
+fi
+run delete "$keychain" "$saved"
 
 start_list
 if P12="" run create "$keychain" "$saved" || [[ "$output" != *"DEVELOPER_ID_CERT_P12_BASE64 is not set"* ]]; then
