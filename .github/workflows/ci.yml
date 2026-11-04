@@ -86,6 +86,7 @@ jobs:
     outputs:
       key: ${{ steps.key.outputs.key }}
       changed: ${{ steps.key.outputs.changed }}
+      published: ${{ steps.engine.outputs.published }}
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -117,13 +118,31 @@ jobs:
             echo "::endgroup::"
           fi
 
+      - name: Look for a published engine
+        id: engine
+        if: ${{ steps.key.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: |
+          # If the lookup fails, the patch check runs as usual.
+          draft="$(gh release view "chromium-engine-$KEY" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [[ "$draft" == false ]]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "chromium-engine-$KEY is published, so the patch check isn't needed."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
   patch-check:
     # Fetches the Chromium source and applies every patch and the overlay, so a
     # patch that no longer applies fails here, named in the log. It compiles no
-    # Chromium.
+    # Chromium. Skipped when this key's engine is already published: engine.yml
+    # applied the same inputs to build it.
     name: Patch check
     needs: engine-key
-    if: ${{ needs.engine-key.outputs.changed == 'true' }}
+    if: ${{ needs.engine-key.outputs.changed == 'true' && needs.engine-key.outputs.published != 'true' }}
     runs-on: xcode-27
     timeout-minutes: 120
     steps:
@@ -147,7 +166,8 @@ jobs:
 
   engine-check:
     # The required check. A pull request that changes the engine key passes
-    # only once its patch check passes and chromium-engine-<key> is published.
+    # only once chromium-engine-<key> is published and its patch check, if it
+    # ran, passed.
     # engine.yml re-runs this job, and only this job, after publishing, so it
     # finds the job by its name and the key in its annotation.
     name: Engine check
@@ -177,7 +197,9 @@ jobs:
           fi
           tag="chromium-engine-$KEY"
           echo "::notice title=Engine needed::$tag"
-          if [[ "$PATCH_RESULT" != success ]]; then
+          # Skipped means the engine was published when this run started. The
+          # lookup below still decides whether it's published now.
+          if [[ "$PATCH_RESULT" != success && "$PATCH_RESULT" != skipped ]]; then
             echo "::error::The patch check did not pass ($PATCH_RESULT); see its log."
             exit 1
           fi

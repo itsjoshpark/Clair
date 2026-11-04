@@ -246,7 +246,7 @@ Handling:
 | Work | Runs on | Started by |
 |---|---|---|
 | Merge gate | hosted `xcode-27` and Ubuntu | every pull request and push |
-| Patch check | hosted `xcode-27` | pull requests that change the engine key |
+| Patch check | hosted `xcode-27` | pull requests that change the engine key, until that key's engine is published |
 | Engine build | owner's Mac (`clair-release`) | the owner, by hand (`engine.yml`, any of the owner's branches), or a release |
 | Quality checks | hosted `xcode-27` | every push to `main`, by hand on any branch, and releases |
 | Release | owner's Mac (`clair-release`) | the owner, from `main` |
@@ -305,7 +305,7 @@ Handling:
   - `scripts/*.test.sh`, `shellcheck -S warning`, `actionlint`
   - `xcodebuild build` and `xcodebuild test` for `ClairUI` and `ClairUITests`, unsigned. It compiles against `native/ClairHost.h`, with no Chromium.
   - an **engine check** job that works out the pull request's engine key and its base's key. If they differ:
-    - it runs the patch check on `xcode-27`: fetch the pinned source, apply ungoogled's series, `patches/series`, the overlay and domain substitution, with no compile (`./build.sh fetch prepare`, about 40 minutes)
+    - unless `chromium-engine-<key>` is already published, it runs the patch check on `xcode-27`: fetch the pinned source, apply ungoogled's series, `patches/series`, the overlay and domain substitution, with no compile (`./build.sh fetch prepare`, about 20 minutes). A published engine already shows that the same inputs apply, because `engine.yml` applied them to build it, so a later push to the pull request doesn't repeat the check.
     - it reports whether `chromium-engine-<key>` is published, and fails until it is, so an engine change can't merge without an engine. After publishing, `engine.yml` re-runs the engine check on open pull requests whose head has that key, so nobody has to re-run it by hand.
   - All of these are required checks on `main`.
 - **Quality checks** (`quality.yml`: push to `main`, `workflow_dispatch` on any ref, and called by `release.yml`):
@@ -334,7 +334,7 @@ Handling:
 - **[Risk] The owner's Mac is offline** when an engine build or a release is needed.
   → Engine pull requests wait. Merges without engine changes and their quality checks continue, using the existing engines. Depot or larger hosted runners are the fallback (D5).
 - **[Risk] An in-place engine update leaves a stale or mixed tree,** giving an engine that doesn't match its key.
-  → The workspace records its key, `build.sh` falls back to a fresh tree on any doubt, and the patch check proves the same inputs apply to clean source on a hosted runner.
+  → The workspace records its key, `build.sh` falls back to a fresh tree on any doubt, and the patch check proves the same inputs apply to clean source on a hosted runner when it runs. It doesn't run once the key's engine is published, so a pull request whose engine is built before its first push relies on `build/base` alone, the workspace's copy of the source from before Clair's patches. A bump of the ungoogled-chromium pin always builds from a fresh tree.
 - **[Risk] Chromium reads the outer bundle's version** in places that break when packaging writes the Clair version (D3).
   → The builder audits these reads before task 3.1 is done, and patches each one that must keep the Chromium version.
 - **[Risk] Chromium 156 doesn't build with Xcode 27's own SDK.**
