@@ -37,7 +37,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [x] 3.1 Add `version.txt` set to `0.1.0`. Make `package.sh` write `CFBundleShortVersionString` from `version.txt` and `CFBundleVersion` from `git rev-list --count HEAD` (or the release's build number) into `Clair.app/Contents/Info.plist`. Before that, audit every place Chromium reads the outer bundle's version, using Helium's versioning and Sparkle patches as a map, and patch any read that must keep the Chromium version (D3). Verify both plist values in a packaged app, and that it launches and loads its framework.
 - [x] 3.2 Adapt Helium's `add-helium-versioning.patch` so the About page and `chrome://version` read the Clair version and build number from the main bundle's `Info.plist` at run time. They also show the Chromium version and ungoogled-chromium revision, labelled as the engine. Verify by opening About Clair in two packages of the same engine with different `version.txt` values.
 - [ ] 3.3 Verify that the engine version reaches the web unchanged. `navigator.userAgent` and client hints should match an ungoogled-chromium build of the same tag and not contain `0.1.0`. A test extension with `minimum_chrome_version` set to `150` should install.
-- [ ] 3.4 Extend `scripts/verify-app.sh` to check the version: the short version matches `version.txt`, and the build number is an integer. Verify that it passes on a packaged app.
+- [x] 3.4 Extend `scripts/verify-app.sh` to check the version: the short version matches `version.txt`, and the build number is an integer. Verify that it passes on a packaged app.
 
 ## 4. Sparkle updater (in the native layer)
 
@@ -97,7 +97,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
   Verify with a rehearsal on a throwaway fork. The Release should exist before the appcast push, and when `main` moves mid-release, the run should abort with no Release created.
 - [ ] 7.5 Check secret hygiene. Verify that searching the full logs and every published asset of a dry run and a rehearsal finds neither the Sparkle private key nor the certificate password. Verify that `engine.yml` and `quality.yml` runs have no access to the `release` environment.
 - [ ] 7.6 Write `docs/releasing.md`: how to start a release, adding Changie fragments, the manual release checklist (from 8.1), key backup and the rollback policy. Verify by following it for the first release.
-- [ ] 7.7 Replace the release secrets with D6's names from the owner's 1Password, removing `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`, `CI_KEYCHAIN_PASSWORD`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8`, and update `release-secrets-check.yml`. Verify that the check reports each new name as present on `main`, and that the environment lists no old name.
+- [x] 7.7 Replace the release secrets with D6's names from the owner's 1Password, removing `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`, `CI_KEYCHAIN_PASSWORD`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8`, and update `release-secrets-check.yml`. Verify that the check reports each new name as present on `main`, and that the environment lists no old name.
 
 ## 8. First release and end-to-end verification
 
