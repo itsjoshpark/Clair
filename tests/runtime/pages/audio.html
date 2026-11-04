@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair runtime audio page</title>
+<p>A steady tone, so that this tab counts as audible.</p>
+<script>
+  // Started over DevTools, as a user gesture.
+  function startTone() {
+    window.context = new AudioContext();
+    window.oscillator = context.createOscillator();
+    oscillator.connect(context.destination);
+    oscillator.start();
+    return context.resume().then(() => context.state);
+  }
+  function stopTone() {
+    oscillator.stop();
+    return context.close().then(() => "stopped");
+  }
+</script>

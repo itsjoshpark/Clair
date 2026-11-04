@@ -1,0 +1,118 @@
+# The quality checks (change 1 design D12): packages the app from the commit's
+# prebuilt engine and runs the static checks and the runtime suite against it. A
+# failure on main opens or updates a quality-failure issue, and a later pass
+# closes it. No release ships without these passing.
+name: Quality
+
+on:
+  push:
+    branches: ["main", "feat/quality-checks"]
+  workflow_dispatch:
+    inputs:
+      report_issue:
+        description: "Report the result to the quality-failure issue, as a run on main does"
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      report_issue:
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality checks
+    runs-on: xcode-27
+    timeout-minutes: 120
+    outputs:
+      failures: ${{ steps.suite.outputs.failures }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          # The build number is the commit count.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select Xcode
+        run: ./.github/scripts/select-xcode.sh
+
+      - name: Download the engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          key="$(./scripts/engine-key.sh)"
+          tag="chromium-engine-$key"
+          draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [[ "$draft" != false ]]; then
+            echo "::error::no engine for $key. Build it with: gh workflow run engine.yml -f ref=$BRANCH"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/engine"
+          gh release download "$tag" --dir "$RUNNER_TEMP/engine"
+          (cd "$RUNNER_TEMP/engine" && shasum -a 256 -c "Clair-Chromium-Engine-$key-arm64.zip.sha256")
+          echo "ENGINE_ZIP=$RUNNER_TEMP/engine/Clair-Chromium-Engine-$key-arm64.zip" >> "$GITHUB_ENV"
+
+      - name: Package the app and build the tests
+        run: ./tests/runtime/run.sh prepare "$ENGINE_ZIP" "$RUNNER_TEMP/engine/engine.json" "$RUNNER_TEMP/runtime"
+
+      - name: Verify the app (no signing checks)
+        run: ./scripts/verify-app.sh "$RUNNER_TEMP/runtime/Clair.app"
+
+      - name: Run the runtime suite
+        id: suite
+        run: |
+          status=0
+          ./tests/runtime/run.sh test "$RUNNER_TEMP/runtime" || status=$?
+          {
+            echo "failures<<END_OF_FAILURES"
+            cat "$RUNNER_TEMP/runtime/failures.txt"
+            echo "END_OF_FAILURES"
+          } >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Upload the results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-results
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/runtime/results.xcresult
+            ${{ runner.temp }}/runtime/logs
+
+  report:
+    # Only this job can write issues.
+    name: Report to the quality-failure issue
+    needs: quality
+    if: ${{ always() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || inputs.report_issue) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.quality.result }}
+          FAILURES: ${{ needs.quality.outputs.failures }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          printf '%s\n' "$FAILURES" > "$RUNNER_TEMP/failures.txt"
+          ./scripts/report-quality.sh --result "$RESULT" --commit "$GITHUB_SHA" \
+            --run-url "$RUN_URL" --failures "$RUNNER_TEMP/failures.txt"

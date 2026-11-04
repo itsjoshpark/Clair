@@ -42,7 +42,7 @@ jobs:
           exit "$failures"
 
       - name: Lint shell scripts
-        run: shellcheck -S warning build.sh package.sh package.test.sh scripts/*.sh .github/scripts/*.sh
+        run: shellcheck -S warning build.sh package.sh package.test.sh scripts/*.sh tests/runtime/*.sh .github/scripts/*.sh
 
       - name: Lint workflows
         run: actionlint
@@ -77,6 +77,14 @@ jobs:
             -destination "platform=macOS,arch=arm64" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGNING_ALLOWED=NO build test
+
+      # Only quality.yml runs the suite, after a merge. This keeps it compiling.
+      - name: Build the runtime suite
+        run: |
+          xcodebuild -project tests/runtime/ClairRuntimeTests.xcodeproj -scheme ClairRuntimeTests \
+            -destination "platform=macOS,arch=arm64" \
+            -derivedDataPath "$RUNNER_TEMP/RuntimeDerivedData" \
+            -quiet build-for-testing
 
   engine-key:
     name: Engine key
