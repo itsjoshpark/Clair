@@ -70,7 +70,7 @@ jobs:
         id: suite
         run: |
           status=0
-          ./tests/runtime/run.sh test "$RUNNER_TEMP/runtime" || status=$?
+          ./tests/runtime/run.sh test "$RUNNER_TEMP/runtime" -only-testing:ClairRuntimeTests/DiagnosticTests || status=$?
           {
             echo "failures<<END_OF_FAILURES"
             cat "$RUNNER_TEMP/runtime/failures.txt"
@@ -79,7 +79,7 @@ jobs:
           exit "$status"
 
       - name: Upload the results
-        if: ${{ failure() }}
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: runtime-results

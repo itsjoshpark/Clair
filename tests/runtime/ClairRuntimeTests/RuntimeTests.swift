@@ -13,7 +13,9 @@ class RuntimeTestCase: XCTestCase {
   var browser: Browser?
 
   override func setUp() async throws {
-    continueAfterFailure = false
+    // A failed assertion must not stop an async test: XCTest would raise an
+    // exception through the continuation and hang until its time allowance runs
+    // out. Steps that later ones depend on use require(), which throws instead.
     fixture = try Fixture.load()
     try Harness.reset()
   }
