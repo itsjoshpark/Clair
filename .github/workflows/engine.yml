@@ -1,6 +1,7 @@
 # Builds Clair's engine, the patched Chromium, on the owner's Mac and publishes
 # it as the prerelease chromium-engine-<key> (change 1 design D10, D11). Started
-# by hand: gh workflow run engine.yml -f ref=<branch>. Once the engine is
+# by hand: gh workflow run engine.yml -f ref=<branch>, or by a release that has no
+# engine for its commit. Once the engine is
 # published, it re-runs the engine check of open pull requests waiting for it.
 name: Engine
 
@@ -14,6 +15,15 @@ on:
         type: string
       clean:
         description: "Compile from scratch, keeping the patched source. To rebuild a published engine, delete its release first."
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      clean:
         required: false
         default: false
         type: boolean

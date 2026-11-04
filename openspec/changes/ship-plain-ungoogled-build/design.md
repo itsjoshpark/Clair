@@ -210,6 +210,7 @@ notes check or build it  the engine  plist, sign, tag, GitHub
   - creates the GitHub Release with the DMG, deltas, SHA-256 checksums and notes (Clair version, build number, ungoogled-chromium tag, engine key)
   - pushes to `main` only after the Release exists
   - before pushing, checks that `main` hasn't moved since `validate`. If it has, it aborts before creating the Release, so the appcast never points at missing files.
+- Jobs on the owner's Mac check out into a `release/` folder inside the workspace. The workspace root holds the persistent engine workspace (D11), which a normal checkout's clean would delete.
 - The release commit changes only `version.txt`, `.changes/`, `CHANGELOG.md` and the appcast. None of these is an engine input, so the release commit has the same engine key as the commit the quality checks ran on.
 
 **Alternatives considered:**
@@ -274,6 +275,7 @@ Handling:
 - **Secrets** reach only release jobs on the Mac, for the duration of the job. Because the runner shares the owner's user, the release job leaves the owner's keychains alone:
   - It creates `$RUNNER_TEMP/clair-signing.keychain-db`, locked with a random password generated for that job, and imports the Developer ID certificate into it.
   - It adds that keychain to the user's keychain search list for the duration of the job, so it shows in Keychain Access while a release runs. It never changes the default keychain and never writes to the login keychain.
+  - `codesign` is told to use only that keychain (`--keychain`), because the owner's login keychain holds the same certificate and `codesign` refuses an ambiguous name.
   - `notarytool` gets the App Store Connect key as a file and IDs (`--key`, `--key-id`, `--issuer`), not as a profile stored in the keychain.
   - When the job ends, including on failure or cancellation, it restores the previous search list and deletes the keychain, so the Mac keeps nothing between releases.
 - The engine smoke test runs the bare engine with `--use-mock-keychain`, so engine builds add no keychain items either.

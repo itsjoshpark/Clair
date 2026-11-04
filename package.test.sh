@@ -338,6 +338,7 @@ args=()
 while (( $# > 0 )); do
   case "$1" in
     --sign) args+=(--sign -); shift 2 ;;
+    --keychain) [[ -z "${KEYCHAIN_LOG-}" ]] || echo "$2" >>"$KEYCHAIN_LOG"; shift 2 ;;
     --timestamp) shift ;;
     --requirements|--options) shift 2 ;;
     *) args+=("$1"); shift ;;
@@ -354,6 +355,25 @@ else
   check "leaves the non-official mark off a package signed with an identity" fail
   echo "$output" | tail -5 | sed 's/^/         /'
 fi
+
+# A keychain limits both the identity check and every signature to it.
+signing_keychain="$workdir/signing.keychain-db"
+: >"$signing_keychain"
+export KEYCHAIN_LOG="$workdir/keychain.log"
+out="$workdir/out-keychain"
+if PATH="$identity_bin:$PATH" run_package --version 0.1.0 --build 7 --identity "Test Identity" --keychain "$signing_keychain" "$engine/Clair.app" "$out" \
+    && [[ -s "$KEYCHAIN_LOG" && -z "$(grep -vxF "$signing_keychain" "$KEYCHAIN_LOG")" ]] \
+    && [[ "$(wc -l <"$KEYCHAIN_LOG" | tr -d ' ')" -gt 10 ]]; then
+  check "signs everything from the given keychain, the DMG too" pass
+else
+  check "signs everything from the given keychain, the DMG too" fail
+  echo "$output" | tail -5 | sed 's/^/         /'
+fi
+unset KEYCHAIN_LOG
+expect_refusal "refuses a keychain without an identity" "needs --identity" \
+  --version 0.1.0 --build 7 --keychain "$signing_keychain" "$engine/Clair.app" "$workdir/out3"
+PATH="$identity_bin:$PATH" expect_refusal "refuses a missing keychain" "no keychain at" \
+  --version 0.1.0 --build 7 --identity "Test Identity" --keychain "$workdir/none" "$engine/Clair.app" "$workdir/out3"
 
 # --- notarization -----------------------------------------------------------------
 # No Apple here: stand-ins log each call, and staple the app by leaving a mark in

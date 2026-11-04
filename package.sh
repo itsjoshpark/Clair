@@ -25,6 +25,9 @@
 #                        from the keychain search list. Without it, the app is
 #                        signed ad hoc and marked non-official (ClairUI's test
 #                        overrides work only there).
+#   --keychain <file>    look for the identity only in this keychain. A release
+#                        needs this, since the same certificate is in the owner's
+#                        login keychain and codesign refuses an ambiguous name.
 #   --notary-key <file>  the App Store Connect API key's .p8. Together with the
 #   --notary-key-id <id> next two, this notarizes and staples the app, and then
 #   --notary-issuer <id> the DMG built from it. Needs --identity.
@@ -48,7 +51,7 @@ usage() {
 }
 
 clairui="" sparkle="" version="" build="" public_key_file="$root/.sparkle/public-ed-key.txt"
-identity="" dmg=true notary_key="" notary_key_id="" notary_issuer=""
+identity="" keychain="" dmg=true notary_key="" notary_key_id="" notary_issuer=""
 args=()
 while (( $# > 0 )); do
   case "$1" in
@@ -58,6 +61,7 @@ while (( $# > 0 )); do
     --build) build="${2-}"; shift 2 || usage ;;
     --public-key) public_key_file="${2-}"; shift 2 || usage ;;
     --identity) identity="${2-}"; shift 2 || usage ;;
+    --keychain) keychain="${2-}"; shift 2 || usage ;;
     --notary-key) notary_key="${2-}"; shift 2 || usage ;;
     --notary-key-id) notary_key_id="${2-}"; shift 2 || usage ;;
     --notary-issuer) notary_issuer="${2-}"; shift 2 || usage ;;
@@ -91,9 +95,15 @@ else
   echo "package: warning: no Sparkle public key at $public_key_file; this package can't install updates" >&2
 fi
 
+keychain_args=()
+if [[ -n "$keychain" ]]; then
+  [[ -n "$identity" ]] || die "--keychain needs --identity"
+  [[ -f "$keychain" ]] || die "no keychain at $keychain"
+  keychain_args=(--keychain "$keychain")
+fi
 if [[ -n "$identity" ]]; then
-  security find-identity -v -p codesigning | grep -qF "\"$identity\"" ||
-    die "no valid signing identity named \"$identity\" in the keychain search list"
+  security find-identity -v -p codesigning ${keychain:+"$keychain"} | grep -qF "\"$identity\"" ||
+    die "no valid signing identity named \"$identity\" in ${keychain:-the keychain search list}"
 fi
 
 notarizing=false
@@ -201,7 +211,7 @@ fi
 # sign_and_package_app.sh (BSD-3-Clause, see CREDITS.md).
 sign() {
   if [[ -n "$identity" ]]; then
-    codesign --sign "$identity" --force --timestamp "$@"
+    codesign --sign "$identity" ${keychain_args[@]+"${keychain_args[@]}"} --force --timestamp "$@"
     return
   fi
   # An ad hoc signature has no Team ID, so the library validation that the
@@ -346,7 +356,7 @@ if $dmg; then
   done
   $created || die "hdiutil couldn't create the DMG"
   if [[ -n "$identity" ]]; then
-    codesign --sign "$identity" --timestamp "$dmg_path"
+    codesign --sign "$identity" ${keychain_args[@]+"${keychain_args[@]}"} --timestamp "$dmg_path"
   fi
   if $notarizing; then
     notarize "$dmg_path"

@@ -27,6 +27,8 @@ Footnotes are the one GitHub construct left unsupported, and render as literal `
 
 Rendering uses [cmark-gfm](https://github.com/github/cmark-gfm), GitHub's own Markdown implementation. To run the script tests locally: `brew install cmark-gfm changie`.
 
+A release needs at least one fragment, or it stops before building.
+
 The `<version>.md` files are the archive of what shipped in each release.
 
 Adapted from Front Row's `.changes/README.md`.
