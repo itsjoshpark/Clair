@@ -31,6 +31,7 @@ Local work is limited to editing files, running the small script tests, and buil
 
 - Use Conventional Commits (`feat:`, `fix:`, `build:`, `ci:`, `docs:`, `chore:`…) for commits and PR titles. The PR title becomes the squash commit message.
 - Work on a branch and open a PR. Never push to `main`.
+- A user-facing change adds a Changie fragment in the same PR (`changie new`). CI, refactors and docs don't.
 - **Every push to a PR that changes the engine key cancels the patch check in progress** and, unless that key's engine is published by then, starts it again, including docs-only pushes, because the check compares the whole PR's key with its base's. To avoid the wait, build the engine first and push docs afterwards. A push never affects an `engine.yml` run, which checks out its branch when it starts.
 - Once a PR's checks pass (CI, plus Build when it ran), squash-merge it with `gh pr merge --squash --delete-branch`. Then switch to `main`, pull, and delete the local branch.
 
@@ -49,8 +50,9 @@ Local work is limited to editing files, running the small script tests, and buil
 - `build.sh`: the staged engine build (`fetch`, `prepare`, `configure`, `compile`), used by `engine.yml` and the patch check. See `docs/building.md`.
 - `tests/runtime/`: the runtime suite (XCUITest and the Chrome DevTools Protocol) that `quality.yml` runs. It deletes Clair's data for the current user, so it runs only on hosted runners.
 - `.github/scripts/`: CI helpers (runner preparation, packing and unpacking the build directory, the smoke test).
-- `scripts/`: release tooling (appcast entries with deltas, release notes rendering, version bump, release preflight), each with a `*.test.sh`.
-- `.sparkle/`: `appcast.xml`, served from `main` as Sparkle's feed, and the `notes/` release-notes flow (`next.md`, `TEMPLATE.md`).
+- `scripts/`: release tooling (appcast entries, deltas, release notes rendering, release preflight), each with a `*.test.sh`.
+- `.sparkle/`: `appcast.xml`, served from `main` as Sparkle's feed.
+- `.changes/`: release notes as [Changie](https://changie.dev) fragments, configured in `.changie.yaml`. Each release's notes end up in `.changes/<version>.md` and `CHANGELOG.md`. See `.changes/README.md`.
 
 ## Identifiers: never change these
 

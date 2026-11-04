@@ -52,7 +52,10 @@ covered=(
 ignored=(
   native/ClairUI/UpdateMenu.swift
   version.txt
-  .sparkle/notes/next.md
+  .changie.yaml
+  .changes/0.1.0.md
+  .changes/unreleased/New-1.yaml
+  CHANGELOG.md
   .github/workflows/ci.yml
   package.sh
   resources/icon/README.md
