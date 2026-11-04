@@ -1,8 +1,10 @@
 # Clair's update relaunch hook (change 1 design D4, task 4.6): Chromium's
 # relauncher reopens the app only once a waiting Sparkle update has replaced it.
 # Without this, the relauncher would reopen the old app while the installer is
-# replacing it. The logic lives in overlay/chrome/browser/mac/; this patch only
-# adds the calls and the sources.
+# replacing it. Chromium also activates the app as it shows restored windows, so
+# a relaunch from the background ignores activation until the user brings Clair
+# forward. The logic lives in overlay/chrome/browser/; this patch only adds the
+# calls and the sources.
 
 --- a/chrome/browser/mac/BUILD.gn
 +++ b/chrome/browser/mac/BUILD.gn
@@ -51,3 +53,29 @@
      base::mac::LaunchApplication(
          base::FilePath(relaunch_executable), relaunch_args, /*url_specs=*/{},
          {.activate = activate,
+--- a/chrome/browser/chrome_browser_application_mac.mm	2026-11-04 00:38:18
++++ b/chrome/browser/chrome_browser_application_mac.mm	2026-11-04 00:38:42
+@@ -16,6 +16,7 @@
+ #include "base/strings/sys_string_conversions.h"
+ #include "base/trace_event/trace_event.h"
+ #import "chrome/browser/app_controller_mac.h"
++#include "chrome/browser/clair/clair_native_layer.h"
+ #import "chrome/browser/mac/exception_processor.h"
+ #include "chrome/browser/ui/cocoa/l10n_util.h"
+ #include "chrome/common/chrome_switches.h"
+@@ -322,6 +323,15 @@
+ 
+ - (void)cancelTerminate:(id)sender {
+   [AppController.sharedController stopTryingToTerminateApplication];
++}
++
++// Clair: showing a restored window would bring forward an app that was
++// relaunched in the background.
++- (void)activateIgnoringOtherApps:(BOOL)flag {
++  if (clair::ShouldStayInBackground()) {
++    return;
++  }
++  [super activateIgnoringOtherApps:flag];
+ }
+ 
+ 

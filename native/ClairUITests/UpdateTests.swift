@@ -3,6 +3,7 @@
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
 import AppKit
+import ClairHost
 import Sparkle
 import Testing
 
@@ -35,6 +36,54 @@ struct UpdateConfigurationTests {
       infoDictionary: [UpdateConfiguration.nonOfficialPackageKey: true],
       environment: [UpdateConfiguration.feedURLOverrideVariable: ""])
     #expect(configuration.feedURLOverride == nil)
+  }
+}
+
+struct IdleThresholdConfigurationTests {
+  private let environment = [UpdateConfiguration.idleThresholdOverrideVariable: "20"]
+
+  @Test func releasePackageWaitsThirtyMinutes() {
+    let configuration = UpdateConfiguration(infoDictionary: [:], environment: environment)
+    #expect(configuration.idleThreshold == 30 * 60)
+  }
+
+  @Test func nonOfficialPackageReadsTheOverride() {
+    let configuration = UpdateConfiguration(
+      infoDictionary: [UpdateConfiguration.nonOfficialPackageKey: true], environment: environment)
+    #expect(configuration.idleThreshold == 20)
+  }
+
+  @Test func aNonsenseOverrideIsIgnored() {
+    for value in ["", "soon", "0", "-5"] {
+      let configuration = UpdateConfiguration(
+        infoDictionary: [UpdateConfiguration.nonOfficialPackageKey: true],
+        environment: [UpdateConfiguration.idleThresholdOverrideVariable: value])
+      #expect(configuration.idleThreshold == 30 * 60)
+    }
+  }
+}
+
+struct IdleInstallScheduleTests {
+  /// What the schedule answers for each idle time in turn.
+  private func attempts(_ idleTimes: [TimeInterval]) -> [Bool] {
+    var schedule = IdleInstallSchedule(threshold: 1800)
+    return idleTimes.map { schedule.shouldAttempt(idleFor: $0) }
+  }
+
+  @Test func nothingHappensBeforeTheThreshold() {
+    #expect(attempts([0, 1799]) == [false, false])
+  }
+
+  @Test func itTriesOnceAtTheThreshold() {
+    #expect(attempts([1800, 1830]) == [true, false])
+  }
+
+  @Test func aBlockedTryWaitsAnotherThreshold() {
+    #expect(attempts([1800, 3599, 3600]) == [true, false, true])
+  }
+
+  @Test func inputStartsThePeriodOver() {
+    #expect(attempts([1800, 5, 1799, 1800]) == [true, false, false, true])
   }
 }
 
@@ -184,6 +233,27 @@ struct UpdateControllerTests {
     updates.updateIsWaiting(item, userInitiated: false)
     updates.chooseUpdateItem()
     #expect(!prompts.log.contains("incognito"))
+    #expect(host.relaunchCount == 1)
+  }
+
+  @Test func anIdleInstallRelaunchesWhenNothingBlocksIt() {
+    let updates = controller()
+    updates.installWhileIdle()
+    #expect(host.relaunchCount == 1)
+    #expect(prompts.log.isEmpty)
+  }
+
+  @Test func anIdleInstallWaitsForEveryBlocker() {
+    let updates = controller()
+    let blockers: [RelaunchBlockers] = [.downloadInProgress, .incognitoWindow, .audibleTab, .capturingTab]
+    for blocker in blockers {
+      host.blockers = blocker
+      updates.installWhileIdle()
+      #expect(host.relaunchCount == 0)
+      #expect(prompts.log.isEmpty)
+    }
+    host.blockers = []
+    updates.installWhileIdle()
     #expect(host.relaunchCount == 1)
   }
 

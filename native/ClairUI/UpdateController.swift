@@ -31,6 +31,9 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
   private lazy var menu = UpdateMenu { [weak self] in
     self?.chooseUpdateItem()
   }
+  private lazy var idleInstaller = IdleInstaller(threshold: configuration.idleThreshold) { [weak self] in
+    self?.installWhileIdle()
+  }
 
   /// The update that's downloaded and waiting to install, if any.
   private(set) var waitingUpdate: SUAppcastItem?
@@ -102,6 +105,7 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
       Self.logger.info("Update \(item.displayVersionString, privacy: .public) is waiting to install on quit")
       host.updateWillInstallOnQuit()
       menu.setUpdateWaiting(true)
+      idleInstaller.start()
     }
     if userInitiated {
       offerRestart()
@@ -131,6 +135,19 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
     {
       return
     }
+    host.relaunch()
+  }
+
+  /// The user has been away long enough. Installs the waiting update unless
+  /// that would interrupt something, and if so tries again later. Chromium's
+  /// relauncher keeps Clair in the background if another app was active.
+  func installWhileIdle() {
+    let blockers = host.silentRelaunchBlockers()
+    guard blockers.isEmpty else {
+      Self.logger.info("Not installing the update while idle: blockers \(blockers.rawValue)")
+      return
+    }
+    Self.logger.info("Installing the update while idle")
     host.relaunch()
   }
 

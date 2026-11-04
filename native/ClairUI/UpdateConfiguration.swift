@@ -7,23 +7,30 @@ import Foundation
 /// How this package's updater is set up. Release packages use only what
 /// package.sh wrote into Info.plist. A non-official package, which package.sh
 /// marks when it signs ad hoc, may also take overrides from the environment,
-/// so tests can use a local appcast.
+/// so tests can use a local appcast and needn't wait 30 minutes.
 struct UpdateConfiguration: Equatable {
   /// The Info.plist key package.sh sets on packages it signs ad hoc. Release
   /// packages don't have it, and adding it would break their signature.
   static let nonOfficialPackageKey = "ClairNonOfficialPackage"
   static let feedURLOverrideVariable = "CLAIR_TEST_FEED_URL"
+  static let idleThresholdOverrideVariable = "CLAIR_TEST_UPDATE_IDLE_SECONDS"
 
   /// The appcast to use instead of Info.plist's `SUFeedURL`.
   let feedURLOverride: String?
 
+  /// How long the Mac must have no input before a waiting update installs.
+  let idleThreshold: TimeInterval
+
   init(infoDictionary: [String: Any], environment: [String: String]) {
     guard infoDictionary[Self.nonOfficialPackageKey] as? Bool == true else {
       feedURLOverride = nil
+      idleThreshold = IdleInstallSchedule.defaultThreshold
       return
     }
     let feedURL = environment[Self.feedURLOverrideVariable] ?? ""
     feedURLOverride = feedURL.isEmpty ? nil : feedURL
+    let threshold = environment[Self.idleThresholdOverrideVariable].flatMap(TimeInterval.init) ?? 0
+    idleThreshold = threshold > 0 ? threshold : IdleInstallSchedule.defaultThreshold
   }
 
   static var current: UpdateConfiguration {
