@@ -117,6 +117,8 @@ Chromium draws nine of its product icons from `.icon` files, its own vector form
 
 Each shape is its own `NEW_PATH` with `FILL_RULE_NONZERO`, because the format fills even-odd by default and the curl and flick overlap the ring. Paths use `MOVE_TO`, `LINE_TO`, `ARC_TO` and `CLOSE`, which all exist in Chromium's vector-icon format. Generated files are committed and copied by the resource-replacement step. Chromium compiles them into C++ during the build, so a malformed file fails the build.
 
+WebUI draws one more single-color product icon, `chrome-product`, from SVG paths written inline in TypeScript rather than from a resource file, so the resource-replacement step can't reach it. It is defined twice in `ui/webui/resources/cr_elements/icons.html.ts` (`cr:chrome-product`, shown by the settings menu's About item, the certificate manager and the context hub) and twice in `chrome/browser/resources/settings/icons.html.ts` (`settings20:chrome-product`, shown by Safety Hub). `make_layers.py` writes `webui-product-icon.svg`, the ring layer fitted to a 24 px canvas as in the 24 px `.icon` files, and two patches put its paths into those four definitions with `viewBox="0 0 24 24"`: `helium/webui-logo-icons.patch`, adapted from Helium's `helium-logo-icons.patch`, and `clair/settings-logo-icons.patch`. The definitions in `chrome/browser/resources/webui_browser/icons.html.ts` belong to the experimental WebUI browser, which Clair doesn't ship, and stay as they are. If the geometry changes, regenerate `webui-product-icon.svg` and update both patches' paths with it.
+
 ### D7. Wordmark
 
 `resources/icon/make_wordmark.py` writes `wordmark.svg` and `wordmark-white.svg` on a 171×32 canvas:

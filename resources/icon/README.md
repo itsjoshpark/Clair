@@ -11,6 +11,7 @@ Everything here is drawn from one geometry: the gilded ring, a thick open gold r
 | `AppIcon.icon/` | Icon Composer document: `icon.json` plus the `ring.svg` and `inlay.svg` layers | `icon.json` by hand (saved from Icon Composer), layers by `make_layers.py` |
 | `logo.svg`, `logo-mono.svg` | In-app logo: the gold mark, and a one-colour silhouette | `make_layers.py` |
 | `vector_icons/` | Chromium `.icon` vector icons, at the same paths as Chromium's | `make_layers.py` |
+| `webui-product-icon.svg` | The one-colour silhouette on a 24 px canvas, for WebUI's inline `chrome-product` icon | `make_layers.py` |
 | `make_wordmark.py` | Writes the wordmark: the mark plus "Clair" in Albert Sans, as outlines | hand |
 | `wordmark.svg`, `wordmark-white.svg` | Wordmark with dark text, and with white text | `make_wordmark.py` |
 | `product-logos.txt` | Every Chromium file Clair replaces, and its source and size | hand |
@@ -32,6 +33,8 @@ scripts/render-icon-images.sh resources/icon/product-logos.txt resources/icon re
 - **Previews:** `make_layers.py --preview <dir>` also writes each `.icon` file back out as an SVG you can open.
 - **Font:** `make_wordmark.py` downloads Albert Sans (SIL Open Font License 1.1) from a pinned `google/fonts` commit into `resources/icon/.font-cache/`, which git ignores.
 - **Tools:** the render script needs `rsvg-convert` (`brew install librsvg`).
+
+WebUI's `chrome-product` icon is drawn from SVG paths written into Chromium's TypeScript, so no file is copied for it. `patches/helium/webui-logo-icons.patch` and `patches/clair/settings-logo-icons.patch` carry the paths from `webui-product-icon.svg`; after regenerating, replace the paths in both patches with the new ones.
 
 Commit the regenerated files together with the geometry change.
 
