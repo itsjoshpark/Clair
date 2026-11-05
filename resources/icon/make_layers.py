@@ -4,6 +4,7 @@
 Writes, relative to resources/icon/:
   AppIcon.icon/Assets/ring.svg, inlay.svg   Icon Composer layers (design D1)
   logo.svg, logo-mono.svg                   in-app product logos (design D5)
+  webui-product-icon.svg                    WebUI's inline chrome-product icon (design D6)
   vector_icons/<chromium path>.icon         Chromium vector icons (design D6)
 
 Strokes are outlined to filled shapes: the ring and hairline as exact arcs with
@@ -251,6 +252,9 @@ def main(argv):
     logo = fitted(256, 0.94)
     write(os.path.join(HERE, "logo.svg"), svg(256, mark(logo), "url(#gold)", gold_defs(logo)))
     write(os.path.join(HERE, "logo-mono.svg"), svg(256, mark(logo, full=False), MONO))
+    # WebUI's inline chrome-product icons, drawn at 20 and 24 px like the 24 px .icon files.
+    write(os.path.join(HERE, "webui-product-icon.svg"),
+          svg(24, mark(fitted(24, 0.92), full=False, samples=12), MONO))
 
     for rel, (sizes, coloured) in sorted(VECTOR_ICONS.items()):
         text = icon_file(sizes, coloured)
