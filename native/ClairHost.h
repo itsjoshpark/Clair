@@ -65,6 +65,10 @@ NS_SWIFT_NAME(ClairHost)
 // has happened, so the new version opens, and opens once.
 - (void)updateWillInstallOnQuit;
 
+// Opens `url`, chrome:// URLs included, in a new foreground tab of the most
+// recently active browser window, or in a new browser window if none is open.
+- (void)openURL:(NSURL *)url NS_SWIFT_NAME(open(_:));
+
 @end
 
 // What ClairUI.framework's principal class (NSPrincipalClass) implements.

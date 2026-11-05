@@ -33,7 +33,7 @@ Wherever a task needs a build, it means the CI build of the pull request, its lo
 - [ ] 4.3 Export the 1024 px image from the built app's icon and measure the ring. Verify that its outer diameter is 585 to 602 px and its center is 12 to 22 px right of center and within 2 px vertically.
 - [ ] 4.4 **(owner)** Check the Dock icon against a bright wallpaper in the light appearance. Verify that the gold ring's edge stays clearly visible. If it doesn't, deepen the light gold in Icon Composer and re-run 1.3.
 - [ ] 4.5 **(owner)** On macOS 15.6, install the CI artifact. Verify that the Dock and Finder show the gold mark on a light rounded-square tile, and that the open ring and curl are recognisable in Finder's list view at 16 px.
-- [ ] 4.6 Open About Clair, `chrome://settings/help` and `chrome://version` in the CI artifact. Verify that the first two show the gold ring, that `chrome://version` shows the Clair wordmark, and that Chromium's logo or wordmark appears on none of them.
+- [ ] 4.6 Open About Clair, `chrome://settings/help` and `chrome://version` in the CI artifact. Verify that the About Clair window shows the app icon on its tile, that `chrome://settings/help` shows the gold ring without the tile, that `chrome://version` shows the Clair wordmark, and that Chromium's logo or wordmark appears on none of them.
 - [ ] 4.7 Open a `chrome://` page in the CI artifact. Verify that the address bar's product icon is the one-color ring silhouette.
 - [ ] 4.8 Check `document.icns` in the built app. Verify whether it shows Chromium's logo, and record the result under Open Questions in `proposal.md`, either resolved or as a named follow-up change.
 

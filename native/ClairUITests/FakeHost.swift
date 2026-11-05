@@ -29,4 +29,10 @@ final class FakeHost: NSObject, ClairHost {
   func updateWillInstallOnQuit() {
     updateWillInstallOnQuitCount += 1
   }
+
+  private(set) var openedURLs: [URL] = []
+
+  func open(_ url: URL) {
+    openedURLs.append(url)
+  }
 }

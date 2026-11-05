@@ -2,6 +2,7 @@
 // You can use, redistribute, and/or modify this source code under
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
+import AppKit
 import ClairHost
 import Foundation
 import os
@@ -19,6 +20,10 @@ final class NativeLayer {
   /// Sparkle, once the layer is running inside Clair.app.
   private(set) var updates: UpdateController?
 
+  /// The About window behind "About Clair", once the layer is running inside
+  /// Clair.app.
+  private(set) var about: AboutWindowController?
+
   init(host: any ClairHost) {
     self.host = host
   }
@@ -29,6 +34,10 @@ final class NativeLayer {
     guard Bundle.main.bundleIdentifier == "dev.joshuapark.Clair" else {
       return
     }
+    let about = AboutWindowController(host: host, info: AboutInfo(bundle: .main, host: host))
+    about.install(in: NSApp.mainMenu)
+    self.about = about
+
     let updates = UpdateController(host: host, configuration: .current)
     updates.start()
     self.updates = updates

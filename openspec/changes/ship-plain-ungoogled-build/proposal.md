@@ -9,7 +9,7 @@ The pipeline has to keep work fast. A full Chromium build takes 25–30 hours on
 - the **engine**: the patched Chromium, built only when its inputs change, on the owner's Mac, and published as a prebuilt artifact
 - the **app**: Clair's native code, packaging, signing and updates, built in minutes on hosted runners against the prebuilt engine
 
-This change also adds a minimal native layer: a Swift framework that Chromium loads at start-up. It runs Sparkle and the update menu, so the fast app build is used from the first release, and so the updater needs no Chromium patches.
+This change also adds a minimal native layer: a Swift framework that Chromium loads at start-up. It runs Sparkle, the update menu and the About window, so the fast app build is used from the first release, and so the updater needs no Chromium patches.
 
 ## What Changes
 
@@ -30,7 +30,8 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
 - Add the native layer:
   - `ClairUI.framework`, written in Swift and built with Xcode, embedded in `Clair.app` at packaging time
   - one Chromium hook that loads it at start-up, and a small Objective-C header (`ClairHost.h`) through which it calls back into Chromium
-  - the window, tab strip, toolbar and menus stay Chromium's own in this change
+  - a native About window, in the style of Arc's, which "About Clair" opens instead of `chrome://settings/help`. It shows the app icon, the Clair version and build number, the engine versions, the copyright, credits links and the GPLv3 notice.
+  - the browser window, tab strip, toolbar and menus stay Chromium's own in this change, apart from the update item and the About window
 - Integrate Sparkle 2 auto-updates in the native layer. `Sparkle.framework` comes from the pinned Sparkle release and is embedded at packaging time. The native layer adds one update item to the Clair menu with AppKit, "Check for Updates…", which reads "Update Available…" while a downloaded update is waiting, as in Arc. A waiting update installs on quit, or on its own once the user has been idle for 30 minutes. Updates use an EdDSA-signed appcast and delta updates.
 - Build the engine as a prebuilt artifact:
   - an **engine key** is a hash over every engine input: the ungoogled-chromium pin, `downloads.ini`, the GN flags, `patches/`, the overlay, `ClairHost.h`, the compiled-in branding resources, and the scripts that prepare and build Chromium
@@ -57,12 +58,12 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
   - publishing to GitHub Releases
 - Capture an Arc behaviour reference in `arc-reference/`, because Arc stops working on 2026-12-22. It holds the menu and shortcut dump, a re-runnable script, filtered UI strings for the MVP features, a look-and-behaviour reference with screenshots (`look-and-behaviour.md`), how Dia (Arc's successor) is built on Chromium (`dia-architecture.md`), and Clair's decided menu bar and shortcuts (`clair-menus.md`). Change 1 itself ships Chromium's stock menus.
 
-**Out of scope for this change:** any Clair browser UI or feature work beyond the update menu; replacing Chromium's window; removing the password manager or autofill; Widevine/DRM; sync; Homebrew cask; crash reporting.
+**Out of scope for this change:** any Clair browser UI or feature work beyond the update menu and the About window; replacing Chromium's window; removing the password manager or autofill; Widevine/DRM; sync; Homebrew cask; crash reporting.
 
 ## Capabilities
 
 ### New Capabilities
-- `app-identity`: Clair's product identity and the identifiers that must stay stable. Covers name, bundle ID, data directory, keychain naming, version scheme, the About window showing the Clair and Chromium versions, and the supported platform (arm64, macOS 15.6+).
+- `app-identity`: Clair's product identity and the identifiers that must stay stable. Covers name, bundle ID, data directory, keychain naming, version scheme, the native About window showing the Clair and Chromium versions, and the supported platform (arm64, macOS 15.6+).
 - `chromium-engine`: The engine baseline. Clair runs ungoogled-chromium's privacy-preserving defaults and tracks upstream ungoogled-chromium releases, including security updates, without waiting on third-party macOS packaging.
 - `native-layer`: Clair's Swift framework inside Chromium. Covers loading it at start-up, the `ClairHost.h` contract it uses to reach Chromium, and building it without a Chromium checkout.
 - `software-updates`: In-app updates through Sparkle 2, in the style of Arc. Clair checks its appcast and downloads updates silently in the background, verifies EdDSA signatures, applies delta updates with a fallback to the full update, and installs on quit or while the user is idle. Updates appear in the Clair menu ("Check for Updates…", which becomes "Update Available…" with "Restart and Update"). There are no Sparkle windows and no update settings.

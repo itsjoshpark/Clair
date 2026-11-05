@@ -122,7 +122,8 @@ Chromium starts the native layer through `ClairHost.h`: it loads `ClairUI.framew
   - `CFBundleShortVersionString` = `version.txt`
   - `CFBundleVersion` = build number
 - An adapted `add-helium-versioning.patch` makes the About page and `chrome://version` read the Clair version and build number from the main bundle's `Info.plist` at run time, instead of from compile-time constants. They show them alongside the compiled-in Chromium version and ungoogled-chromium revision.
-- `patches/clair/versioning.patch` is that adaptation, and `overlay/chrome/browser/clair/clair_version.mm` holds the logic. Unlike Helium, it leaves `version_info` and the `IDS_SETTINGS_ABOUT_PAGE_BROWSER_VERSION` message alone, so translations and everything websites see stay as they are: the About page reads "Version 0.1.0 (123) (Official Build, ungoogled-chromium) (arm64)", with a second line, "Engine: Chromium … (ungoogled-chromium …)". `chrome://version` shows the Clair version in its first row and adds an "Engine" row.
+- `patches/clair/versioning.patch` is that adaptation, and `overlay/chrome/browser/clair/clair_version.mm` holds the logic. Unlike Helium, it leaves `version_info` and the `IDS_SETTINGS_ABOUT_PAGE_BROWSER_VERSION` message alone, so translations and everything websites see stay as they are: the About page reads "Version 0.1.0 (123) (Official Build) (arm64)", with a second line, "Engine: Chromium … (ungoogled-chromium …)". `chrome://version` shows the Clair version in its first row and adds an "Engine" row.
+- "About Clair" in the application menu opens `ClairUI`'s native About window rather than this page (D13). The page stays reachable from Settings and keeps both lines.
 - Everything that websites or extensions see (user agent, client hints, `minimum_chrome_version`) still uses the Chromium version.
 - **Build number** = `git rev-list --count` of the release commit, as in Front Row. It is never stored. A build from the release tag reproduces the same number. Builds that aren't releases use the count of `HEAD`.
 - Chromium may read the outer bundle's `CFBundleShortVersionString` elsewhere, for example when it locates its versioned framework directory, for app shims, or in `UpgradeDetector`. The builder finds every such read, using Helium's versioning and Sparkle patches as a map, and either confirms it is safe or patches it to use the Chromium version.
@@ -337,7 +338,8 @@ Handling:
   - the application menu reads "About Clair", "Hide Clair" and "Quit Clair", and contains "Check for Updates…"
   - `~/Library/Application Support/Clair` and a "Clair Safe Storage" keychain item are created, and no "Chromium Safe Storage" item is read or created
   - `navigator.userAgent` reports the engine's Chromium version and doesn't contain the Clair version
-  - the About page shows the Clair version and build number, and the Chromium version labelled as the engine
+  - `chrome://settings/help` shows the Clair version and build number, and the Chromium version labelled as the engine
+  - "About Clair" opens the native About window and no browser tab: it shows the Clair version and build number and the engine versions, choosing it again brings the same window forward, Cmd+W closes it and leaves the browser window open, and its link to Chromium's open source software opens `chrome://credits` in a tab
   - an idle first launch makes no requests to Google service hosts, checked with `--log-net-log`
   - "Check for Updates…" against local test appcasts, signed with the test key, reports "up to date" and "Clair X.Y.Z is ready" correctly, and the item then reads "Update Available…"
   - with an update waiting and a simulated idle period, Clair installs and relaunches, and doesn't while a download is in progress, an incognito window is open, or a tab is audible
@@ -347,6 +349,45 @@ Handling:
 - **On failure:** the quality run fails visibly on the `main` commit and opens or updates a GitHub issue labelled `quality-failure`. The issue names the commit, the failing tests and the run link, so an agent can be sent to fix it.
 - **Releases** run the quality checks for their own commit (D5) and stop on a failure. They never wait on, or skip, a run that's still in progress.
 - **Not covered:** visual appearance, layout and animation, which are checked by hand in the running app.
+
+### D13. Native About window
+
+"About Clair" opens a native window from `ClairUI`, as Arc's does, instead of Chromium's `chrome://settings/help` tab. It works with no browser window open, and it puts Clair's version first.
+
+```
++----------------------------------------------------------+
+| (x) ( ) ( )                                              |
++----------------------------------------------------------+
+|                        [app icon]                        |
+|                          Clair                           |
+|                                                          |
+|                   Version 0.1.0 (123)                    |
+|         Chromium Engine Version 156.0.8078.79            |
+|           (ungoogled-chromium 156.0.8078.79-1)           |
+|                                                          |
+|   Copyright 2026 The Clair Authors. All rights reserved. |
+|                                                          |
+|   Clair is made possible by the [Chromium] open source   |
+|   project, Chromium's [open source software], as well as |
+|   other [open source software]. It's free software under |
+|   the [GPLv3], with no warranty.                         |
++----------------------------------------------------------+
+```
+
+- **Contents and where they come from:**
+  - the app icon, `NSApp.applicationIconImage`, so it follows the system's icon appearance and shows the tile, as the Dock does
+  - "Version 0.1.0 (123)": `CFBundleShortVersionString` and `CFBundleVersion` from the main bundle's `Info.plist` (D3). Unlike the Settings page, it leaves out the build type and architecture.
+  - the engine line: `ClairHost`'s `chromiumVersion` and `ungoogledChromiumVersion`
+  - the copyright notice: `NSHumanReadableCopyright`, which Chromium writes into each language's `InfoPlist.strings` from `IDS_ABOUT_VERSION_COPYRIGHT` (`infoplist_strings_util.cc`), so it's localized and matches `chrome://settings/help`. Name substitution (D2) makes it "Copyright 2026 The Clair Authors. All rights reserved." `BRANDING`'s `COPYRIGHT` doesn't reach it, and `package.sh` doesn't need to write it.
+  - the credits and license line, with its links
+- **Links**, all opened in a Clair tab through `ClairHost`'s `-openURL:`: "Chromium" goes to `https://www.chromium.org`, "Chromium's open source software" to `chrome://credits`, "other open source software" to `CREDITS.md` on GitHub, and "GPLv3" to `https://www.gnu.org/licenses/gpl-3.0.html`. They go through the host because Chromium doesn't accept `chrome://` URLs from outside the browser, and `NSWorkspace` would open the web links in the default browser, which may not be Clair. `-openURL:` changes `ClairHost.h`, so it needs a new engine (D10). The window itself is app-only.
+- **The GPLv3 line:** Clair is GPLv3 (D8), and GPLv3 asks each interactive user interface to show "Appropriate Legal Notices": a copyright notice, that there is no warranty, and how to view the license. The About window is where Clair shows them.
+- **Window:** SwiftUI in an `NSWindow`. There is one instance, which "About Clair" brings to the front if it's already open. It has a fixed size, a close button only (minimize and zoom are disabled), and opens centered.
+- **Menu item:** at start-up, `ClairUI` retargets the application menu's first item, Chromium's "About Clair", to its own action, in the same step that inserts "Check for Updates…" below it (D4). That needs no Chromium patch. If the first item isn't titled "About Clair", `ClairUI` logs it and leaves the item alone, so it still opens `chrome://settings/help`.
+
+**Alternatives considered:**
+- Keeping `chrome://settings/help`, as Chromium does: rejected, because it opens a browser window just to show versions, and it reads as a settings page rather than Clair's own.
+- Patching Chromium's `IDC_ABOUT` command to call `ClairUI`: kept only as a fallback (see Risks), because retargeting the menu item needs no patch.
 
 ## Risks / Trade-offs
 
@@ -364,6 +405,8 @@ Handling:
   → Accepted, since Crest relies on it too. Fallback: `macos-26` with Xcode 27 installed in the job.
 - **[Risk] Main-menu changes:** Chromium may rebuild or reorder the main menu after `ClairUI` adds its items.
   → The quality suite checks the items. Fallback: a one-line hook in `main_menu_builder.mm` that calls into `ClairUI`.
+- **[Risk] Chromium's menu handling and the About window (D13):** the About window is the first window `ClairUI` shows. Chromium validates its menu items and sends many commands to the last active browser window, so it may undo the retargeted "About Clair" item, or Cmd+W and other shortcuts may act on a browser window behind the About window.
+  → The quality suite checks that "About Clair" opens the window and that Cmd+W closes only it. Fallbacks: a one-line hook in Chromium's `IDC_ABOUT` handling that calls into `ClairUI`, and key handling in the About window itself.
 - **[Risk] Sparkle and Chromium both want to relaunch.**
   → Only Chromium relaunches, and its relauncher waits for the installer (D4). The quality suite covers relaunch through `ClairHost`, and the release checklist covers the real update path.
 - **[Risk] An idle install interrupts something the user left running,** such as a long download, a call, or music.

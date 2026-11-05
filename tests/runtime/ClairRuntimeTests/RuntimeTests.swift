@@ -127,7 +127,7 @@ final class AppTests: RuntimeTestCase {
     XCTAssertFalse(userAgent.contains("Clair"), "The user agent names Clair: \(userAgent)")
   }
 
-  func testAboutPageShowsBothVersions() async throws {
+  func testSettingsHelpPageShowsBothVersions() async throws {
     let browser = try await startBrowser()
     let tab = try await browser.open("about:blank")
     defer { tab.close() }
@@ -158,6 +158,83 @@ final class AppTests: RuntimeTestCase {
       return expected.allSatisfy(text.contains)
     }
     XCTAssertTrue(shown, "chrome://settings/help doesn't show \(expected). It reads: \(text)")
+  }
+}
+
+/// "About Clair" opens ClairUI's About window, not a tab (design D13).
+@MainActor
+final class AboutWindowTests: RuntimeTestCase {
+  func testAboutClairOpensTheAboutWindow() async throws {
+    let browser = try await startBrowser()
+    let windowsBefore = try await browser.windowCount()
+    let tabsBefore = try await browser.pageTargets().map(\.url)
+
+    let about = try browser.openAboutWindow()
+    let expected = [
+      "Clair",
+      "Version \(fixture.version) (\(fixture.build))",
+      "Chromium Engine Version \(fixture.chromiumVersion) (ungoogled-chromium \(fixture.ungoogledVersion))",
+      "The Clair Authors",
+      "free software under the GPLv3, with no warranty",
+    ]
+    var text = ""
+    let shown = await Harness.wait(for: 10) {
+      text = browser.text(in: about)
+      return expected.allSatisfy(text.contains)
+    }
+    XCTAssertTrue(shown, "The About window doesn't show \(expected). It reads: \(text)")
+    let tabsAfter = try await browser.pageTargets().map(\.url)
+    XCTAssertEqual(tabsAfter, tabsBefore, "About Clair opened a tab")
+
+    // Choosing it again brings the same window forward.
+    _ = try browser.openAboutWindow()
+    XCTAssertEqual(browser.aboutWindows.count, 1, "About Clair opened a second window")
+
+    // Cmd+W closes the About window, not the browser window behind it.
+    browser.ui.typeKey("w", modifierFlags: .command)
+    XCTAssertTrue(about.waitForNonExistence(timeout: 10), "Cmd+W didn't close the About window")
+    let windowsAfter = try await browser.windowCount()
+    XCTAssertEqual(windowsAfter, windowsBefore, "Cmd+W closed a browser window")
+  }
+
+  func testCreditsOpenInATabOfTheBrowserWindow() async throws {
+    let browser = try await startBrowser()
+    let windowsBefore = try await browser.windowCount()
+    let about = try browser.openAboutWindow()
+    try browser.clickLink("open source software", index: 0, in: about)
+    try await requireTab(in: browser, beginningWith: "chrome://credits")
+
+    // The new tab's window came forward, so bring the About window back first.
+    _ = try browser.openAboutWindow()
+    try browser.clickLink("Chromium", in: about)
+    try await requireTab(in: browser, beginningWith: "https://www.chromium.org")
+    let windowsAfter = try await browser.windowCount()
+    XCTAssertEqual(windowsAfter, windowsBefore, "The links opened a new window instead of tabs")
+  }
+
+  func testCreditsOpenAWindowWhenNoneIsOpen() async throws {
+    let browser = try await startBrowser()
+    try await browser.closeAllTabs()
+
+    let about = try browser.openAboutWindow()
+    let noWindow = try await browser.pageTargets().isEmpty
+    XCTAssertTrue(noWindow, "About Clair opened a browser window")
+    try browser.clickLink("open source software", index: 0, in: about)
+    try await requireTab(in: browser, beginningWith: "chrome://credits")
+
+    try await browser.closeAllTabs()
+    _ = try browser.openAboutWindow()
+    try browser.clickLink("Chromium", in: about)
+    try await requireTab(in: browser, beginningWith: "https://www.chromium.org")
+  }
+
+  private func requireTab(in browser: Browser, beginningWith prefix: String) async throws {
+    var urls: [String] = []
+    let opened = await Harness.wait(for: 30) {
+      urls = try await browser.pageTargets().map(\.url)
+      return urls.contains { $0.hasPrefix(prefix) }
+    }
+    try require(opened, "No tab at \(prefix). Tabs: \(urls)")
   }
 
   func testFirstRunPageNamesClairAndItsDataFolder() async throws {
