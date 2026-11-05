@@ -81,7 +81,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
   Verify with a `workflow_dispatch` test job on `[self-hosted, clair-release]` that prints the toolchain versions and the internal disk's free space.
 - [x] 7.1 **(owner)** Add the secrets to a `release` environment limited to `main`: the Developer ID `.p12` (base64) and its password, a CI keychain password, and the App Store Connect API key ID, issuer and `.p8`; `SPARKLE_ED_PRIVATE_KEY` is from 4.1. Verify that a workflow step reports each secret as present without printing any value.
-- [ ] 7.2 Add `release.yml`. It has inputs `release-type` (auto, patch, minor or major) and `dry-run`, and `concurrency: release`. Its jobs are:
+- [x] 7.2 Add `release.yml`. It has inputs `release-type` (auto, patch, minor or major) and `dry-run`, and `concurrency: release`. Its jobs are:
   - `validate`, using the 6.3 script
   - `engine`, which downloads `chromium-engine-<key>`, or calls `engine.yml` and waits when it isn't published
   - `quality`, which calls `quality.yml` unless it has already passed for the commit
