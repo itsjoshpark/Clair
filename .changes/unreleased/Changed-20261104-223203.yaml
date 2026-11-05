@@ -1,0 +1,3 @@
+kind: Changed
+body: macOS's local network permission prompt now explains why Clair asks for access
+time: 2026-11-04T22:32:03.764169-05:00
