@@ -105,21 +105,47 @@ A few things in the suite look odd, for reasons that aren't obvious:
 
 ## Editing patches
 
-Clair's patch series is `patches/series`. Paths in it are relative to `patches/`, and it is applied after ungoogled-chromium's own series. To edit or add a patch, use quilt on a fetched, unpatched source tree:
+Clair's patch series is `patches/series`. Paths in it are relative to `patches/`, and it is applied after ungoogled-chromium's own series, so that series has to be applied first. To edit or add a patch, use quilt (`brew install quilt`) on a fetched source tree:
 
 ```sh
 ./build.sh fetch
 cd build/src
-export QUILT_PATCHES="$PWD/../../patches" QUILT_SERIES=series
+python3 ../../ungoogled-chromium/utils/patches.py apply . ../../ungoogled-chromium/patches
+# QUILTRC=- skips quilt's own config, which would replace these settings.
+export QUILTRC=- QUILT_PATCHES="$PWD/../../patches" QUILT_SERIES=series
 export QUILT_REFRESH_ARGS="-p ab --no-timestamps --no-index"
 quilt push -a       # apply Clair's patches one by one
+```
+
+To change an existing patch, go back to it, edit, and save the change. Use `quilt add <file>` first if the patch doesn't touch that file yet:
+
+```sh
+quilt pop clair/my-change.patch
+# edit the file...
+quilt refresh
+```
+
+To add a patch, start it where it belongs in the series. `quilt new` adds it to `patches/series` after the current patch:
+
+```sh
 quilt new clair/my-change.patch
 quilt add path/to/file.cc
 # edit the file...
 quilt refresh
 ```
 
-Clair's series assumes ungoogled-chromium's patches are already applied. Apply those first with `python3 ../../ungoogled-chromium/utils/patches.py apply . ../../ungoogled-chromium/patches`, then use quilt for Clair's.
+`git diff patches/` should show only your change, plus any hunk line numbers that quilt updated. Then rebuild the engine from a branch of this repository:
+
+```sh
+git switch -c fix/my-change
+git add patches && git commit -m "fix: describe the change"
+git push -u origin fix/my-change
+gh workflow run engine.yml -f ref=fix/my-change
+gh run list --workflow engine.yml --limit 1   # gives the run ID
+gh run view <run ID> --log
+```
+
+The owner's Mac doesn't fetch Chromium by hand, because that's left to `engine.yml`. To write a patch there, read the engine workspace without changing it, in `~/Developer/clair-actions-runner/_work/Clair/Clair/build/`. Diff against `build/base`, the source before Clair's patches. `build/src` has had name and domain substitution applied, so its context lines won't match.
 
 ## Adding new source files: the overlay
 
