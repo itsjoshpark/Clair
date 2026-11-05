@@ -119,11 +119,11 @@ if ! gh release create "$tag" --repo "$repo" --draft --verify-tag --title "$tag"
   die "tag $tag is pushed, but creating the GitHub Release failed, and main is unchanged. Delete the tag and any draft (git push origin :$tag), then run the release again."
 fi
 gh release edit "$tag" --repo "$repo" --draft=false --latest ||
-  die "the Release for $tag is still a draft, and main is unchanged. Publish it, then push the tagged commit to main: git fetch origin tag $tag && git push origin $tag:main"
+  die "the Release for $tag is still a draft, and main is unchanged. Publish it (gh release edit $tag --draft=false --latest), then bring the tagged commit to main through a pull request, as docs/releasing.md describes."
 
 # --- main last --------------------------------------------------------------------
 stranded() {
-  die "$1 The Release is public, but installed copies won't be offered it until the appcast is on main. Cherry-pick the tagged commit onto main: git fetch origin tag $tag && git cherry-pick $tag"
+  die "$1 The Release is public, but installed copies won't be offered it until the appcast is on main. Bring the tagged commit to main through a pull request, as docs/releasing.md describes."
 }
 for attempt in 1 2 3; do
   if git push -q origin HEAD:main; then

@@ -7,6 +7,8 @@ A release runs from `main` through `.github/workflows/release.yml`, mostly on th
 - **Notes:** `.changes/unreleased/` needs at least one Changie fragment. User-facing pull requests add their own; see [`.changes/README.md`](../.changes/README.md).
 - **Runner:** the owner's Mac must be online, with its runner started (`./run.sh`).
 - **Certificate:** the Developer ID certificate expires on 2027-02-01. The release warns in the last 30 days and stops once it has expired.
+- **Quality checks:** if `quality.yml` is still running for the commit after its merge, wait for it. Otherwise the release runs the whole suite again.
+- **`main`:** merge nothing between the dry run you test and the release being published. The release ships `main` as it is when you start it, and stops if `main` moves before the Release is created.
 
 ## Start a release
 
@@ -28,19 +30,62 @@ With `auto`, a `New` fragment bumps the minor version and the other kinds bump t
 
 A dry run stops after `package` and leaves the DMG as a workflow artifact. It adds no tag, Release or appcast change.
 
-If `main` moves before the Release is created, `publish` stops with nothing published, so run the release again. If a run fails after the Release exists, its error says how to get the appcast onto `main`.
+If `publish` fails, see [If `publish` fails](#if-publish-fails).
 
 ## Manual release checklist
 
-The quality checks can't cover these, so run them on the dry-run DMG, on a clean Mac or user account:
+The quality checks can't cover these. Run them on a dry-run DMG of the commit you are about to release:
+
+1. Start a dry run from `main` and wait for it to finish.
+2. On a Mac or user account that has never run Clair, sign in to GitHub in Safari, open the dry run's page and download the `clair-<version>` artifact. To get a fresh account, add a standard user in System Settings > Users & Groups, and delete it afterwards. Use a browser, because the first item needs the quarantine flag it adds, and `gh run download` doesn't add it.
+3. Unzip the artifact, open `Clair-<version>-arm64.dmg`, drag Clair to Applications and open it from there.
 
 - [ ] The notarized DMG opens after only the standard downloaded-from-the-internet prompt
 - [ ] A CRX installs through the extension MIME flag
 - [ ] ungoogled-chromium's default settings are in place
 - [ ] System Settings lists Clair as a default browser, and a link from another app opens in it
 - [ ] Opening a page on the local network makes macOS ask for access, with the text "Clair uses your local network to access websites and devices on your network."
-- [ ] The update path works with Developer ID-signed builds: a delta downloads in the background, Restart and Update restores the session, quitting installs the update, and so do 30 idle minutes
 - [ ] Sparkle rejects a release signed by a different team
+
+Then start the real release from the same commit.
+
+## After publishing
+
+- [ ] The GitHub Release for `v<version>` is published and marked latest. It has the DMG, a delta for each of up to three previous releases, and `Clair-<version>-SHA256SUMS.txt`. Its notes end with the version, build number, ungoogled-chromium tag and engine key.
+- [ ] The checksums match: download the assets with `gh release download v<version> --dir <dir>`, then run `shasum -a 256 -c Clair-<version>-SHA256SUMS.txt` in that directory.
+- [ ] `main` ends with `chore: release <version> (<build>) [skip ci]`, tagged `v<version>`, and its appcast entry's links resolve:
+
+  ```sh
+  curl -fsL https://github.com/itsjoshpark/Clair/raw/main/.sparkle/appcast.xml |
+    grep -o 'url="[^"]*"' | cut -d'"' -f2 | xargs -n1 curl -fsIL -o /dev/null -w '%{http_code} %{url_effective}\n'
+  ```
+
+- [ ] The DMG from the Release opens on a clean Mac or user account, as in the checklist above.
+- [ ] From the second release on, the update path works with Developer ID-signed builds. Do this on an account running the previous release: a delta downloads in the background, Restart and Update restores the session, quitting installs the update, and so do 30 idle minutes. Release packages ignore the test feed, so only a published release can test this.
+
+## If `publish` fails
+
+`publish` has no partial reruns. Its error says which case you're in:
+
+| Error | State | What to do |
+|---|---|---|
+| "main moved during the release, so nothing was published" | Nothing left the Mac | Run the release again |
+| "creating the GitHub Release failed" | The tag is pushed, and `main` is unchanged | Delete any draft (`gh release delete v<version> --yes`) and the tag (`git push origin :refs/tags/v<version>`), then run the release again |
+| "the Release for v<version> is still a draft" | The Release has every asset, but `main` is unchanged | Publish it (`gh release edit v<version> --draft=false --latest`), then bring the release commit to `main` as below |
+| "The Release is public, but installed copies won't be offered it" | The Release is public, but the appcast isn't on `main` | Bring the release commit to `main` as below |
+
+Until the appcast entry is on `main`, installed copies aren't offered the release, but nothing points at a missing file. Only the deploy key can push past `main`'s ruleset, so go through a pull request. Its head can't be the release commit itself: that commit's `[skip ci]` would keep the required checks from running. Cherry-pick it and drop `[skip ci]` from the message:
+
+```sh
+git fetch origin main && git fetch origin tag v<version>
+git switch -c release/v<version> origin/main
+git cherry-pick v<version>
+git commit --amend -m "chore: release <version> (<build>)"
+git push -u origin release/v<version>
+gh pr create --title "chore: release <version> (<build>)" --body "Brings v<version>'s appcast entry to main."
+```
+
+Merge it once its checks pass. The tag stays on the original commit, which is what the Release was built from.
 
 ## Secrets
 
