@@ -39,6 +39,12 @@ concurrency:
 env:
   CHANGIE_VERSION: v1.26.0
 
+# Naming bash turns on pipefail, which the default shell doesn't. Steps here pipe
+# scripts into tee, and without it a script's refusal would count as success.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   validate:
     name: Validate
