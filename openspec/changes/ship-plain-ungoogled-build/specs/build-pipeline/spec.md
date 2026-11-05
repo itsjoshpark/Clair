@@ -72,6 +72,10 @@ A pull request that changes the engine key SHALL also run a patch check on a Git
 - **WHEN** a pull request bumps the ungoogled-chromium tag and one Clair patch no longer applies
 - **THEN** the patch check fails and names that patch
 
+#### Scenario: Context around a patch changed
+- **WHEN** one context line of a patch in `patches/series` no longer matches the source, including a hunk's outermost line
+- **THEN** the patch check fails and names that patch, because Clair's series is applied with no fuzz
+
 #### Scenario: Engine not yet built
 - **WHEN** an engine pull request's patch check passes but its engine has not been published
 - **THEN** the engine check fails with a message naming the key and the command to build it, and the pull request can't merge
