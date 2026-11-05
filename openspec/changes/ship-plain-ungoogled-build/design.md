@@ -251,7 +251,7 @@ Handling:
 
   Every check runs by default, so a release can't skip one by accident. The quality checks pass `--skip-signing`, and `engine.yml` passes `--engine` for the identity checks alone.
 - **Runtime behaviour** is covered by the quality checks (D12).
-- **A manual release checklist** keeps only what the quality checks can't do on a hosted runner: a clean Mac's first open of the notarized DMG, default-browser registration, the real Developer ID update path (deltas, install on quit, Restart and Update, install while idle), and Sparkle's rejection of a release signed by a different team.
+- **A manual release checklist** keeps only what the quality checks can't do on a hosted runner: a clean Mac's first open of the notarized DMG, default-browser registration, and the real Developer ID update path (deltas, install on quit, Restart and Update, install while idle), which needs a published release because release packages ignore the test feed.
 
 ### D8. Attribution and licensing
 

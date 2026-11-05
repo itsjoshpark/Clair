@@ -110,4 +110,11 @@ Make a delta with Sparkle's tool, which `fetch-sparkle.sh` puts in `build/sparkl
 build/sparkle/bin/BinaryDelta create "$work/old/Clair.app" "$work/new/Clair.app" "$work/feed/100-101.delta"
 ```
 
-An ad hoc package logs that its code signature doesn't match the old version's. That's expected: Sparkle accepts the update because its EdDSA signature is valid. A Developer ID build has to be signed by the same team too, which only the release path can test.
+An ad hoc package logs that its code signature doesn't match the old version's. That's expected: Sparkle accepts the update because its EdDSA signature is valid.
+
+Release builds follow the same rule. Sparkle accepts an update when either signature carries over:
+
+- its EdDSA signature verifies against the running app's key, and the new app's code signature is valid, whatever its team
+- the new app is signed by the same Developer ID team, and its EdDSA signature verifies against the new app's own key
+
+So one release can move to a new Developer ID team or to a new EdDSA key, but not both (Sparkle's `SUUpdateValidator.m`). The EdDSA key is what tells Clair's updates apart. A different team's build signed with Clair's key would install, which is one more reason the private key must stay secret.

@@ -45,7 +45,6 @@ The quality checks can't cover these. Run them on a dry-run DMG of the commit yo
 - [ ] ungoogled-chromium's default settings are in place
 - [ ] System Settings lists Clair as a default browser, and a link from another app opens in it
 - [ ] Opening a page on the local network makes macOS ask for access, with the text "Clair uses your local network to access websites and devices on your network."
-- [ ] Sparkle rejects a release signed by a different team
 
 Then start the real release from the same commit.
 

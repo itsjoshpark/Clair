@@ -81,14 +81,18 @@ While no downloaded update is waiting, the Clair application menu's update item 
 - **THEN** an alert says the check failed, and nothing changes
 
 ### Requirement: Update signature verification
-Clair SHALL install an update only if its EdDSA signature verifies against the Sparkle public key embedded in the running app. The new app SHALL also carry a valid Developer ID signature from the same Apple team as the running app. An update failing either check MUST be rejected and left uninstalled.
+Clair SHALL install an update only if the new app carries a valid code signature and either of these holds:
+- its EdDSA signature verifies against the Sparkle public key embedded in the running app
+- the new app is signed by the same Apple team as the running app, and its EdDSA signature verifies against the new app's own public key, as when the EdDSA key is rotated
+
+An update that meets neither MUST be rejected and left uninstalled. One update can change the Developer ID team or the EdDSA key, not both.
 
 #### Scenario: Tampered update is rejected
 - **WHEN** a downloaded update's file does not match its EdDSA signature in the appcast
 - **THEN** Clair refuses to install it, the Clair menu doesn't show "Update Available…" for it, and Clair keeps running the current version unchanged
 
 #### Scenario: Valid update is installed
-- **WHEN** a downloaded update's EdDSA signature verifies and its app is signed by the same Developer ID team
+- **WHEN** a downloaded update's EdDSA signature verifies against the running app's key and its app has a valid code signature
 - **THEN** Clair installs it
 
 ### Requirement: Only newer, compatible releases are offered
