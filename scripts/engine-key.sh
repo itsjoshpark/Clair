@@ -31,7 +31,7 @@ logo_list="$icon_dir/product-logos.txt"
 inputs=(
   build.sh retrieve_and_unpack_resource.py 'downloads*.ini' 'flags*.gn'
   patches overlay utils native/ClairHost.h
-  scripts/engine-key.sh scripts/apply-overlay.sh scripts/compile-icon.sh
+  scripts/engine-key.sh scripts/apply-overlay.sh scripts/compile-icon.sh scripts/patch-no-fuzz.sh
   scripts/replace-icon-resources.sh scripts/install-native-contract.sh
   "$icon_dir/AppIcon.icon" "$icon_dir/logos" "$icon_dir/vector_icons" "$logo_list"
 )

@@ -117,7 +117,10 @@ clear_base() {
 # and logos, and domain substitution, applied to the tree in $1.
 apply_layer() {
   local tree="$1"
-  python3 "$_main_repo/utils/patches.py" apply "$tree" "$_root_dir/patches"
+  # Without fuzz, so a patch whose context has changed stops here. Upstream's own
+  # series keeps patch's defaults, since upstream tests it with them.
+  PATCH_BIN="$_root_dir/scripts/patch-no-fuzz.sh" \
+    python3 "$_main_repo/utils/patches.py" apply "$tree" "$_root_dir/patches"
   # Add Clair's new source files. Fails and names the file if one would shadow
   # a file that Chromium or a patch already has.
   "$_root_dir/scripts/apply-overlay.sh" "$tree" "$_root_dir/overlay"

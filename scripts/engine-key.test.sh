@@ -40,6 +40,7 @@ covered=(
   utils/name_substitution.py
   native/ClairHost.h
   scripts/apply-overlay.sh
+  scripts/patch-no-fuzz.sh
   scripts/compile-icon.sh
   scripts/replace-icon-resources.sh
   scripts/install-native-contract.sh
