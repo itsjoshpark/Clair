@@ -15,7 +15,7 @@ The application SHALL present itself as "Clair". This applies to the app bundle 
 
 #### Scenario: No Chromium branding in user-facing chrome
 - **WHEN** a user opens the About screen, the application menu, or a new window
-- **THEN** none of them shows "Chromium" as the product name, except where the Chromium version is labelled as the engine version
+- **THEN** none of them shows "Chromium" as the product name. The About screen may still label the Chromium version as the engine version and credit the Chromium open source project
 
 ### Requirement: Stable bundle identifier
 The application SHALL use the bundle identifier `dev.joshuapark.Clair`. Every helper app inside the bundle SHALL use an identifier prefixed with `dev.joshuapark.Clair.`. These identifiers MUST NOT change in later releases.
