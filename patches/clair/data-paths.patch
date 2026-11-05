@@ -1,0 +1,124 @@
+# Keep Clair to its own data and configuration: the places Chromium looks for or
+# writes data outside its profile folder now name Clair, so Clair can't pick up
+# another browser's files, or leave its own in another browser's folders. Found
+# by tracing a first launch with fs_usage and searching the framework's strings.
+#
+# - Initial preferences: /Library/Application Support/Chromium
+# - External extensions: /Library/Application Support/Google/Chrome
+# - Native messaging hosts: /Library/Application Support/Chromium
+# - Brand code: /Library/Google and ~/Library/Google
+# - Cloud management: /Library/Google/Chrome, ~/Library/Application Support/Google
+#   and the managed preferences of com.google.Chrome
+# - Web app shortcuts: ~/Applications/Chromium Apps.localized
+# - Device-bound session keys: the org.chromium.Chromium keychain access group
+
+--- a/chrome/common/chrome_paths.cc
++++ b/chrome/common/chrome_paths.cc
+@@ -434,8 +434,7 @@
+         return false;
+       }
+ 
+-      cur = cur.Append(FILE_PATH_LITERAL("Google"))
+-                .Append(FILE_PATH_LITERAL("Chrome"))
++      cur = cur.Append(FILE_PATH_LITERAL("Clair"))
+                 .Append(FILE_PATH_LITERAL("External Extensions"));
+ #else
+       if (!base::PathService::Get(base::DIR_MODULE, &cur)) {
+@@ -460,7 +459,7 @@
+           "/Library/Google/ChromeForTesting/NativeMessagingHosts"));
+ #else
+       cur = base::FilePath(FILE_PATH_LITERAL(
+-          "/Library/Application Support/Chromium/NativeMessagingHosts"));
++          "/Library/Application Support/Clair/NativeMessagingHosts"));
+ #endif
+ #else  // BUILDFLAG(IS_MAC)
+ #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+--- a/chrome/browser/mac/initial_prefs.mm
++++ b/chrome/browser/mac/initial_prefs.mm
+@@ -28,9 +28,9 @@
+     "Google Chrome Master Preferences";
+ #else
+ const NSSearchPathDirectory kSearchPath = NSApplicationSupportDirectory;
+-const char kInitialPreferencesDirectory[] = "Chromium";
+-const char kInitialPreferencesFileName[] = "Chromium Initial Preferences";
+-const char kLegacyInitialPreferencesFileName[] = "Chromium Master Preferences";
++const char kInitialPreferencesDirectory[] = "Clair";
++const char kInitialPreferencesFileName[] = "Clair Initial Preferences";
++const char kLegacyInitialPreferencesFileName[] = "Clair Master Preferences";
+ #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+ 
+ }  // namespace
+--- a/chrome/browser/google/google_brand_mac.mm
++++ b/chrome/browser/google/google_brand_mac.mm
+@@ -37,7 +37,8 @@
+   // If there is a system brand file, use it.
+   NSFileManager* fm = NSFileManager.defaultManager;
+   NSString* system_brand_file =
+-      [@"/Library/Google/Google Chrome Brand.plist" stringByStandardizingPath];
++      [@"/Library/Application Support/Clair/Clair Brand.plist"
++          stringByStandardizingPath];
+   if ([fm fileExistsAtPath:system_brand_file]) {
+     return ReadBrandFile(system_brand_file);
+   }
+@@ -62,7 +63,8 @@
+ 
+   // Otherwise, use the user brand code file, if present.
+   NSString* user_brand_file =
+-      [@"~/Library/Google/Google Chrome Brand.plist" stringByStandardizingPath];
++      [@"~/Library/Application Support/Clair/Clair Brand.plist"
++          stringByStandardizingPath];
+   if ([fm fileExistsAtPath:user_brand_file]) {
+     return ReadBrandFile(user_brand_file);
+   }
+--- a/chrome/browser/policy/browser_dm_token_storage_mac.mm
++++ b/chrome/browser/policy/browser_dm_token_storage_mac.mm
+@@ -43,23 +43,23 @@
+ namespace {
+ 
+ const char kDmTokenBaseDir[] =
+-    FILE_PATH_LITERAL("Google/Chrome Cloud Enrollment/");
++    FILE_PATH_LITERAL("Clair/Cloud Enrollment/");
+ const CFStringRef kEnrollmentTokenPolicyName =
+     CFSTR("CloudManagementEnrollmentToken");
+ const char kEnrollmentTokenFilePath[] =
+-    FILE_PATH_LITERAL("/Library/Google/Chrome/CloudManagementEnrollmentToken");
++    FILE_PATH_LITERAL("/Library/Application Support/Clair/CloudManagementEnrollmentToken");
+ 
+ // Enrollment Mandatory Option
+ const CFStringRef kEnrollmentMandatoryOptionPolicyName =
+     CFSTR("CloudManagementEnrollmentMandatory");
+ const char kEnrollmentOptionsFilePath[] = FILE_PATH_LITERAL(
+-    "/Library/Google/Chrome/CloudManagementEnrollmentOptions");
++    "/Library/Application Support/Clair/CloudManagementEnrollmentOptions");
+ const char kEnrollmentMandatoryOption[] = "Mandatory";
+ 
+ // Explicitly access the "com.google.Chrome" bundle ID, no matter what this
+ // app's bundle ID actually is. All channels of Chrome should obey the same
+ // policies.
+-const CFStringRef kBundleId = CFSTR("com.google.Chrome");
++const CFStringRef kBundleId = CFSTR("dev.joshuapark.Clair");
+ 
+ constexpr char kEnrollmentTokenMetricsName[] =
+     "Enterprise.CloudManagementEnrollmentTokenLocation.Mac";
+--- a/chrome/browser/web_applications/os_integration/mac/apps_folder_support.mm
++++ b/chrome/browser/web_applications/os_integration/mac/apps_folder_support.mm
+@@ -38,7 +38,7 @@
+ std::atomic<bool> g_have_localized_app_dir_name{false};
+ 
+ base::FilePath GetLocalizableAppShortcutsSubdirName() {
+-  static const char kChromiumAppDirName[] = "Chromium Apps.localized";
++  static const char kChromiumAppDirName[] = "Clair Apps.localized";
+   static const char kChromeAppDirName[] = "Chrome Apps.localized";
+   static const char kChromeCanaryAppDirName[] = "Chrome Canary Apps.localized";
+ 
+--- a/net/device_bound_sessions/unexportable_key_service_factory.cc
++++ b/net/device_bound_sessions/unexportable_key_service_factory.cc
+@@ -27,7 +27,7 @@
+ #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+           "EQHXZ8M8AV.com.google.Chrome"
+ #else
+-          ".org.chromium.Chromium"
++          ".dev.joshuapark.Clair"
+ #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+           ".unexportable-keys",
+ #endif  // BUILDFLAG(IS_MAC)

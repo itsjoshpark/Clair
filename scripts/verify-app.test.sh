@@ -103,6 +103,17 @@ stray="$app/Contents/Frameworks/Other.framework/Updater.app"
 write_plist "$stray/Contents/Info.plist" org.sparkle-project.Sparkle.Updater Updater ""
 expect "an app outside Sparkle.framework still needs Clair's prefix" fail "$app" "Updater.app has identifier"
 
+for string in "Application Support/Chromium/NativeMessagingHosts" "Chromium Apps.localized" \
+  "/Library/Google/Chrome/CloudManagementEnrollmentToken"; do
+  app="$(make_app "$workdir/foreign" Clair dev.joshuapark.Clair Clair 15.6 dev.joshuapark.Clair.helper arm64.bin)"
+  printf '%s' "$string" >>"$app/Contents/Frameworks/Clair Framework.framework/Versions/A/Clair Framework"
+  expect "a framework naming '$string' fails" fail "$app" "names another browser's location"
+done
+
+app="$(make_app "$workdir/noframework" Clair dev.joshuapark.Clair Clair 15.6 dev.joshuapark.Clair.helper arm64.bin)"
+rm "$app/Contents/Frameworks/Clair Framework.framework/Versions/A/Clair Framework"
+expect "a package with no framework binary fails" fail "$app" "no Clair Framework binary found"
+
 if "$verify" "$workdir/missing.app" >/dev/null 2>&1; then
   check "rejects a missing app" fail
 else

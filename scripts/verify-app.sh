@@ -139,6 +139,36 @@ elif (( bad_machos == 0 )); then
   pass "all $machos Mach-O files are arm64 only"
 fi
 
+# --- other browsers' folders ------------------------------------------------------
+# Clair keeps to its own data and configuration (patches/clair/data-paths.patch and
+# first-run-page.patch). A Chromium update could add these back.
+foreign_strings=(
+  "Application Support/Chromium"
+  "Chromium Initial Preferences"
+  "Chromium Apps.localized"
+  "Google Chrome Brand.plist"
+  "Library/Google/Chrome"
+  "Chrome Cloud Enrollment"
+  ".org.chromium.Chromium.unexportable-keys"
+)
+frameworks=0
+while IFS= read -r -d '' file; do
+  frameworks=$((frameworks + 1))
+  found=0
+  for string in "${foreign_strings[@]}"; do
+    if grep -aqF -- "$string" "$file"; then
+      fail "Clair Framework names another browser's location: $string"
+      found=$((found + 1))
+    fi
+  done
+  if (( found == 0 )); then
+    pass "Clair Framework names no other browser's locations"
+  fi
+done < <(find "$app/Contents/Frameworks" -type f -name 'Clair Framework' -print0 2>/dev/null)
+if (( frameworks == 0 )); then
+  fail "no Clair Framework binary found"
+fi
+
 # --- version and updates --------------------------------------------------------
 if $packaged; then
   if [[ -z "$version" ]]; then

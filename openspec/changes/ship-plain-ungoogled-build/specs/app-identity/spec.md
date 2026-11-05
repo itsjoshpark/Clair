@@ -35,6 +35,18 @@ The application SHALL store profile data under `~/Library/Application Support/Cl
 - **WHEN** Clair is launched for the first time on a Mac with no previous Clair data
 - **THEN** a default profile is created under `~/Library/Application Support/Clair`
 
+#### Scenario: A first launch stays out of other browsers' folders
+- **WHEN** Clair launches for the first time on a Mac where other Chromium-based browsers have data or configuration
+- **THEN** it reads and writes none of it. System-wide configuration that Chromium would read from `/Library/Application Support/Chromium`, `/Library/Application Support/Google/Chrome` or `/Library/Google` (initial preferences, external extensions, native messaging hosts, brand code and cloud management enrollment) comes only from `/Library/Application Support/Clair`
+
+#### Scenario: Web app shortcuts
+- **WHEN** a user installs a web app
+- **THEN** its shortcut goes in `~/Applications/Clair Apps.localized`
+
+#### Scenario: The first run page
+- **WHEN** Clair shows its first run page
+- **THEN** the page's title and heading name Clair, and its dictionaries location is `~/Library/Application Support/Clair/Dictionaries/`
+
 #### Scenario: Side by side with another Chromium build
 - **WHEN** Clair and an ungoogled-chromium or Chromium build are installed and running at the same time
 - **THEN** both run as separate instances with separate profiles, and neither opens the other's profile or blocks its launch through the other's single-instance lock
@@ -80,7 +92,7 @@ The About Clair screen (which Chromium shows as its About settings page) SHALL s
 
 #### Scenario: Opening About Clair
 - **WHEN** a user chooses "About Clair" from the application menu
-- **THEN** the About screen shows the Clair version, for example "0.1.0 (123)", and separately the Chromium version, for example "Chromium 156.0.8078.47 (ungoogled-chromium 156.0.8078.47-1)"
+- **THEN** the About screen shows the Clair version and build type, for example "Version 0.1.0 (123) (Official Build) (arm64)", and separately the Chromium version, for example "Engine: Chromium 156.0.8078.47 (ungoogled-chromium 156.0.8078.47-1)"
 
 ### Requirement: Supported platform
 The application SHALL be built for Apple Silicon (arm64) only and SHALL declare a minimum macOS version of 15.6 (Sequoia).
