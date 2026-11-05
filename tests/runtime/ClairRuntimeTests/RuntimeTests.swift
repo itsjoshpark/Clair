@@ -159,6 +159,44 @@ final class AppTests: RuntimeTestCase {
     }
     XCTAssertTrue(shown, "chrome://settings/help doesn't show \(expected). It reads: \(text)")
   }
+
+  func testFirstRunPageNamesClairAndItsDataFolder() async throws {
+    let browser = try await startBrowser()
+    let tab = try await browser.open("about:blank")
+    defer { tab.close() }
+    try await tab.navigate(to: "chrome://ungoogled-first-run")
+    let title = try await tab.evaluate("document.title") as? String
+    XCTAssertEqual(title, "Welcome to Clair")
+    let text = try await tab.evaluate("document.documentElement.textContent") as? String ?? ""
+    XCTAssertTrue(text.contains("~/Library/Application Support/Clair/Dictionaries/"), text)
+    XCTAssertFalse(text.contains("Application Support/Chromium"), text)
+    XCTAssertFalse(text.contains("first run page"), text)
+  }
+
+  func testIdleFirstLaunchMakesNoGoogleRequests() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "clair-netlog-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let log = directory.appending(path: "netlog.json")
+    let browser = try await startBrowser(feed: upToDateFeed, arguments: ["--log-net-log=\(log.path)"])
+    try await Task.sleep(for: .seconds(60))
+    // Proves the log records requests. It comes after the idle period, and the
+    // page is local.
+    let tab = try await browser.open(page)
+    tab.close()
+    try await browser.quit()
+
+    let contents = try String(contentsOf: log, encoding: .utf8)
+    // The events come after the constants, which name hosts that nothing asked for.
+    guard let events = contents.range(of: "\"events\": [") else {
+      return XCTFail("The net log has no events")
+    }
+    let hosts = NetLog.hosts(in: String(contents[events.upperBound...]))
+    print("Hosts in the net log: \(hosts.sorted())")
+    XCTAssertTrue(hosts.contains("localhost"), "The net log didn't record the test page's request")
+    let google = hosts.filter(NetLog.isGoogleService)
+    XCTAssertTrue(google.isEmpty, "An idle first launch contacted \(google.sorted())")
+  }
 }
 
 /// "About Clair" opens ClairUI's About window, not a tab (design D13).
@@ -235,44 +273,6 @@ final class AboutWindowTests: RuntimeTestCase {
       return urls.contains { $0.hasPrefix(prefix) }
     }
     try require(opened, "No tab at \(prefix). Tabs: \(urls)")
-  }
-
-  func testFirstRunPageNamesClairAndItsDataFolder() async throws {
-    let browser = try await startBrowser()
-    let tab = try await browser.open("about:blank")
-    defer { tab.close() }
-    try await tab.navigate(to: "chrome://ungoogled-first-run")
-    let title = try await tab.evaluate("document.title") as? String
-    XCTAssertEqual(title, "Welcome to Clair")
-    let text = try await tab.evaluate("document.documentElement.textContent") as? String ?? ""
-    XCTAssertTrue(text.contains("~/Library/Application Support/Clair/Dictionaries/"), text)
-    XCTAssertFalse(text.contains("Application Support/Chromium"), text)
-    XCTAssertFalse(text.contains("first run page"), text)
-  }
-
-  func testIdleFirstLaunchMakesNoGoogleRequests() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "clair-netlog-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let log = directory.appending(path: "netlog.json")
-    let browser = try await startBrowser(feed: upToDateFeed, arguments: ["--log-net-log=\(log.path)"])
-    try await Task.sleep(for: .seconds(60))
-    // Proves the log records requests. It comes after the idle period, and the
-    // page is local.
-    let tab = try await browser.open(page)
-    tab.close()
-    try await browser.quit()
-
-    let contents = try String(contentsOf: log, encoding: .utf8)
-    // The events come after the constants, which name hosts that nothing asked for.
-    guard let events = contents.range(of: "\"events\": [") else {
-      return XCTFail("The net log has no events")
-    }
-    let hosts = NetLog.hosts(in: String(contents[events.upperBound...]))
-    print("Hosts in the net log: \(hosts.sorted())")
-    XCTAssertTrue(hosts.contains("localhost"), "The net log didn't record the test page's request")
-    let google = hosts.filter(NetLog.isGoogleService)
-    XCTAssertTrue(google.isEmpty, "An idle first launch contacted \(google.sorted())")
   }
 }
 
