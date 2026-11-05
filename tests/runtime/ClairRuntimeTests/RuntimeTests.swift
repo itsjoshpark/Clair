@@ -148,7 +148,7 @@ final class AppTests: RuntimeTestCase {
       })()
       """
     let expected = [
-      "Version \(fixture.version) (\(fixture.build))",
+      "Version \(fixture.version) (\(fixture.build)) (Official Build) (arm64)",
       "Engine: Chromium \(fixture.chromiumVersion) (ungoogled-chromium \(fixture.ungoogledVersion))",
     ]
     var text = ""
@@ -158,6 +158,19 @@ final class AppTests: RuntimeTestCase {
       return expected.allSatisfy(text.contains)
     }
     XCTAssertTrue(shown, "chrome://settings/help doesn't show \(expected). It reads: \(text)")
+  }
+
+  func testFirstRunPageNamesClairAndItsDataFolder() async throws {
+    let browser = try await startBrowser()
+    let tab = try await browser.open("about:blank")
+    defer { tab.close() }
+    try await tab.navigate(to: "chrome://ungoogled-first-run")
+    let title = try await tab.evaluate("document.title") as? String
+    XCTAssertEqual(title, "Welcome to Clair")
+    let text = try await tab.evaluate("document.documentElement.textContent") as? String ?? ""
+    XCTAssertTrue(text.contains("~/Library/Application Support/Clair/Dictionaries/"), text)
+    XCTAssertFalse(text.contains("Application Support/Chromium"), text)
+    XCTAssertFalse(text.contains("first run page"), text)
   }
 
   func testIdleFirstLaunchMakesNoGoogleRequests() async throws {

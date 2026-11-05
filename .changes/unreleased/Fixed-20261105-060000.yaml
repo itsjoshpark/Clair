@@ -1,0 +1,3 @@
+kind: Fixed
+body: Clair no longer looks in Chromium's or Google Chrome's folders for preferences, extensions, native messaging hosts or other settings, and web app shortcuts now go in a Clair Apps folder
+time: 2026-11-05T06:00:00.000000000-05:00

@@ -31,6 +31,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [x] 2.5 Set `LSMinimumSystemVersion` to 15.6. Verify with `PlistBuddy`, and verify with `lipo -archs` that every Mach-O in the bundle is arm64 only.
 - [x] 2.6 Check default-browser registration. Verify that System Settings lists "Clair" as a default browser choice, and that with Clair selected, a link opened from another app opens in Clair.
 - [x] 2.7 Create `scripts/verify-app.sh` with the static identity checks: bundle and helper IDs, minimum OS, arm64 only, no "Chromium" in `CFBundleName`. Add a flag that skips the signing checks for unsigned builds. Verify that it passes on a packaged app and fails on an untouched ungoogled-chromium build.
+- [x] 2.8 Keep Clair out of other browsers' folders with `patches/clair/data-paths.patch`, make the first run page Clair's with `patches/clair/first-run-page.patch`, and add a check to `scripts/verify-app.sh`. Verify with `fs_usage` that a real first launch and a second launch touch no other browser's data or configuration folder (macOS's attribute lookups on other browsers' app bundles, and Chromium's own file names inside Clair's folder, such as `ChromeFeatureState`, don't count), that `chrome://ungoogled-first-run` names Clair's dictionaries folder, and that the About page reads "(Official Build)" with no ungoogled-chromium in that line.
 
 ## 3. Versioning
 

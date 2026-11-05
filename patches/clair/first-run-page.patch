@@ -1,0 +1,55 @@
+# Make ungoogled-chromium's first run page Clair's: its title and heading name
+# Clair, the dictionaries folder is Clair's and macOS's only, and problems go to
+# Clair's issues page. Applies to the file that first-run-page.patch creates.
+
+--- a/chrome/browser/ui/webui/ungoogled_first_run.h
++++ b/chrome/browser/ui/webui/ungoogled_first_run.h
+@@ -25,7 +25,7 @@
+                         const content::WebContents::Getter& wc_getter,
+                         GotDataCallback callback) {
+     std::string source = R"(
+-<title>ungoogled-chromium first run page</title>
++<title>Welcome to Clair</title>
+ <meta name="color-scheme" content="light dark">
+ <style>
+  @import url(chrome://resources/css/text_defaults_md.css);
+@@ -47,8 +47,8 @@
+ </style>
+ <base target="_blank">
+ <section>
+- <h2>ungoogled-chromium</h2><p>
+- This browser was built with ungoogled-chromium patches and differs from the default Chromium experience
++ <h2>Welcome to Clair</h2><p>
++ Clair is built on ungoogled-chromium, so it differs from the default Chromium experience
+  in a few ways. Look over the sections below and the
+  <a href="https://github.com/ungoogled-software/ungoogled-chromium/blob/master/docs/default_settings.md">
+   changes to the default settings</a> to see what may be important to you.<p>
+@@ -80,12 +80,8 @@
+     <a href="https://chromium.googlesource.com/chromium/deps/hunspell_dictionaries/+/main/en-US-10-2.bdic?format=TEXT">
+      https://chromium.googlesource.com/chromium/deps/hunspell_dictionaries/+/main/en-US-10-2.bdic?format=TEXT</a></li>
+    <li>This is a base64-encoded file that needs to be decoded. Use the button below to select the .txt file you saved
+-    and save/move the resulting bdic file to your Dictionaries directory. Default locations:
+-    <ul>
+-     <li>Linux: <code>~/.config/chromium/Dictionaries/</code><br></li>
+-     <li>Mac: <code>~/Library/Application Support/Chromium/Dictionaries/</code><br></li>
+-     <li>Windows: <code>%LOCALAPPDATA%\Chromium\Application\Dictionaries\</code><br></li>
+-    </ul>
++    and save/move the resulting bdic file to your Dictionaries directory:
++    <code>~/Library/Application Support/Clair/Dictionaries/</code><br><br>
+     <input id="bdic" type="file" accept=".txt,text/plain" />
+    </li>
+    <li>Toggle spell check in <a href="chrome://settings/languages">chrome://settings/languages</a>,
+@@ -103,10 +99,9 @@
+ </section>
+ <section>
+  <h2>Additional Links</h2><p>
+-  Privacy and security information, motivation and philosophy, rationale for changes, and more can be found in the
+-  <a href="https://github.com/ungoogled-software/ungoogled-chromium/blob/master/README.md">README</a>.<p>
+-  Visit our <a href="https://github.com/ungoogled-software/ungoogled-chromium/blob/master/SUPPORT.md">
+-   support page</a> if you wish to report problems.<p>
++  Privacy and security information, motivation and philosophy, rationale for changes, and more can be found in
++  <a href="https://github.com/ungoogled-software/ungoogled-chromium/blob/master/README.md">ungoogled-chromium's README</a>.<p>
++  Report problems with Clair on <a href="https://github.com/itsjoshpark/Clair/issues">its issues page</a>.<p>
+   Are you a developer? Consider
+   <a href="https://github.com/ungoogled-software/ungoogled-chromium/blob/master/docs/contributing.md">
+    contributing</a> to ungoogled-chromium!
