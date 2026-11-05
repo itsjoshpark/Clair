@@ -85,7 +85,7 @@ Clair SHALL install an update only if the new app carries a valid code signature
 - its EdDSA signature verifies against the Sparkle public key embedded in the running app
 - the new app is signed by the same Apple team as the running app, and its EdDSA signature verifies against the new app's own public key, as when the EdDSA key is rotated
 
-An update that meets neither MUST be rejected and left uninstalled. One update can change the Developer ID team or the EdDSA key, not both.
+An update that meets neither MUST be rejected and left uninstalled.
 
 #### Scenario: Tampered update is rejected
 - **WHEN** a downloaded update's file does not match its EdDSA signature in the appcast
@@ -94,6 +94,10 @@ An update that meets neither MUST be rejected and left uninstalled. One update c
 #### Scenario: Valid update is installed
 - **WHEN** a downloaded update's EdDSA signature verifies against the running app's key and its app has a valid code signature
 - **THEN** Clair installs it
+
+#### Scenario: Team and key both changed
+- **WHEN** a downloaded update's app is signed by a different Apple team, and its EdDSA signature verifies only against a new key in that app
+- **THEN** Clair refuses to install it, as Sparkle allows changing the team or the EdDSA key in one update, not both
 
 ### Requirement: Only newer, compatible releases are offered
 Clair SHALL offer only releases whose build number is higher than the running build, and whose minimum macOS version is no higher than the running macOS version.
