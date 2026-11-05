@@ -109,7 +109,8 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
   - default ungoogled settings
   - default-browser registration
   - the local network prompt
-  - the update path with Developer ID–signed builds
+
+  The update path with Developer ID–signed builds needs a published release, because release packages ignore the test feed, so 8.3 checks it.
 - [ ] 8.2 Release `0.1.0` through the workflow. Verify that the GitHub Release has its assets and checksums, that `main` has the appcast entry with a link that resolves, and that the DMG installs and opens on a clean Mac.
 - [ ] 8.3 Release `0.1.1`, either an ungoogled security bump or a notes-only release. Verify on a `0.1.0` install that the delta downloads in the background, that "Restart and Update" restores the session, and, separately, that quitting installs the update and that 30 minutes without input installs it.
 
