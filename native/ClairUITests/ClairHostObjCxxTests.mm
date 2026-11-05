@@ -28,6 +28,8 @@
 }
 - (void)updateWillInstallOnQuit {
 }
+- (void)openURL:(NSURL*)url {
+}
 @end
 
 @interface ClairHostObjCxxTests : XCTestCase

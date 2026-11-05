@@ -87,12 +87,35 @@ The Chromium version SHALL remain the version that websites and extensions see. 
 - **WHEN** a user installs an extension that declares `minimum_chrome_version` of `150`
 - **THEN** the installation is allowed, because the Chromium version (156) meets it, even though the Clair version is `0.1.0`
 
-### Requirement: About screen shows both versions
-The About Clair screen (which Chromium shows as its About settings page) SHALL show the Clair version with its build number, and separately, labelled as the engine, the Chromium version and the ungoogled-chromium revision Clair is built from.
+### Requirement: About window shows both versions
+"About Clair" in the application menu SHALL open Clair's own native About window, in the style of Arc's, rather than a browser tab. The window SHALL show the app icon, the name "Clair", the Clair version with its build number, and separately, labelled as the engine, the Chromium version and the ungoogled-chromium revision Clair is built from. Chromium's About settings page, `chrome://settings/help`, SHALL keep showing both versions.
 
 #### Scenario: Opening About Clair
 - **WHEN** a user chooses "About Clair" from the application menu
-- **THEN** the About screen shows the Clair version and build type, for example "Version 0.1.0 (123) (Official Build) (arm64)", and separately the Chromium version, for example "Engine: Chromium 156.0.8078.47 (ungoogled-chromium 156.0.8078.47-1)"
+- **THEN** a native About window opens without opening a browser tab, and shows "Clair", the Clair version and build number, for example "Version 0.1.0 (123)", and separately the engine, for example "Chromium Engine Version 156.0.8078.47 (ungoogled-chromium 156.0.8078.47-1)", followed by the copyright notice, the credits and the GPLv3 notice
+
+#### Scenario: Opening About Clair again
+- **WHEN** the About window is already open and the user chooses "About Clair" again
+- **THEN** the same window comes to the front, and no second About window opens
+
+#### Scenario: About Clair with no browser window open
+- **WHEN** no browser window is open and the user chooses "About Clair"
+- **THEN** the About window opens, and no browser window opens
+
+#### Scenario: About settings page
+- **WHEN** a user opens `chrome://settings/help`
+- **THEN** it shows the Clair version and build type, for example "Version 0.1.0 (123) (Official Build) (arm64)", and separately the engine, for example "Engine: Chromium 156.0.8078.47 (ungoogled-chromium 156.0.8078.47-1)"
+
+### Requirement: About window shows legal notices
+The About window SHALL show Clair's copyright notice, SHALL credit Chromium and the other open source software Clair is built from with links to their notices, and SHALL state that Clair is free software under the GPLv3 with no warranty, with a link to the license.
+
+#### Scenario: Notices in the About window
+- **WHEN** the About window is open
+- **THEN** it shows the copyright notice, the credits for Chromium and the other open source software, and the GPLv3 and no-warranty statement, each with its link
+
+#### Scenario: Following a credits link
+- **WHEN** the user clicks the link to Chromium's open source software in the About window
+- **THEN** `chrome://credits` opens in a Clair browser tab
 
 ### Requirement: Supported platform
 The application SHALL be built for Apple Silicon (arm64) only and SHALL declare a minimum macOS version of 15.6 (Sequoia).

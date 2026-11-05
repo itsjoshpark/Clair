@@ -10,10 +10,12 @@
 #include "base/apple/foundation_util.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/time/time.h"
+#import "chrome/browser/app_controller_mac.h"
 #import "chrome/browser/clair/ClairHost.h"
 #include "chrome/browser/clair/ungoogled_version.h"
 #include "chrome/browser/download/download_core_service.h"
@@ -25,15 +27,34 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "chrome/browser/ui/navigator/browser_navigator.h"
+#include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/base/page_transition_types.h"
+#include "ui/base/window_open_disposition.h"
+#include "url/gurl.h"
 
 namespace {
 
 // Set in the user defaults by a relaunch from the background, for the process
 // that replaces it.
 NSString* const kRelaunchedInBackgroundKey = @"ClairRelaunchedInBackground";
+
+// Opens `url` in a new foreground tab of `profile`'s most recently active
+// tabbed window. With no browser to hold the tab, Navigate creates a window.
+void OpenURLInProfile(const GURL& url, Profile* profile) {
+  if (!profile) {
+    LOG(ERROR) << "ClairUI: no profile to open " << url.possibly_invalid_spec()
+               << " in";
+    return;
+  }
+  NavigateParams params(profile, url, ui::PAGE_TRANSITION_AUTO_BOOKMARK);
+  params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
+  params.window_action = NavigateParams::WindowAction::kShowWindow;
+  Navigate(&params);
+}
 
 }  // namespace
 
@@ -106,6 +127,19 @@ NSString* const kRelaunchedInBackgroundKey = @"ClairRelaunchedInBackground";
 - (void)updateWillInstallOnQuit {
   CHECK([NSThread isMainThread]);
   clair::NoteUpdateWillInstallOnQuit();
+}
+
+- (void)openURL:(NSURL*)url {
+  CHECK([NSThread isMainThread]);
+  GURL gurl(base::SysNSStringToUTF8(url.absoluteString));
+  if (!gurl.is_valid()) {
+    LOG(ERROR) << "ClairUI: not opening an invalid URL";
+    return;
+  }
+  // The same profile Chromium's own menu commands use, loaded if it isn't yet.
+  app_controller_mac::RunInLastProfileSafely(
+      base::BindOnce(&OpenURLInProfile, gurl),
+      app_controller_mac::kShowProfilePickerOnFailure);
 }
 
 @end
