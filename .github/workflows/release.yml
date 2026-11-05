@@ -39,12 +39,6 @@ concurrency:
 env:
   CHANGIE_VERSION: v1.26.0
 
-# Naming bash turns on pipefail, which the default shell doesn't. Steps here pipe
-# scripts into tee, and without it a script's refusal would count as success.
-defaults:
-  run:
-    shell: bash
-
 jobs:
   validate:
     name: Validate
@@ -91,7 +85,10 @@ jobs:
             echo "::error::Releases run from main, not $GITHUB_REF_NAME. Only main can reach the release secrets."
             exit 1
           fi
-          ./scripts/release-preflight.sh --release-type "$RELEASE_TYPE" | tee -a "$GITHUB_OUTPUT"
+          # No pipe into tee: the default shell has no pipefail, so a refusal would pass.
+          ./scripts/release-preflight.sh --release-type "$RELEASE_TYPE" >"$RUNNER_TEMP/preflight.txt"
+          cat "$RUNNER_TEMP/preflight.txt"
+          cat "$RUNNER_TEMP/preflight.txt" >> "$GITHUB_OUTPUT"
 
       - name: Look for the commit's engine
         id: engine
@@ -199,7 +196,7 @@ jobs:
           AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
         run: |
           ./scripts/check-release-credentials.sh --keychain "$KEYCHAIN" --key "$AC_KEY_PATH" \
-            --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" | tee -a "$GITHUB_OUTPUT"
+            --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" >> "$GITHUB_OUTPUT"
 
       - name: Download the engine
         env:
@@ -232,7 +229,8 @@ jobs:
         run: |
           mkdir -p "$DIST"
           ./scripts/make-deltas.sh --app "$PACKAGE_DIR/Clair.app" --dmg "$PACKAGE_DIR/Clair-$VERSION-arm64.dmg" \
-            --version "$VERSION" --build "$BUILD" --out "$DIST" --repo "$REPO" | tee "$DIST/assets.txt"
+            --version "$VERSION" --build "$BUILD" --out "$DIST" --repo "$REPO" >"$DIST/assets.txt"
+          cat "$DIST/assets.txt"
           mv "$PACKAGE_DIR/Clair-$VERSION-arm64.dmg" "$DIST/"
 
       - name: Upload the release

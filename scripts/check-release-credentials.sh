@@ -1,6 +1,7 @@
 #!/bin/bash
 # Checks a release's signing and notarization credentials before anything is
-# packaged, and prints the signing identity as identity=<name>. It stops on a
+# packaged, and prints the signing identity on stdout as identity=<name>, with
+# everything else on stderr, so stdout can go to $GITHUB_OUTPUT. It stops on a
 # missing identity, an expired certificate or a rejected App Store Connect API key,
 # and warns when the certificate has under 30 days left.
 #
@@ -45,12 +46,12 @@ if (( expiry_epoch > 0 )); then
   if (( expiry_epoch <= now )); then
     die "The signing certificate expired on $expiry. Create a new Developer ID Application certificate and update DEVELOPER_ID_CERT_P12_BASE64 and DEVELOPER_ID_CERT_PASSWORD."
   elif (( days < warn_days )); then
-    echo "::warning::The signing certificate expires in $days days ($expiry). Renew it before the next release."
+    echo "::warning::The signing certificate expires in $days days ($expiry). Renew it before the next release." >&2
   else
     echo "Certificate expires in $days days ($expiry)" >&2
   fi
 else
-  echo "::warning::Could not read the signing certificate's expiry ('$expiry')."
+  echo "::warning::Could not read the signing certificate's expiry ('$expiry')." >&2
 fi
 
 if ! xcrun notarytool history --key "$key" --key-id "$key_id" --issuer "$issuer" >/dev/null 2>&1; then
