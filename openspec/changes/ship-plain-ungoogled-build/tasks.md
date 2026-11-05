@@ -29,14 +29,14 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 - [x] 2.3 Adapt Helium's `change-product-dir-name` and `change-keychain-name` patches for Clair. Verify on first launch that `~/Library/Application Support/Clair` and `~/Library/Caches/Clair` are created, and that a "Clair Safe Storage" keychain item appears with no "Chromium Safe Storage" item created or read. Verify that Clair and an ungoogled-chromium build run at the same time with separate profiles.
 - [x] 2.4 Add the resource-replacement step to `build.sh prepare`: compile `resources/icon/AppIcon.icon` with `scripts/compile-icon.sh` into `chrome/app/theme/chromium/mac/`, and copy every entry in `resources/icon/product-logos.txt` to its Chromium path. The artwork and both files come from the `design-app-icon` change. They are engine inputs. Verify that the Dock and Finder show the Clair icon, and that `scripts/engine-key.sh` changes its key when an icon file changes.
 - [x] 2.5 Set `LSMinimumSystemVersion` to 15.6. Verify with `PlistBuddy`, and verify with `lipo -archs` that every Mach-O in the bundle is arm64 only.
-- [ ] 2.6 Check default-browser registration. Verify that System Settings lists "Clair" as a default browser choice, and that with Clair selected, a link opened from another app opens in Clair.
+- [x] 2.6 Check default-browser registration. Verify that System Settings lists "Clair" as a default browser choice, and that with Clair selected, a link opened from another app opens in Clair.
 - [x] 2.7 Create `scripts/verify-app.sh` with the static identity checks: bundle and helper IDs, minimum OS, arm64 only, no "Chromium" in `CFBundleName`. Add a flag that skips the signing checks for unsigned builds. Verify that it passes on a packaged app and fails on an untouched ungoogled-chromium build.
 
 ## 3. Versioning
 
 - [x] 3.1 Add `version.txt` set to `0.1.0`. Make `package.sh` write `CFBundleShortVersionString` from `version.txt` and `CFBundleVersion` from `git rev-list --count HEAD` (or the release's build number) into `Clair.app/Contents/Info.plist`. Before that, audit every place Chromium reads the outer bundle's version, using Helium's versioning and Sparkle patches as a map, and patch any read that must keep the Chromium version (D3). Verify both plist values in a packaged app, and that it launches and loads its framework.
 - [x] 3.2 Adapt Helium's `add-helium-versioning.patch` so the About page and `chrome://version` read the Clair version and build number from the main bundle's `Info.plist` at run time. They also show the Chromium version and ungoogled-chromium revision, labelled as the engine. Verify by opening About Clair in two packages of the same engine with different `version.txt` values.
-- [ ] 3.3 Verify that the engine version reaches the web unchanged. `navigator.userAgent` and client hints should match an ungoogled-chromium build of the same tag and not contain `0.1.0`. A test extension with `minimum_chrome_version` set to `150` should install.
+- [x] 3.3 Verify that the engine version reaches the web unchanged. `navigator.userAgent` and client hints should match an ungoogled-chromium build of the same tag and not contain `0.1.0`. A test extension with `minimum_chrome_version` set to `150` should install.
 - [x] 3.4 Extend `scripts/verify-app.sh` to check the version: the short version matches `version.txt`, and the build number is an integer. Verify that it passes on a packaged app.
 
 ## 4. Sparkle updater (in the native layer)
@@ -107,6 +107,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
   - CRX install through the extension MIME flag
   - default ungoogled settings
   - default-browser registration
+  - the local network prompt
   - the update path with Developer ID–signed builds
 - [ ] 8.2 Release `0.1.0` through the workflow. Verify that the GitHub Release has its assets and checksums, that `main` has the appcast entry with a link that resolves, and that the DMG installs and opens on a clean Mac.
 - [ ] 8.3 Release `0.1.1`, either an ungoogled security bump or a notes-only release. Verify on a `0.1.0` install that the delta downloads in the background, that "Restart and Update" restores the session, and, separately, that quitting installs the update and that 30 minutes without input installs it.

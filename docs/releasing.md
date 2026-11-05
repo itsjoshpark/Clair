@@ -38,6 +38,7 @@ The quality checks can't cover these, so run them on the dry-run DMG, on a clean
 - [ ] A CRX installs through the extension MIME flag
 - [ ] ungoogled-chromium's default settings are in place
 - [ ] System Settings lists Clair as a default browser, and a link from another app opens in it
+- [ ] Opening a page on the local network makes macOS ask for access, with the text "Clair uses your local network to access websites and devices on your network."
 - [ ] The update path works with Developer ID-signed builds: a delta downloads in the background, Restart and Update restores the session, quitting installs the update, and so do 30 idle minutes
 - [ ] Sparkle rejects a release signed by a different team
 
