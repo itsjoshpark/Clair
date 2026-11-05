@@ -50,5 +50,5 @@
 
 ## Open Questions
 
-- **Document icon.** Chromium ships a `document.icns` for HTML and other files it opens. Check what it looks like in the first CI build. If it carries Chromium's logo, add a Clair document icon here or in a follow-up change.
+- **Document icon.** Resolved on 2026-11-05: Chromium 156 ships no `document.icns`. Its `Info.plist` declares document types with `UTTypeIcons`, so macOS draws each document icon with the type's text and the badge image `Icon` from `Assets.car`. Chromium's `Assets.car` has that image; Clair's compiled one has only `AppIcon`, so macOS badges documents with Clair's app icon instead. A rendered `org.chromium.extension` icon shows the gold ring above "EXTENSION" and no Chromium logo, so no follow-up change is needed.
 - **macOS 15.6 fallback.** Resolved on 2026-10-27: a local `actool` compile wrote pre-Tahoe images into `Assets.car` and a matching `.icns`, so the fallback comes from `actool` (design D4). The macOS 15.6 check itself is task 4.5.
