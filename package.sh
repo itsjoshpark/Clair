@@ -356,8 +356,12 @@ if $dmg; then
   dmg_path="$out/$product-$version-arm64.dmg"
   rm -f "$dmg_path"
   # dmgbuild copies the app, makes the Applications link and writes the window
-  # layout (style-release-dmg design D4). Its hdiutil steps fail now and then
-  # on the hosted runners, so try it again.
+  # layout (style-release-dmg design D4). On a hosted runner, for about a
+  # minute after the job's first xcodebuild, simdiskimaged keeps retrying an
+  # unmount of a simulator runtime by its disk number. A DMG attached then can
+  # reuse that number and be unmounted under dmgbuild ("No such file or
+  # directory: '/Volumes/Clair/...'"). Waiting 30 seconds between attempts
+  # gets past that window.
   layout="$root/resources/dmg"
   created=false
   for attempt in 1 2 3; do
@@ -370,7 +374,7 @@ if $dmg; then
     fi
     echo "package: dmgbuild failed (attempt $attempt of 3)" >&2
     rm -f "$dmg_path"
-    [[ "$attempt" == 3 ]] || sleep 5
+    [[ "$attempt" == 3 ]] || sleep 30
   done
   $created || die "dmgbuild couldn't create the DMG"
   if [[ -n "$identity" ]]; then

@@ -391,7 +391,7 @@ fi
 # DMGs. The DMG tests above cover the real thing.
 stub_bin="$workdir/stub-bin"
 mkdir "$stub_bin"
-printf '#!/bin/bash\nexit 0\n' >"$stub_bin/sleep"
+printf '#!/bin/bash\necho "$1" >>"%s"\n' "$workdir/sleeps" >"$stub_bin/sleep"
 cat >"$stub_bin/dmgbuild" <<EOF
 #!/bin/bash
 count="\$(cat "$workdir/dmgbuild-count" 2>/dev/null || echo 0)"
@@ -406,6 +406,7 @@ EOF
 chmod +x "$stub_bin/sleep" "$stub_bin/dmgbuild"
 
 echo 0 >"$workdir/dmgbuild-count"
+: >"$workdir/sleeps"
 out="$workdir/out-retry"
 if DMGBUILD_FAILURES=2 PATH="$stub_bin:$PATH" run_package --version 0.1.0 --build 7 --dmgbuild "$stub_bin/dmgbuild" "$engine/Clair.app" "$out" \
     && [[ -f "$out/Clair-0.1.0-arm64.dmg" && "$(cat "$workdir/dmgbuild-count")" == 3 ]]; then
@@ -413,6 +414,14 @@ if DMGBUILD_FAILURES=2 PATH="$stub_bin:$PATH" run_package --version 0.1.0 --buil
 else
   check "tries dmgbuild again when it fails" fail
   echo "$output" | tail -5 | sed 's/^/         /'
+fi
+
+# Long enough to outlast simdiskimaged's unmount retries on hosted runners.
+if [[ "$(tr '\n' ' ' <"$workdir/sleeps")" == "30 30 " ]]; then
+  check "waits 30 seconds before each new attempt" pass
+else
+  check "waits 30 seconds before each new attempt" fail
+  echo "         slept: $(tr '\n' ' ' <"$workdir/sleeps")"
 fi
 
 passed="$(tr '\n' ' ' <"$workdir/dmgbuild-args")"

@@ -52,7 +52,7 @@ Hash-pinning matters because `package.sh` runs in the `release` environment, nex
 
 ### D4. `package.sh` swaps `hdiutil create` for `dmgbuild`
 
-The staging folder and `ditto` copy go, since `dmgbuild` copies the app and makes the symlink itself. The three-attempt loop stays around the `dmgbuild` call, because the flaky step is still `hdiutil`. Signing, notarization and stapling after it don't change. The output name stays `Clair-<version>-arm64.dmg`.
+The staging folder and `ditto` copy go, since `dmgbuild` copies the app and makes the symlink itself. The three-attempt loop stays around the `dmgbuild` call, now with 30 seconds between attempts. On hosted runners, for about a minute after a job's first `xcodebuild`, `simdiskimaged` keeps retrying an unmount of a simulator runtime by its disk number. A DMG attached in that window can reuse the number and be unmounted while `dmgbuild` writes to it. This is most likely what made `hdiutil create` fail now and then before. `quality.yml` hits it, since `run.sh prepare` builds ClairUI just before packaging; the 30-second waits outlast the window. Signing, notarization and stapling after it don't change. The output name stays `Clair-<version>-arm64.dmg`.
 
 ### D5. How the layout is checked
 
