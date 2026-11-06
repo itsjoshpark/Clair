@@ -55,7 +55,12 @@ jobs:
             echo "No unreleased changes"
           fi
 
+      - name: Install the DMG artwork tools
+        run: python3 -m pip install --disable-pip-version-check -r resources/dmg/artwork-requirements.txt
+
       - name: Run script tests
+        env:
+          REQUIRE_ARTWORK_TOOLS: "1"
         run: |
           failures=0
           for test in scripts/*.test.sh ./package.test.sh; do

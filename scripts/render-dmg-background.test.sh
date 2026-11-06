@@ -1,7 +1,10 @@
 #!/bin/bash
 # Tests for render-dmg-background.sh. Run directly: ./scripts/render-dmg-background.test.sh
 #
-# Requires rsvg-convert (brew install librsvg) and python3.
+# Requires rsvg-convert (brew install librsvg) and python3. Checking background.svg
+# against make_background.py also needs resources/dmg/artwork-requirements.txt
+# installed for python3; without it that check is skipped, unless
+# REQUIRE_ARTWORK_TOOLS is set, as CI sets it.
 
 set -uo pipefail
 
@@ -40,7 +43,9 @@ else
   tiff_sizes "$dmg/background.tiff" | sed 's/^/         got: /'
 fi
 
-if python3 -I "$dmg/make_background.py" --out "$workdir/background.svg" >/dev/null \
+if ! python3 -I -c 'import fontTools, uharfbuzz' 2>/dev/null && [[ -z "${REQUIRE_ARTWORK_TOOLS-}" ]]; then
+  echo "skip     the committed background.svg is what make_background.py writes (pip install -r resources/dmg/artwork-requirements.txt)"
+elif python3 -I "$dmg/make_background.py" --out "$workdir/background.svg" >/dev/null \
     && cmp -s "$workdir/background.svg" "$dmg/background.svg"; then
   check "the committed background.svg is what make_background.py writes" pass
 else
