@@ -5,5 +5,32 @@
     <description>There's a new version available</description>
     <language>en</language>
 
+    <item>
+      <title>New Version Available</title>
+      <link>https://github.com/itsjoshpark/Clair</link>
+      <sparkle:version>69</sparkle:version>
+      <sparkle:shortVersionString>0.1.0 (69)</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.6</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/itsjoshpark/Clair/releases/tag/v0.1.0</sparkle:fullReleaseNotesLink>
+      <pubDate>Fri, 06 Nov 2026 00:12:31 +0000</pubDate>
+      <enclosure
+        url="https://github.com/itsjoshpark/Clair/releases/download/v0.1.0/Clair-0.1.0-arm64.dmg"
+        sparkle:edSignature="9BZu3U0biYGYfgthBOPKadKzyXKuKOE0C4OGZVw2s5TyPXe33WDwsSMKF+fes0P/AoS45sTsguvXM4Grio67Dw=="
+        length="171701119"
+        type="application/octet-stream" />
+      <description><![CDATA[
+      <ul>
+      <li>New: First release of Clair, a macOS browser built on ungoogled-chromium, with automatic updates</li>
+      <li>Updated: Update the engine to Chromium 156.0.8078.79 (ungoogled-chromium 156.0.8078.79-1)</li>
+      <li>Changed: macOS's local network permission prompt now explains why Clair asks for access</li>
+      <li>Fixed: Clair no longer looks in Chromium's or Google Chrome's folders for preferences, extensions, native messaging hosts or other settings, and web app shortcuts now go in a Clair Apps folder</li>
+      <li>Changed: The first run page now names Clair and its Dictionaries folder, and the About page reads &quot;Official Build&quot;</li>
+      <li>New: About Clair opens Clair's own About window, with the Clair version, the Chromium engine version and the open source credits</li>
+      <li>Fixed: Settings, Safety Hub and the certificate manager now show Clair's ring instead of Chromium's logo</li>
+      </ul>
+      ]]>
+      </description>
+    </item>
+
   </channel>
 </rss>
