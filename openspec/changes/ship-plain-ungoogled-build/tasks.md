@@ -57,7 +57,7 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
 
 - [x] 5.1 Write `package.sh`, ported from ungoogled-macos's `sign_and_package_app.sh` with Clair names. It takes an engine artifact, embeds `ClairUI.framework` and `Sparkle.framework`, writes the plist values (3.1, 4.2), and signs each helper with its own ID, the hardened runtime and entitlements. It signs `ClairUI`, Sparkle's `Autoupdate` and `Updater.app` separately, without `--deep`. Without signing credentials, it signs ad hoc. Verify that `codesign --verify --strict` passes for the app and every nested bundle in both modes.
 - [x] 5.2 Add notarization with `notarytool` (App Store Connect API key) and stapling for the app and the DMG. Verify that `stapler validate` passes for both, and that `spctl --assess --type execute` names Clair's Developer ID team.
-- [ ] 5.3 Build the DMG with `Clair.app` and an `/Applications` link. A background is left for later. Verify that mounting it shows that layout. Verify that on a Mac or user account that has never run Clair, it opens after only the standard downloaded-from-the-internet prompt.
+- [x] 5.3 Build the DMG with `Clair.app` and an `/Applications` link. A background is left for later. Verify that mounting it shows that layout. Verify that on a Mac or user account that has never run Clair, it opens after only the standard downloaded-from-the-internet prompt. Verified on dry run 42127150196's DMG, on the owner's account with Clair's data, keychain item and every Launch Services registration removed first (the owner's choice over a new account).
 - [x] 5.4 Extend `scripts/verify-app.sh` with the `codesign`, `spctl` and `stapler` checks and a check that the Sparkle keys are present. Verify that it passes on a notarized package.
 
 ## 6. Release tooling scripts
@@ -96,14 +96,16 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
   - pushes to `main` last
 
   Verify with `scripts/publish-release.test.sh`, which runs the script against a local bare repository: the Release should exist before the appcast push, and when `main` moves mid-release, the run should abort with no Release created. Then verify on the real `0.1.0` release that real `gh` and the deploy key do the same. A rehearsal on a fork was dropped: it would need its own runner, secrets, engine, ruleset and deploy key, and a failed `0.1.0` publish offers nothing to users, because no installed copies are waiting for an update yet.
-- [ ] 7.5 Check secret hygiene. Verify that searching the full logs and every published asset of a dry run and of the `0.1.0` release finds neither the Sparkle private key nor the certificate password. Verify that `engine.yml` and `quality.yml` runs have no access to the `release` environment.
-- [ ] 7.6 Write `docs/releasing.md`: how to start a release, adding Changie fragments, the manual release checklist (from 8.1), key backup and the rollback policy. Verify by following it for the first release.
+
+  On `0.1.0` (run 42134572020), real `gh` created the Release before any push to `main`, but the job's push to `main` was refused: ssh offered the owner's 1Password key from `~/.ssh/config` ahead of the deploy key, so GitHub saw the owner, whom the ruleset holds to the checks. The release commit reached `main` by hand with the deploy key alone. The `publish` job now makes git's ssh ignore the user's config and checks that GitHub sees the deploy key before anything is published. Verify that on `0.1.1`'s publish.
+- [x] 7.5 Check secret hygiene. Verify that searching the full logs and every published asset of a dry run and of the `0.1.0` release finds neither the Sparkle private key nor the certificate password. Verify that `engine.yml` and `quality.yml` runs have no access to the `release` environment.
+- [x] 7.6 Write `docs/releasing.md`: how to start a release, adding Changie fragments, the manual release checklist (from 8.1), key backup and the rollback policy. Verify by following it for the first release.
 - [x] 7.7 Replace the release secrets with D6's names from the owner's 1Password, removing `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`, `CI_KEYCHAIN_PASSWORD`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID` and `ASC_API_KEY_P8`, and update `release-secrets-check.yml`. Verify that the check reports each new name as present on `main`, and that the environment lists no old name.
-- [ ] 7.8 **(owner)** Replace `main`'s branch protection with a ruleset that requires the same three checks from everyone, blocks force pushes and deletion, and lets deploy keys bypass it. Add a deploy key with write access, with its private half in the `release` environment as `RELEASE_DEPLOY_KEY` and backed up in 1Password, and make it the repository's only deploy key. Verify that `gh api repos/itsjoshpark/Clair/rules/branches/main` lists the checks, that `release-secrets-check.yml` reports the secret as present, and that `0.1.0`'s release commit reaches `main`.
+- [x] 7.8 **(owner)** Replace `main`'s branch protection with a ruleset that requires the same three checks from everyone, blocks force pushes and deletion, and lets deploy keys bypass it. Add a deploy key with write access, with its private half in the `release` environment as `RELEASE_DEPLOY_KEY` and backed up in 1Password, and make it the repository's only deploy key. Verify that `gh api repos/itsjoshpark/Clair/rules/branches/main` lists the checks, that `release-secrets-check.yml` reports the secret as present, and that `0.1.0`'s release commit reaches `main`.
 
 ## 8. First release and end-to-end verification
 
-- [ ] 8.1 Run the manual release checklist on the dry-run DMG on a clean Mac or user account. Verify that every item passes:
+- [x] 8.1 Run the manual release checklist on the dry-run DMG on a clean Mac or user account. Verify that every item passes:
   - the notarized DMG opens after only the standard prompt
   - CRX install through the extension MIME flag
   - default ungoogled settings
@@ -111,6 +113,8 @@ Suggested order: 1, 2 and 3 (engine content), 10 (engine pipeline), 9 (native la
   - the local network prompt
 
   The update path with Developer ID–signed builds needs a published release, because release packages ignore the test feed, so 8.3 checks it.
+
+  Run on dry run 42127150196's DMG, on the owner's account cleared as in 5.3. The CRX installed from a server sending `application/x-chrome-extension`; opening a local `.crx` from Finder doesn't go through the flag. The local network prompt didn't appear: Clair wasn't listed under Local Network, the router's page opened, and no other browser on this Mac had shown the prompt either. The owner accepted that result without investigating further.
 - [ ] 8.2 Release `0.1.0` through the workflow. Verify that the GitHub Release has its assets and checksums, that `main` has the appcast entry with a link that resolves, and that the DMG installs and opens on a clean Mac.
 - [ ] 8.3 Release `0.1.1`, either an ungoogled security bump or a notes-only release. Verify on a `0.1.0` install that the delta downloads in the background, that "Restart and Update" restores the session, and, separately, that quitting installs the update and that 30 minutes without input installs it.
 

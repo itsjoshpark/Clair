@@ -272,6 +272,23 @@ jobs:
           fetch-depth: 0
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
+      # The runner runs as the owner, whose SSH config offers the owner's own key
+      # before checkout's deploy key. A push as the owner is refused by main's ruleset
+      # (0.1.0's publish), so git's ssh ignores that config and uses only the deploy key.
+      - name: Push with the deploy key only
+        run: |
+          ssh_command="$(git config --local core.sshCommand)" ||
+            { echo "::error::actions/checkout configured no SSH command for the deploy key"; exit 1; }
+          ssh_command="$ssh_command -F /dev/null -o IdentitiesOnly=yes -o IdentityAgent=none"
+          git config --local core.sshCommand "$ssh_command"
+          # ssh -T always fails; its greeting names the deploy key's repository, or a user.
+          greeting="$(eval "$ssh_command -T git@github.com" 2>&1 || true)"
+          echo "$greeting"
+          if [[ "$greeting" != *"Hi $GITHUB_REPOSITORY!"* ]]; then
+            echo "::error::GitHub doesn't see the deploy key for $GITHUB_REPOSITORY, so main's ruleset would refuse the push. Nothing was published."
+            exit 1
+          fi
+
       - name: Use Homebrew's tools
         working-directory: .
         run: echo /opt/homebrew/bin >> "$GITHUB_PATH"
