@@ -179,15 +179,16 @@ reject() {
 }
 
 echo "<p>First.</p>" >"$workdir/first-notes.html"
-# The first release adds to the committed appcast, which has no items.
+# The next release adds to the committed appcast, whatever it already holds.
 first="$workdir/first.xml"
 cp "$script_dir/../.sparkle/appcast.xml" "$first"
-if "$append" --appcast "$first" --version 0.1.0 --build 5 --url "https://e.com/a.dmg" --signature "S==" --length 1 \
+next_build=$(( $(sed -n 's:.*<sparkle\:version>\([0-9]*\)</sparkle\:version>.*:\1:p' "$first" | sort -n | tail -1) + 1 ))
+if "$append" --appcast "$first" --version 99.0.0 --build "$next_build" --url "https://e.com/a.dmg" --signature "S==" --length 1 \
     --notes "$workdir/first-notes.html" --pub-date "Mon, 01 Jan 2026 00:00:00 +0000" --minimum-system-version 15.6 \
-    && grep -q '<sparkle:version>5</sparkle:version>' "$first"; then
-  check "adds the first release to the committed appcast" pass
+    && grep -q "<sparkle:version>$next_build</sparkle:version>" "$first" && xmllint --noout "$first"; then
+  check "adds the next release to the committed appcast" pass
 else
-  check "adds the first release to the committed appcast" fail
+  check "adds the next release to the committed appcast" fail
 fi
 
 reject "rejects a non-numeric length"      --version 2.11.0 --build 206 --url "https://e.com/a.dmg" --signature "S==" --length abc
