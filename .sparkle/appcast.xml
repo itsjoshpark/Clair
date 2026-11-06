@@ -8,6 +8,35 @@
     <item>
       <title>New Version Available</title>
       <link>https://github.com/itsjoshpark/Clair</link>
+      <sparkle:version>74</sparkle:version>
+      <sparkle:shortVersionString>0.1.1 (74)</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.6</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/itsjoshpark/Clair/releases/tag/v0.1.1</sparkle:fullReleaseNotesLink>
+      <pubDate>Fri, 06 Nov 2026 01:15:30 +0000</pubDate>
+      <enclosure
+        url="https://github.com/itsjoshpark/Clair/releases/download/v0.1.1/Clair-0.1.1-arm64.dmg"
+        sparkle:edSignature="S1vwZgTjd6hgKDtURO2YPdqrynAaG7OaEBwY5XoX1ZT+ltq9FAjnzRHmCghDQw26EOGH2XHuQJmHpcYC0LO6AA=="
+        length="171700553"
+        type="application/octet-stream" />
+      <sparkle:deltas>
+        <enclosure
+          url="https://github.com/itsjoshpark/Clair/releases/download/v0.1.1/Clair-69-74.delta"
+          sparkle:deltaFrom="69"
+          sparkle:edSignature="Yis816o/S8oWn/rA4j2Tt+DER09gBP4YQXUc0ubrgCckZOc3Tg3vEYbPpRwb80zRTDtW5RuOmH92/O3WoY29Ag=="
+          length="62662"
+          type="application/octet-stream" />
+      </sparkle:deltas>
+      <description><![CDATA[
+      <ul>
+      <li>Changed: This release tests Clair's automatic updates. Nothing else changes</li>
+      </ul>
+      ]]>
+      </description>
+    </item>
+
+    <item>
+      <title>New Version Available</title>
+      <link>https://github.com/itsjoshpark/Clair</link>
       <sparkle:version>69</sparkle:version>
       <sparkle:shortVersionString>0.1.0 (69)</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.6</sparkle:minimumSystemVersion>
