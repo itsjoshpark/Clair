@@ -358,10 +358,12 @@ final class UpdateMenuTests: RuntimeTestCase {
     let ready = "Clair \(fixture.updateVersion) is ready"
     try browser.requireAlert(titled: ready, within: 180)
     let oldProcess = try browser.runningProcessID()
+    let beside = try browser.itemsBesideApp()
     try browser.clickAlertButton("Restart and Update")
 
     try await waitForRelaunch(of: browser, from: oldProcess)
     XCTAssertEqual(browser.installedVersion, fixture.updateVersion, "The update didn't install")
+    assertUpdateLeftNothingBeside(browser, before: beside)
     var after: [String] = []
     let restored = await Harness.wait(for: 60) {
       after = try await browser.pageTargets().map(\.url).filter { $0.contains("?") }
@@ -383,6 +385,17 @@ extension RuntimeTestCase {
       return try await !browser.pageTargets().isEmpty
     }
     try require(relaunched, "Clair didn't relaunch within \(Int(seconds)) seconds")
+  }
+
+  /// Checks that the update replaced only Clair.app: nothing from its DMG, such
+  /// as the window's layout files or the Applications link, landed beside it.
+  func assertUpdateLeftNothingBeside(_ browser: Browser, before: Set<String>) {
+    do {
+      let added = try browser.itemsBesideApp().subtracting(before)
+      XCTAssertEqual(added.sorted(), [], "The update left these beside Clair.app")
+    } catch {
+      XCTFail("Couldn't list what's beside Clair.app: \(error)")
+    }
   }
 }
 
@@ -413,8 +426,10 @@ final class IdleInstallTests: RuntimeTestCase {
 
   /// Checks that Clair installs the update once nothing stands in the way.
   private func assertInstalls(_ browser: Browser, from process: Int32?) async throws {
+    let beside = try browser.itemsBesideApp()
     try await waitForRelaunch(of: browser, from: process)
     XCTAssertEqual(browser.installedVersion, fixture.updateVersion, "The update didn't install")
+    assertUpdateLeftNothingBeside(browser, before: beside)
   }
 
   func testInstallsAndRelaunchesWhenIdle() async throws {

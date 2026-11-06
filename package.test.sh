@@ -2,15 +2,17 @@
 # Tests for package.sh. Run directly: ./package.test.sh
 #
 # Packages a stand-in engine, ClairUI and Sparkle made of small real Mach-O
-# files, so it works offline and needs no Chromium (needs clang from Xcode or
-# the Command Line Tools). Signs ad hoc only, with stand-ins for Apple's notary
-# service; real Developer ID signing and notarization are checked by the release
-# dry run.
+# files, so it needs no Chromium (needs clang from Xcode or the Command Line
+# Tools). Builds real DMGs with dmgbuild, which scripts/fetch-dmgbuild.sh
+# installs into build/dmgbuild, from PyPI the first time. Signs ad hoc only,
+# with stand-ins for Apple's notary service; real Developer ID signing and
+# notarization are checked by the release dry run.
 
 set -uo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 package="$root/package.sh"
+layout="$root/resources/dmg/layout.json"
 
 failures=0
 workdir="$(mktemp -d)"
@@ -33,6 +35,11 @@ cc -arch arm64 -arch x86_64 -o "$workdir/exe-universal" "$workdir/main.c" || exi
 cc -arch x86_64 -o "$workdir/exe-x86_64" "$workdir/main.c" || exit 1
 cc -arch arm64 -dynamiclib -o "$workdir/lib" "$workdir/lib.c" || exit 1
 cc -arch arm64 -arch x86_64 -dynamiclib -o "$workdir/lib-universal" "$workdir/lib.c" || exit 1
+# Any real icon will do; the DMG's volume icon must match it byte for byte.
+cp /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns "$workdir/app.icns" || exit 1
+
+dmgbuild="$("$root/scripts/fetch-dmgbuild.sh" "$root/build/dmgbuild")" || exit 1
+dmg_python="$(dirname "$dmgbuild")/python"
 
 plist() {
   local file="$1" id="$2" executable="$3"
@@ -72,6 +79,11 @@ make_engine() {
   /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 156.0.8078.73" \
     -c "Add :CFBundleVersion string 8078.73" \
     -c "Add :LSMinimumSystemVersion string 15.6" "$app/Contents/Info.plist"
+  if [[ "${3-icon}" == icon ]]; then
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string app" "$app/Contents/Info.plist"
+    mkdir -p "$app/Contents/Resources"
+    cp "$workdir/app.icns" "$app/Contents/Resources/app.icns"
+  fi
   local fw="$app/Contents/Frameworks/Clair Framework.framework"
   framework "$fw" "Clair Framework" dev.joshuapark.Clair.framework lib
   local helpers="$fw/Versions/A/Helpers"
@@ -134,7 +146,7 @@ echo "pfIShU4dEXqPd5ObYNfDBiQWcXozk7estwzTnF9BamQ=" >"$key_file"
 
 output=""
 run_package() {
-  output="$("$package" --clairui "$clairui/ClairUI.framework" --sparkle "$sparkle" "$@" 2>&1)"
+  output="$("$package" --clairui "$clairui/ClairUI.framework" --sparkle "$sparkle" --dmgbuild "$dmgbuild" "$@" 2>&1)"
 }
 
 expect_refusal() {
@@ -268,6 +280,57 @@ else
   check "without a public key, warns and writes no SUPublicEDKey" fail
 fi
 
+# --- the DMG window (style-release-dmg design D5) -----------------------------------
+# What the layout should be, from layout.json, and what a mounted DMG's .DS_Store
+# says it is, one fact a line: "<fact> <value>".
+layout_facts() {
+  "$dmg_python" -I -c '
+import json, sys
+layout = json.load(open(sys.argv[1]))
+w = layout["window"]
+print("window {{%d, %d}, {%d, %d}}" % (w["x"], w["y"], w["width"], w["height"]))
+print("icon_size %s" % float(layout["icon_size"]))
+for name, (x, y) in sorted(layout["icons"].items()):
+    print("position %s %d %d" % (name, x, y))
+print("bars off")
+print("background /.background.tiff")
+' "$layout"
+}
+
+dmg_facts() {
+  "$dmg_python" -I -c '
+import sys
+from ds_store import DSStore
+from mac_alias import Alias
+bars = ("ShowToolbar", "ShowSidebar", "ShowStatusBar", "ShowPathbar", "ShowTabView")
+with DSStore.open(sys.argv[1] + "/.DS_Store", "r") as store:
+    positions = {}
+    for entry in store:
+        if entry.code == b"Iloc":
+            positions[entry.filename] = entry.value
+        elif entry.filename == "." and entry.code == b"bwsp":
+            print("window %s" % entry.value["WindowBounds"])
+            on = [bar for bar in bars if entry.value.get(bar, True)]
+            print("bars %s" % (" ".join(on) or "off"))
+        elif entry.filename == "." and entry.code == b"icvp":
+            print("icon_size %s" % float(entry.value["iconSize"]))
+            if entry.value.get("backgroundType") == 2:
+                alias = Alias.from_bytes(entry.value["backgroundImageAlias"])
+                print("background %s" % alias.target.posix_path)
+            else:
+                print("background none")
+    for name, (x, y) in sorted(positions.items()):
+        print("position %s %d %d" % (name, x, y))
+' "$1"
+}
+
+tiff_sizes() {
+  tiffutil -info "$1" 2>/dev/null | sed -n 's/^ *Image Width: \([0-9]*\) Image Length: \([0-9]*\)$/\1x\2/p' | tr '\n' ' '
+}
+
+expected_facts="$(layout_facts)"
+read -r window_width window_height < <("$dmg_python" -I -c 'import json, sys; w = json.load(open(sys.argv[1]))["window"]; print(w["width"], w["height"])' "$layout")
+
 mount="$workdir/mount"
 mkdir "$mount"
 if hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mount" "$out/Clair-0.1.0-arm64.dmg" 2>/dev/null; then
@@ -277,52 +340,109 @@ if hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mount" "$out/Clair-0.
   else
     check "the DMG holds the signed Clair.app and an /Applications link" fail
   fi
+
+  visible="$(ls "$mount" | tr '\n' ' ')"
+  if [[ "$visible" == "Applications Clair.app " ]]; then
+    check "Clair.app and Applications are the only visible items" pass
+  else
+    check "Clair.app and Applications are the only visible items" fail
+    echo "         got: $visible"
+  fi
+
+  sizes="$(tiff_sizes "$mount/.background.tiff")"
+  if [[ "$sizes" == "${window_width}x$window_height $((window_width * 2))x$((window_height * 2)) " ]]; then
+    check "the background holds the window's 1x and 2x images" pass
+  else
+    check "the background holds the window's 1x and 2x images" fail
+    echo "         got: ${sizes:-no .background.tiff}"
+  fi
+
+  # kHasCustomIcon is bit 10 of the Finder flags, which start at byte 8 of FinderInfo.
+  finder_flags="$(xattr -px com.apple.FinderInfo "$mount" 2>/dev/null | tr -d ' \n' | cut -c17-18)"
+  if cmp -s "$mount/.VolumeIcon.icns" "$out/Clair.app/Contents/Resources/app.icns" \
+      && (( (0x${finder_flags:-00} & 0x04) != 0 )); then
+    check "the volume icon is the app's icon, and the volume shows it" pass
+  else
+    check "the volume icon is the app's icon, and the volume shows it" fail
+  fi
+
+  actual_facts="$(dmg_facts "$mount" 2>&1)"
+  for pair in "window=the window's position and size" "icon_size=the icon size" "position=the icons' positions" \
+      "bars=no toolbar, sidebar, status bar, path bar or tab bar" "background=the background alias"; do
+    fact="${pair%%=*}" description="${pair#*=}"
+    expected="$(grep "^$fact " <<<"$expected_facts")"
+    actual="$(grep "^$fact " <<<"$actual_facts")"
+    if [[ -n "$expected" && "$actual" == "$expected" ]]; then
+      check "the .DS_Store sets $description, as layout.json says" pass
+    else
+      check "the .DS_Store sets $description, as layout.json says" fail
+      echo "         expected: $expected"
+      echo "         got: ${actual:-$actual_facts}"
+    fi
+  done
   hdiutil detach -quiet "$mount" || true
 else
   check "the DMG holds the signed Clair.app and an /Applications link" fail
   echo "         hdiutil couldn't mount it"
 fi
 
-# --- hdiutil failures ----------------------------------------------------------------
+# --- dmgbuild failures ----------------------------------------------------------------
+# A stand-in dmgbuild, so a flaky one can be tried again without waiting on real
+# DMGs. The DMG tests above cover the real thing.
 stub_bin="$workdir/stub-bin"
 mkdir "$stub_bin"
 printf '#!/bin/bash\nexit 0\n' >"$stub_bin/sleep"
-cat >"$stub_bin/hdiutil" <<EOF
+cat >"$stub_bin/dmgbuild" <<EOF
 #!/bin/bash
-count="\$(cat "$workdir/hdiutil-count" 2>/dev/null || echo 0)"
-echo "\$((count + 1))" >"$workdir/hdiutil-count"
-if ((count < HDIUTIL_FAILURES)); then
-  echo "hdiutil: create failed - Resource busy" >&2
+count="\$(cat "$workdir/dmgbuild-count" 2>/dev/null || echo 0)"
+echo "\$((count + 1))" >"$workdir/dmgbuild-count"
+printf '%s\n' "\$@" >"$workdir/dmgbuild-args"
+if ((count < DMGBUILD_FAILURES)); then
+  echo "dmgbuild: Unable to create disk image: Resource busy" >&2
   exit 1
 fi
-# The stand-in for a successful create: real hdiutil fails now and then on the
-# hosted runners, and this test would give it only one attempt. The DMG tests
-# above already cover the real thing.
 : >"\${!#}"
 EOF
-chmod +x "$stub_bin/sleep" "$stub_bin/hdiutil"
+chmod +x "$stub_bin/sleep" "$stub_bin/dmgbuild"
 
-echo 0 >"$workdir/hdiutil-count"
+echo 0 >"$workdir/dmgbuild-count"
 out="$workdir/out-retry"
-if HDIUTIL_FAILURES=2 PATH="$stub_bin:$PATH" run_package --version 0.1.0 --build 7 "$engine/Clair.app" "$out" \
-    && [[ -f "$out/Clair-0.1.0-arm64.dmg" && "$(cat "$workdir/hdiutil-count")" == 3 ]]; then
-  check "tries hdiutil again when it fails" pass
+if DMGBUILD_FAILURES=2 PATH="$stub_bin:$PATH" run_package --version 0.1.0 --build 7 --dmgbuild "$stub_bin/dmgbuild" "$engine/Clair.app" "$out" \
+    && [[ -f "$out/Clair-0.1.0-arm64.dmg" && "$(cat "$workdir/dmgbuild-count")" == 3 ]]; then
+  check "tries dmgbuild again when it fails" pass
 else
-  check "tries hdiutil again when it fails" fail
+  check "tries dmgbuild again when it fails" fail
   echo "$output" | tail -5 | sed 's/^/         /'
 fi
 
-echo 0 >"$workdir/hdiutil-count"
-out="$workdir/out-busy"
-if HDIUTIL_FAILURES=99 PATH="$stub_bin:$PATH" run_package --version 0.1.0 --build 7 "$engine/Clair.app" "$out"; then
-  check "stops after three hdiutil failures, showing its error" fail
-elif [[ "$output" == *"Resource busy"* && "$output" == *"couldn't create the DMG"* \
-    && "$(cat "$workdir/hdiutil-count")" == 3 ]]; then
-  check "stops after three hdiutil failures, showing its error" pass
+passed="$(tr '\n' ' ' <"$workdir/dmgbuild-args")"
+out="$(cd "$out" && pwd -P)"
+if [[ "$passed" == *"-s $root/resources/dmg/settings.py "* \
+    && "$passed" == *"-D app=$out/Clair.app "* \
+    && "$passed" == *"-D icon=$out/Clair.app/Contents/Resources/app.icns "* \
+    && "$passed" == *"-D background=$root/resources/dmg/background.tiff "* \
+    && "$passed" == *"-D layout=$layout "* \
+    && "$passed" == *" Clair $out/Clair-0.1.0-arm64.dmg " ]]; then
+  check "passes dmgbuild the settings, the app, its icon, the background and the layout" pass
 else
-  check "stops after three hdiutil failures, showing its error" fail
+  check "passes dmgbuild the settings, the app, its icon, the background and the layout" fail
+  echo "         $passed"
+fi
+
+echo 0 >"$workdir/dmgbuild-count"
+out="$workdir/out-busy"
+if DMGBUILD_FAILURES=99 PATH="$stub_bin:$PATH" run_package --version 0.1.0 --build 7 --dmgbuild "$stub_bin/dmgbuild" "$engine/Clair.app" "$out"; then
+  check "stops after three dmgbuild failures, showing its error" fail
+elif [[ "$output" == *"Resource busy"* && "$output" == *"couldn't create the DMG"* \
+    && "$(cat "$workdir/dmgbuild-count")" == 3 && ! -e "$out/Clair-0.1.0-arm64.dmg" ]]; then
+  check "stops after three dmgbuild failures, showing its error" pass
+else
+  check "stops after three dmgbuild failures, showing its error" fail
   echo "$output" | tail -5 | sed 's/^/         /'
 fi
+
+expect_refusal "refuses a missing dmgbuild" "no dmgbuild at" \
+  --version 0.1.0 --build 7 --dmgbuild "$workdir/no-dmgbuild" "$engine/Clair.app" "$workdir/out3"
 
 # --- signing with an identity -----------------------------------------------------
 # No Developer ID here: stand-ins accept the identity and sign ad hoc instead.
@@ -522,6 +642,10 @@ expect_refusal "refuses an identity that isn't in the keychain" "no valid signin
 make_engine "$workdir/foreign" org.chromium.Chromium
 expect_refusal "refuses an engine with another bundle identifier" "not dev.joshuapark.Clair" \
   --version 0.1.0 --build 7 --no-dmg "$workdir/foreign/Clair.app" "$workdir/out3"
+
+make_engine "$workdir/no-icon" dev.joshuapark.Clair no-icon
+expect_refusal "refuses an engine without its icon, which the volume uses" "no CFBundleIconFile" \
+  --version 0.1.0 --build 7 --no-dmg "$workdir/no-icon/Clair.app" "$workdir/out3"
 
 make_engine "$workdir/twice"
 framework "$workdir/twice/Clair.app/Contents/Frameworks/ClairUI.framework" ClairUI dev.joshuapark.Clair.ClairUI lib

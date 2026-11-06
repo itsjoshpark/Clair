@@ -176,6 +176,13 @@ final class Browser {
     return plist?["CFBundleShortVersionString"] as? String
   }
 
+  /// What sits beside the private Clair.app, hidden files included: Clair's
+  /// data directory, and anything else a test or an update put there.
+  func itemsBesideApp() throws -> Set<String> {
+    let names = try FileManager.default.contentsOfDirectory(atPath: workDirectory.path)
+    return Set(names).subtracting([appPath.lastPathComponent])
+  }
+
   /// The ID of the running Clair process, wherever it was started from.
   func runningProcessID() throws -> Int32? {
     let result = try Harness.run("/usr/bin/pgrep", ["-x", "Clair"])

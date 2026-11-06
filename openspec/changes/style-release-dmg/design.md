@@ -42,9 +42,10 @@ Hash-pinning matters because `package.sh` runs in the `release` environment, nex
 
 ### D3. Layout and artwork in `resources/dmg/`
 
-- `settings.py`: the `dmgbuild` settings. The window is 660 × 400 points with 128-point icons. Clair is at (180, 200) and Applications at (480, 200), with the toolbar, sidebar, status bar and path bar off. The format stays `ULFO` on HFS+.
-- `background.svg`: the 660 × 400 artwork, written by `make_background.py` from the same geometry as `resources/icon/make_layers.py`, so the ring and the colours match the app icon. It has a curved arrow between the two icon positions, read from the same constants as `settings.py`. The tone keeps black and white labels both readable: a mid-tone field, or a lighter plate under each label, picked by checking both appearances.
-- `background.tiff`: the committed render. `scripts/render-dmg-background.sh` renders the SVG at 660 × 400 and 1320 × 800 with `rsvg-convert`, then joins them with `tiffutil -cathidpicheck`. That gives Finder one file with both resolutions, which it picks between for the display. `package.sh` needs only the TIFF, so packaging doesn't need `rsvg-convert`.
+- `layout.json`: the window's position and size, the icon and label sizes, and the two icon positions, read by both `settings.py` and `make_background.py`. The window is 660 × 400 points with 128-point icons. Clair is at (180, 200) and Applications at (480, 200).
+- `settings.py`: the `dmgbuild` settings: the layout from `layout.json`, with the toolbar, sidebar, status bar and path bar off. The format stays `ULFO` on HFS+. It doesn't use `dmgbuild`'s `hide_extensions`: that sets Finder info on the app bundle, which makes `codesign --verify --strict` fail on the DMG's copy of the app. Finder already labels an app without its `.app`.
+- `background.svg`: the 660 × 400 artwork, written by `make_background.py` from the same geometry as `resources/icon/make_layers.py`, so the ring and the colours match the app icon. It has a curved arrow between the two icon positions, read from `layout.json`. The tone keeps black and white labels both readable: a mid-tone field, or a lighter plate under each label, picked by checking both appearances.
+- `background.tiff`: the committed render, which `dmgbuild` copies to `.background.tiff` at the volume's root. `scripts/render-dmg-background.sh` renders the SVG at 660 × 400 and 1320 × 800 with `rsvg-convert`, then joins them with `tiffutil -cathidpicheck`. That gives Finder one file with both resolutions, which it picks between for the display. `package.sh` needs only the TIFF, so packaging doesn't need `rsvg-convert`.
 - The volume icon is the packaged app's own `Contents/Resources/app.icns`, read from the app being packaged, so it can't drift from the app icon.
 
 `settings.py` reads the paths it needs (app, volume icon, background) from `dmgbuild`'s `-D` definitions, which `package.sh` passes. It holds no absolute paths.
@@ -57,9 +58,9 @@ The staging folder and `ditto` copy go, since `dmgbuild` copies the app and make
 
 - **`package.test.sh` (every pull request):** it mounts the DMG it builds and checks these:
   - `Clair.app` and the `Applications` symlink are the only visible items
-  - `.background/background.tiff` holds two images, at 660 × 400 and 1320 × 800 (`tiffutil -info`)
+  - `.background.tiff` holds two images, at 660 × 400 and 1320 × 800 (`tiffutil -info`)
   - `.VolumeIcon.icns` matches the app's `app.icns`, and the volume root has the custom-icon Finder flag
-  - the `.DS_Store`, read with the `ds_store` library from the `dmgbuild` environment, gives each item the position in `settings.py`, and sets the window size, icon size and a background alias to `.background/background.tiff`
+  - the `.DS_Store`, read with the `ds_store` library from the `dmgbuild` environment, gives each item the position in `layout.json`, and sets the window size, icon size, the bars off and a background alias to `/.background.tiff`
 - **The runtime suite:** its update test already installs an update from a DMG `package.sh` built, which now has the layout. It gains a check that the update replaced only `Clair.app` and left nothing else beside it.
 - **The release checklist (by eye):** `docs/releasing.md` gains an item to open the dry-run DMG in Light and Dark Mode and on a Retina and a standard display, if both are at hand.
 

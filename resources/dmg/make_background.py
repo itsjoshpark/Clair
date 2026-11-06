@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Write the DMG window's background, background.svg (style-release-dmg design D3).
+
+The window size and the icon positions come from layout.json, which settings.py
+also reads, so the arrow always runs between the two icons. The gold, the mark
+and the arc's proportions come from resources/icon/make_layers.py, so they match
+the app icon.
+
+The field is a warm mid-tone, so the labels Finder draws under the icons, black
+in Light Mode and white in Dark Mode, both stay readable: this script refuses a
+tone where either falls below LABEL_CONTRAST.
+
+Standard library only. Render it with scripts/render-dmg-background.sh.
+
+Usage: make_background.py [--out FILE]   (default: background.svg next to it)
+"""
+
+import json
+import math
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+# Importing make_layers would otherwise leave __pycache__ in resources/icon/.
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.join(HERE, "..", "icon"))
+import make_layers  # noqa: E402
+
+# The field, top to bottom. LABEL_STOP sits on the labels' line, so the label
+# contrast is checked against it.
+FIELD_TOP, FIELD_LABELS, FIELD_BOTTOM = "#8A7E6E", "#807464", "#74695A"
+LABEL_CONTRAST = 4.5
+# The arrow: a gold arc, like the ring, from GOLD_TOP to the icon's mid gold.
+ARROW_GOLD_END = "#%02X%02X%02X" % make_layers.GOLD_ARGB[1:]
+ARROW_GAP = 22       # between an icon's edge and the arrow's end
+ARROW_RISE = 26      # how far the arc's middle rises above the icons' centres
+ARROW_WIDTH = 7.0
+ARROW_HEAD = 15      # length of each side of the head
+MARK_SIZE = 46       # the mark's diameter above the arrow
+MARK_TOP = 46
+
+
+def luminance(colour):
+    """WCAG relative luminance of #RRGGBB."""
+    def channel(value):
+        c = value / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (int(colour[i:i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def contrast(a, b):
+    la, lb = sorted((luminance(a), luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def load_layout():
+    with open(os.path.join(HERE, "layout.json")) as f:
+        return json.load(f)
+
+
+def arrow(layout):
+    """The arc between the icons, its head, and the bead at its tail."""
+    (x1, y1), (x2, y2) = layout["icons"]["Clair.app"], layout["icons"]["Applications"]
+    if y1 != y2 or x2 <= x1:
+        raise SystemExit("make_background: Applications must sit level with Clair, to its right")
+    half_icon = layout["icon_size"] / 2
+    start, end = x1 + half_icon + ARROW_GAP, x2 - half_icon - ARROW_GAP
+    chord = end - start
+    # The circle through both ends and the raised middle.
+    radius = (chord * chord / 4 + ARROW_RISE * ARROW_RISE) / (2 * ARROW_RISE)
+    cx, cy = (start + end) / 2, y1 - ARROW_RISE + radius
+    # The head points along the arc's tangent at its end.
+    angle = math.atan2(y1 - cy, end - cx)
+    tangent = (-math.sin(angle), math.cos(angle))
+    if tangent[0] < 0:
+        tangent = (-tangent[0], -tangent[1])
+    spread = math.radians(40)
+
+    def side(sign):
+        c, s = math.cos(sign * spread), math.sin(sign * spread)
+        dx, dy = tangent[0] * c - tangent[1] * s, tangent[0] * s + tangent[1] * c
+        return end - dx * ARROW_HEAD, y1 - dy * ARROW_HEAD
+
+    n = make_layers.num
+    left, right = side(1), side(-1)
+    arc = "M%s %s A%s %s 0 0 1 %s %s" % (n(start, 2), n(y1, 2), n(radius, 2), n(radius, 2), n(end, 2), n(y1, 2))
+    head = "M%s %s L%s %s L%s %s" % (n(left[0], 2), n(left[1], 2), n(end, 2), n(y1, 2), n(right[0], 2), n(right[1], 2))
+    top = y1 - ARROW_RISE - ARROW_WIDTH
+    bead = (start, y1, ARROW_WIDTH * 0.85)
+    return arc, head, bead, top
+
+
+def mark(layout):
+    """The full gold mark, centred above the arrow."""
+    scale = MARK_SIZE / (2 * make_layers.RING_OUTER)
+    cx = layout["window"]["width"] / 2
+    m = (scale, cx - 50 * scale, MARK_TOP + MARK_SIZE / 2 - 50 * scale)
+    return m, make_layers.mark(m, samples=48)
+
+
+def background(layout):
+    width, height = layout["window"]["width"], layout["window"]["height"]
+    for label in ("#000000", "#FFFFFF"):
+        ratio = contrast(FIELD_LABELS, label)
+        if ratio < LABEL_CONTRAST:
+            raise SystemExit("make_background: %s labels would have %.2f:1 contrast on %s; need %.1f:1"
+                             % (label, ratio, FIELD_LABELS, LABEL_CONTRAST))
+    # The labels' line: just under the icons.
+    label_y = layout["icons"]["Clair.app"][1] + layout["icon_size"] / 2 + layout["text_size"]
+    label_stop = label_y / height
+    arc, head, bead, top = arrow(layout)
+    mark_mapping, shapes = mark(layout)
+    n = make_layers.num
+    gold = make_layers.gold_defs(mark_mapping).strip()
+    gold = gold.replace("<defs>", "").replace("</defs>", "")
+    return "\n".join([
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d">' % (width, height, width, height),
+        "  <!-- Generated by resources/dmg/make_background.py; do not edit. -->",
+        "  <defs>",
+        '    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0" stop-color="%s"/><stop offset="%s" stop-color="%s"/><stop offset="1" stop-color="%s"/>'
+        "</linearGradient>" % (FIELD_TOP, n(label_stop, 3), FIELD_LABELS, FIELD_BOTTOM),
+        '    <radialGradient id="glow" cx="0.5" cy="0.3" r="0.45">'
+        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.07"/>'
+        '<stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>',
+        '    <linearGradient id="arrow" gradientUnits="userSpaceOnUse" x1="0" y1="%s" x2="0" y2="%s">'
+        '<stop offset="0" stop-color="%s"/><stop offset="1" stop-color="%s"/></linearGradient>'
+        % (n(top, 2), n(layout["icons"]["Clair.app"][1] + ARROW_WIDTH, 2), make_layers.GOLD_TOP, ARROW_GOLD_END),
+        "    " + gold,
+        "  </defs>",
+        '  <rect width="%d" height="%d" fill="url(#field)"/>' % (width, height),
+        '  <rect width="%d" height="%d" fill="url(#glow)"/>' % (width, height),
+        "\n".join('  <path fill="url(#gold)" d="%s"/>' % make_layers.svg_d(s) for s in shapes),
+        '  <g fill="none" stroke="url(#arrow)" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round">'
+        % n(ARROW_WIDTH, 2),
+        '    <path d="%s"/>' % arc,
+        '    <path d="%s"/>' % head,
+        "  </g>",
+        '  <circle cx="%s" cy="%s" r="%s" fill="url(#arrow)"/>' % tuple(n(v, 2) for v in bead),
+        "</svg>",
+        "",
+    ])
+
+
+def main(argv):
+    out = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(HERE, "background.svg")
+    text = background(load_layout())
+    with open(out, "w") as f:
+        f.write(text)
+    print("wrote", out)
+    for label in ("#000000", "#FFFFFF"):
+        print("label contrast with %s: %.2f:1" % (label, contrast(FIELD_LABELS, label)))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

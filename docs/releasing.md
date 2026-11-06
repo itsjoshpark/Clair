@@ -41,6 +41,7 @@ The quality checks can't cover these. Run them on a dry-run DMG of the commit yo
 3. Unzip the artifact, open `Clair-<version>-arm64.dmg`, drag Clair to Applications and open it from there.
 
 - [ ] The notarized DMG opens after only the standard downloaded-from-the-internet prompt
+- [ ] The DMG's window opens at its fixed size with no toolbar or sidebar, Clair on the left, Applications on the right and the arrow between them, and the mounted disk shows Clair's icon. Open it in Light and in Dark Mode: both labels are readable in each. If both a Retina and a standard display are at hand, the background is sharp on the Retina one and lines up with the icons on both.
 - [ ] A CRX installs through the extension MIME flag
 - [ ] ungoogled-chromium's default settings are in place
 - [ ] System Settings lists Clair as a default browser, and a link from another app opens in it
