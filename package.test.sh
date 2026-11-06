@@ -288,7 +288,8 @@ layout_facts() {
 import json, sys
 layout = json.load(open(sys.argv[1]))
 w = layout["window"]
-print("window {{%d, %d}, {%d, %d}}" % (w["x"], w["y"], w["width"], w["height"]))
+# Finder'"'"'s bounds include the title bar, above the background.
+print("window {{%d, %d}, {%d, %d}}" % (w["x"], w["y"], w["width"], w["height"] + w["title_bar"]))
 print("icon_size %s" % float(layout["icon_size"]))
 for name, (x, y) in sorted(layout["icons"].items()):
     print("position %s %d %d" % (name, x, y))

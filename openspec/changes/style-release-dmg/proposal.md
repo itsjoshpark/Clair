@@ -7,7 +7,7 @@ Opening Clair's DMG shows a plain Finder window with `Clair.app` and an `Applica
 ## What Changes
 
 - The DMG window gets a fixed layout: its size, Clair on the left and Applications on the right at fixed positions, a large icon size, and no toolbar, sidebar or status bar.
-- A designed background, drawn from the same artwork as the app icon (`resources/icon/`), with an arrow from Clair to Applications. It is generated from SVG at 1x and 2x and committed, like the product logos.
+- A designed background in the style of Dia's DMG: a plain light field, "To install, drag Clair to Applications" along the top, and three chevrons from Clair to Applications. It is generated from SVG at 1x and 2x and committed, like the product logos.
 - The mounted volume uses Clair's app icon instead of the generic disk icon.
 - `package.sh` builds the DMG with `dmgbuild`, pinned, instead of `hdiutil create`. `dmgbuild` writes the window's `.DS_Store` directly, so it runs headless on the owner's Mac and on hosted runners, with no Finder scripting. Signing, notarization and stapling don't change.
 - `package.test.sh` checks the mounted layout: the background, icon positions and volume icon.
@@ -30,7 +30,7 @@ None.
 ## Impact
 
 - **Code:** `package.sh`'s DMG section and `package.test.sh`. New `resources/dmg/`: the `dmgbuild` settings, the background source and its renders, and the script that renders them.
-- **Dependencies:** `dmgbuild` (MIT; it depends on `ds_store` and `mac_alias`), pinned in a requirements file and installed into a virtual environment by `package.sh`'s callers. `rsvg-convert` (already used for the logos) and macOS's `tiffutil` render the background.
+- **Dependencies:** `dmgbuild` (MIT; it depends on `ds_store` and `mac_alias`), pinned in a requirements file and installed into a virtual environment by `package.sh`'s callers. `rsvg-convert` (already used for the logos) and macOS's `tiffutil` render the background. Regenerating its SVG needs fontTools and uharfbuzz, and the Inter font (SIL OFL 1.1), none of them on the packaging path.
 - **Workflows:** `release.yml`'s `package` job on the owner's Mac, and `quality.yml`, whose runtime suite builds a DMG for its update test, both need `dmgbuild` installed. `ci.yml`'s script tests need it for `package.test.sh`.
 - **Engine:** none. `package.sh` and `resources/dmg/` aren't engine inputs, so the engine key doesn't change.
 - **Updates:** Sparkle copies only `Clair.app` out of the DMG, so the extra layout files don't affect updates. The runtime suite's update test covers this.

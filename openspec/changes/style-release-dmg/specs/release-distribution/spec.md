@@ -14,7 +14,7 @@ When the release DMG is opened in Finder, its window SHALL open at a fixed size,
 - **THEN** the window shows no items other than `Clair.app` and `Applications`
 
 ### Requirement: Disk image background
-The DMG window SHALL show a background drawn from Clair's artwork, with an arrow from `Clair.app` to `Applications` that tells the user to drag one onto the other. The background SHALL be sharp on both standard and Retina displays.
+The DMG window SHALL show a light background that tells the user to drag `Clair.app` onto `Applications`, in words and with an arrow pointing from one to the other. The background SHALL be sharp on both standard and Retina displays.
 
 #### Scenario: Background on a Retina display
 - **WHEN** the release DMG is opened on a Retina display

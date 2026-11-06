@@ -1,0 +1,6 @@
+# What resources/dmg/make_background.py needs to write background.svg: fontTools
+# draws Inter's outlines, and uharfbuzz lays out the text with its kerning. Only
+# for regenerating the artwork and for scripts/render-dmg-background.test.sh;
+# packaging uses the committed background.tiff.
+fonttools==4.68.0
+uharfbuzz==0.57.0

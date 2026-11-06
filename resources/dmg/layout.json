@@ -1,9 +1,9 @@
 {
-  "window": {"x": 200, "y": 120, "width": 660, "height": 400},
-  "icon_size": 128,
-  "text_size": 13,
+  "window": {"x": 110, "y": 110, "width": 800, "height": 400, "title_bar": 27},
+  "icon_size": 212,
+  "text_size": 16,
   "icons": {
-    "Clair.app": [180, 200],
-    "Applications": [480, 200]
+    "Clair.app": [190, 180],
+    "Applications": [610, 180]
   }
 }

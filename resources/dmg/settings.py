@@ -51,5 +51,7 @@ label_pos = "bottom"
 icon_size = _layout["icon_size"]
 text_size = _layout["text_size"]
 _window = _layout["window"]
-window_rect = ((_window["x"], _window["y"]), (_window["width"], _window["height"]))
+# Finder's window bounds include the title bar, so the background, which is
+# the window's content, needs that much more height to show in full.
+window_rect = ((_window["x"], _window["y"]), (_window["width"], _window["height"] + _window["title_bar"]))
 icon_locations = {name: tuple(position) for name, position in _layout["icons"].items()}

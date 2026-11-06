@@ -1,43 +1,64 @@
 #!/usr/bin/env python3
 """Write the DMG window's background, background.svg (style-release-dmg design D3).
 
+A plain light field. "To install, drag Clair to Applications" runs along the
+top, and three chevrons, light to dark, point from Clair to Applications.
+
 The window size and the icon positions come from layout.json, which settings.py
-also reads, so the arrow always runs between the two icons. The gold, the mark
-and the arc's proportions come from resources/icon/make_layers.py, so they match
-the app icon.
+also reads, so the chevrons always sit between the icons. The text is Inter
+(SIL Open Font License 1.1), downloaded from a pinned google/fonts commit into
+resources/icon/.font-cache/, which git ignores, and turned into outlines so the
+SVG has no <text>.
 
-The field is a warm mid-tone, so the labels Finder draws under the icons, black
-in Light Mode and white in Dark Mode, both stay readable: this script refuses a
-tone where either falls below LABEL_CONTRAST.
+Finder draws the icon labels dark on a light background, in Dark Mode too, so
+the script refuses a field where black text falls below LABEL_CONTRAST.
 
-Standard library only. Render it with scripts/render-dmg-background.sh.
+Needs fontTools and uharfbuzz (pip install fonttools uharfbuzz): HarfBuzz lays
+out the text with Inter's kerning, and fontTools draws the outlines. Render the
+result with scripts/render-dmg-background.sh.
 
-Usage: make_background.py [--out FILE]   (default: background.svg next to it)
+Usage: make_background.py [--out FILE] [--font-cache DIR]
 """
 
 import json
-import math
 import os
 import sys
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# Importing make_layers would otherwise leave __pycache__ in resources/icon/.
+ICON = os.path.join(HERE, "..", "icon")
+# Importing these would otherwise leave __pycache__ in resources/icon/.
 sys.dont_write_bytecode = True
-sys.path.insert(0, os.path.join(HERE, "..", "icon"))
+sys.path.insert(0, ICON)
 import make_layers  # noqa: E402
 
-# The field, top to bottom. LABEL_STOP sits on the labels' line, so the label
-# contrast is checked against it.
-FIELD_TOP, FIELD_LABELS, FIELD_BOTTOM = "#8A7E6E", "#807464", "#74695A"
+from fontTools.pens.svgPathPen import SVGPathPen  # noqa: E402
+from fontTools.pens.transformPen import TransformPen  # noqa: E402
+from fontTools.ttLib import TTFont  # noqa: E402
+from fontTools.varLib import instancer  # noqa: E402
+import uharfbuzz as hb  # noqa: E402
+
+FIELD = "#FAF8F4"
 LABEL_CONTRAST = 4.5
-# The arrow: a gold arc, like the ring, from GOLD_TOP to the icon's mid gold.
-ARROW_GOLD_END = "#%02X%02X%02X" % make_layers.GOLD_ARGB[1:]
-ARROW_GAP = 22       # between an icon's edge and the arrow's end
-ARROW_RISE = 26      # how far the arc's middle rises above the icons' centres
-ARROW_WIDTH = 7.0
-ARROW_HEAD = 15      # length of each side of the head
-MARK_SIZE = 46       # the mark's diameter above the arrow
-MARK_TOP = 46
+
+FONT_COMMIT = "fffdadf0f0c9cc1ec8b407063424a8bfbee05611"
+FONT_URL = ("https://raw.githubusercontent.com/google/fonts/%s/ofl/inter/Inter%%5Bopsz%%2Cwght%%5D.ttf"
+            % FONT_COMMIT)
+OPTICAL_SIZE = 20
+
+# The instruction: runs of (text, colour, weight), centred at CAPTION_Y.
+CAPTION = (("To install, drag ", "#666666", 400), ("Clair", "#000000", 600),
+           (" to ", "#666666", 400), ("Applications", "#000000", 600))
+CAPTION_Y = 52.5          # the capitals' vertical centre
+CAPTION_CAP_HEIGHT = 12
+
+# Three chevrons, light to dark, pointing from Clair to Applications.
+CHEVRONS = ("#C6C6C6", "#7C7C7C", "#000000")
+CHEVRON_DROP = 13.5       # below the icons' centres, where app icons look centred
+CHEVRON_PITCH = 16.25     # from one chevron to the next
+CHEVRON_WIDTH = 7.5       # from the arms' ends to the tip
+CHEVRON_HEIGHT = 20.5     # from one arm's end to the other's
+CHEVRON_STROKE = 3
 
 
 def luminance(colour):
@@ -59,98 +80,102 @@ def load_layout():
         return json.load(f)
 
 
-def arrow(layout):
-    """The arc between the icons, its head, and the bead at its tail."""
+def n(value):
+    return make_layers.num(value, 2)
+
+
+def font_path(cache):
+    path = os.path.join(cache, "Inter-%s.ttf" % FONT_COMMIT[:12])
+    if not os.path.exists(path):
+        os.makedirs(cache, exist_ok=True)
+        urllib.request.urlretrieve(FONT_URL, path)
+    return path
+
+
+def chevrons(layout):
+    """The three chevrons' paths and colours, centred between the icons."""
     (x1, y1), (x2, y2) = layout["icons"]["Clair.app"], layout["icons"]["Applications"]
-    if y1 != y2 or x2 <= x1:
-        raise SystemExit("make_background: Applications must sit level with Clair, to its right")
-    half_icon = layout["icon_size"] / 2
-    start, end = x1 + half_icon + ARROW_GAP, x2 - half_icon - ARROW_GAP
-    chord = end - start
-    # The circle through both ends and the raised middle.
-    radius = (chord * chord / 4 + ARROW_RISE * ARROW_RISE) / (2 * ARROW_RISE)
-    cx, cy = (start + end) / 2, y1 - ARROW_RISE + radius
-    # The head points along the arc's tangent at its end.
-    angle = math.atan2(y1 - cy, end - cx)
-    tangent = (-math.sin(angle), math.cos(angle))
-    if tangent[0] < 0:
-        tangent = (-tangent[0], -tangent[1])
-    spread = math.radians(40)
-
-    def side(sign):
-        c, s = math.cos(sign * spread), math.sin(sign * spread)
-        dx, dy = tangent[0] * c - tangent[1] * s, tangent[0] * s + tangent[1] * c
-        return end - dx * ARROW_HEAD, y1 - dy * ARROW_HEAD
-
-    n = make_layers.num
-    left, right = side(1), side(-1)
-    arc = "M%s %s A%s %s 0 0 1 %s %s" % (n(start, 2), n(y1, 2), n(radius, 2), n(radius, 2), n(end, 2), n(y1, 2))
-    head = "M%s %s L%s %s L%s %s" % (n(left[0], 2), n(left[1], 2), n(end, 2), n(y1, 2), n(right[0], 2), n(right[1], 2))
-    top = y1 - ARROW_RISE - ARROW_WIDTH
-    bead = (start, y1, ARROW_WIDTH * 0.85)
-    return arc, head, bead, top
+    span = CHEVRON_PITCH * (len(CHEVRONS) - 1) + CHEVRON_WIDTH
+    if y1 != y2 or x2 - x1 < layout["icon_size"] + span:
+        raise SystemExit("make_background: Applications must sit level with Clair, far enough to its right for the chevrons")
+    y = y1 + CHEVRON_DROP
+    left = (x1 + x2) / 2 - span / 2
+    paths = []
+    for i, colour in enumerate(CHEVRONS):
+        x = left + i * CHEVRON_PITCH
+        paths.append((colour, "M%s %s L%s %s L%s %s" % (
+            n(x), n(y - CHEVRON_HEIGHT / 2), n(x + CHEVRON_WIDTH), n(y), n(x), n(y + CHEVRON_HEIGHT / 2))))
+    return paths
 
 
-def mark(layout):
-    """The full gold mark, centred above the arrow."""
-    scale = MARK_SIZE / (2 * make_layers.RING_OUTER)
-    cx = layout["window"]["width"] / 2
-    m = (scale, cx - 50 * scale, MARK_TOP + MARK_SIZE / 2 - 50 * scale)
-    return m, make_layers.mark(m, samples=48)
+def shape(font_file, text, weight):
+    """HarfBuzz's layout of TEXT at WEIGHT: (glyph name, x offset, advance) in font units, kerning included."""
+    with open(font_file, "rb") as f:
+        face = hb.Face(f.read())
+    font = hb.Font(face)
+    font.set_variations({"wght": weight, "opsz": OPTICAL_SIZE})
+    buf = hb.Buffer()
+    buf.add_str(text)
+    buf.guess_segment_properties()
+    hb.shape(font, buf, {"kern": True, "liga": True})
+    order = TTFont(font_file).getGlyphOrder()
+    return [(order[info.codepoint], pos.x_offset, pos.x_advance)
+            for info, pos in zip(buf.glyph_infos, buf.glyph_positions)]
 
 
-def background(layout):
+def caption(font_file, width):
+    """The instruction's runs as (colour, path data), centred across the window."""
+    fonts = {weight: instancer.instantiateVariableFont(TTFont(font_file), {"wght": weight, "opsz": OPTICAL_SIZE})
+             for weight in sorted({run[2] for run in CAPTION})}
+    scale = CAPTION_CAP_HEIGHT / fonts[400]["OS/2"].sCapHeight
+    shaped = [(colour, weight, shape(font_file, text, weight)) for text, colour, weight in CAPTION]
+    advance = sum(a for _, _, glyphs in shaped for _, _, a in glyphs) * scale
+    x = (width - advance) / 2
+    baseline = CAPTION_Y + CAPTION_CAP_HEIGHT / 2
+    runs = []
+    for colour, weight, glyphs in shaped:
+        glyph_set = fonts[weight].getGlyphSet()
+        pen = SVGPathPen(glyph_set, lambda v: make_layers.num(v, 2))
+        for name, offset, adv in glyphs:
+            # Font units are y-up; the canvas is y-down.
+            glyph_set[name].draw(TransformPen(pen, (scale, 0, 0, -scale, x + offset * scale, baseline)))
+            x += adv * scale
+        runs.append((colour, pen.getCommands()))
+    return runs
+
+
+def background(layout, font_file):
     width, height = layout["window"]["width"], layout["window"]["height"]
-    for label in ("#000000", "#FFFFFF"):
-        ratio = contrast(FIELD_LABELS, label)
-        if ratio < LABEL_CONTRAST:
-            raise SystemExit("make_background: %s labels would have %.2f:1 contrast on %s; need %.1f:1"
-                             % (label, ratio, FIELD_LABELS, LABEL_CONTRAST))
-    # The labels' line: just under the icons.
-    label_y = layout["icons"]["Clair.app"][1] + layout["icon_size"] / 2 + layout["text_size"]
-    label_stop = label_y / height
-    arc, head, bead, top = arrow(layout)
-    mark_mapping, shapes = mark(layout)
-    n = make_layers.num
-    gold = make_layers.gold_defs(mark_mapping).strip()
-    gold = gold.replace("<defs>", "").replace("</defs>", "")
+    labels = contrast(FIELD, "#000000")
+    if labels < LABEL_CONTRAST:
+        raise SystemExit("make_background: labels would have %.2f:1 contrast on %s; need %.1f:1"
+                         % (labels, FIELD, LABEL_CONTRAST))
+    for text, colour, _ in CAPTION:
+        if contrast(FIELD, colour) < LABEL_CONTRAST:
+            raise SystemExit("make_background: %r in %s has too little contrast on %s" % (text, colour, FIELD))
+    marks = chevrons(layout)
+    runs = caption(font_file, width)
     return "\n".join([
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d">' % (width, height, width, height),
         "  <!-- Generated by resources/dmg/make_background.py; do not edit. -->",
-        "  <defs>",
-        '    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0" stop-color="%s"/><stop offset="%s" stop-color="%s"/><stop offset="1" stop-color="%s"/>'
-        "</linearGradient>" % (FIELD_TOP, n(label_stop, 3), FIELD_LABELS, FIELD_BOTTOM),
-        '    <radialGradient id="glow" cx="0.5" cy="0.3" r="0.45">'
-        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.07"/>'
-        '<stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>',
-        '    <linearGradient id="arrow" gradientUnits="userSpaceOnUse" x1="0" y1="%s" x2="0" y2="%s">'
-        '<stop offset="0" stop-color="%s"/><stop offset="1" stop-color="%s"/></linearGradient>'
-        % (n(top, 2), n(layout["icons"]["Clair.app"][1] + ARROW_WIDTH, 2), make_layers.GOLD_TOP, ARROW_GOLD_END),
-        "    " + gold,
-        "  </defs>",
-        '  <rect width="%d" height="%d" fill="url(#field)"/>' % (width, height),
-        '  <rect width="%d" height="%d" fill="url(#glow)"/>' % (width, height),
-        "\n".join('  <path fill="url(#gold)" d="%s"/>' % make_layers.svg_d(s) for s in shapes),
-        '  <g fill="none" stroke="url(#arrow)" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round">'
-        % n(ARROW_WIDTH, 2),
-        '    <path d="%s"/>' % arc,
-        '    <path d="%s"/>' % head,
+        '  <rect width="%d" height="%d" fill="%s"/>' % (width, height, FIELD),
+        "\n".join('  <path fill="%s" d="%s"/>' % run for run in runs),
+        '  <g fill="none" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round">' % n(CHEVRON_STROKE),
+        "\n".join('    <path stroke="%s" d="%s"/>' % mark for mark in marks),
         "  </g>",
-        '  <circle cx="%s" cy="%s" r="%s" fill="url(#arrow)"/>' % tuple(n(v, 2) for v in bead),
         "</svg>",
         "",
-    ])
+    ]), labels
 
 
 def main(argv):
     out = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(HERE, "background.svg")
-    text = background(load_layout())
+    cache = argv[argv.index("--font-cache") + 1] if "--font-cache" in argv else os.path.join(ICON, ".font-cache")
+    text, labels = background(load_layout(), font_path(cache))
     with open(out, "w") as f:
         f.write(text)
     print("wrote", out)
-    for label in ("#000000", "#FFFFFF"):
-        print("label contrast with %s: %.2f:1" % (label, contrast(FIELD_LABELS, label)))
+    print("label contrast: %.2f:1" % labels)
 
 
 if __name__ == "__main__":
