@@ -73,7 +73,18 @@ Then start the real release from the same commit.
 | "the Release for v<version> is still a draft" | The Release has every asset, but `main` is unchanged | Publish it (`gh release edit v<version> --draft=false --latest`), then bring the release commit to `main` as below |
 | "The Release is public, but installed copies won't be offered it" | The Release is public, but the appcast isn't on `main` | Bring the release commit to `main` as below |
 
-Until the appcast entry is on `main`, installed copies aren't offered the release, but nothing points at a missing file. Only the deploy key can push past `main`'s ruleset, so go through a pull request. Its head can't be the release commit itself: that commit's `[skip ci]` would keep the required checks from running. Cherry-pick it and drop `[skip ci]` from the message:
+Until the appcast entry is on `main`, installed copies aren't offered the release, but nothing points at a missing file. Only the deploy key can push past `main`'s ruleset.
+
+If `main` is still the release commit's parent, fast-forward it with the deploy key from 1Password. That keeps the tag on `main`. `-F /dev/null` and `IdentityAgent=none` stop your own SSH config from offering your key instead, as happened in `0.1.0`'s publish:
+
+```sh
+key="$(mktemp)" && op read "op://Private/qcm7ew5s3zeapoxwfuaa34t4nq/clair-release-deploy-key" >"$key"
+GIT_SSH_COMMAND="ssh -F /dev/null -o IdentitiesOnly=yes -o IdentityAgent=none -i $key" \
+  git push git@github.com:itsjoshpark/Clair.git "$(git rev-parse v<version>^{commit}):refs/heads/main"
+rm -f "$key"
+```
+
+The push should report "Bypassed rule violations". Otherwise, go through a pull request. Its head can't be the release commit itself: that commit's `[skip ci]` would keep the required checks from running. Cherry-pick it and drop `[skip ci]` from the message:
 
 ```sh
 git fetch origin main && git fetch origin tag v<version>
