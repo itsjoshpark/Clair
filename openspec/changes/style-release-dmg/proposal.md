@@ -25,7 +25,7 @@ None.
 
 ### Modified Capabilities
 
-- `release-distribution`: adds a requirement for the DMG window's layout, background and volume icon. `release-distribution` is still in flight in `ship-plain-ungoogled-build`, so this is a new requirement next to "Signed and notarized disk image" rather than a modification of it.
+- `release-distribution`: adds requirements for the DMG window's layout, background and volume icon, next to "Signed and notarized disk image", which they leave unchanged.
 
 ## Impact
 

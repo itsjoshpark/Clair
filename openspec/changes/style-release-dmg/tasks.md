@@ -25,4 +25,3 @@ Wherever a verification below needs a packaged or signed DMG, it means one built
 ## Workflow follow-up
 
 - Archive this change after the release that first ships the new window.
-- `release-distribution` is first added by `ship-plain-ungoogled-build`. Archive that change first, so this change's requirements join its spec rather than starting it.

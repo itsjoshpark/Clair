@@ -1,12 +1,12 @@
 # Clair
 
-Clair is a macOS web browser in the style of Arc, built on ungoogled-chromium. It targets Apple Silicon only, with macOS 15.6 as the minimum. Its interface is native AppKit/SwiftUI in Crest's style (`pauljoda/Crest`): a Swift framework, `ClairUI`, that Chromium loads at start-up, with WebUI only for Chromium's internal pages. Change 1 uses it only for Sparkle 2 updates, the update menu and the About window. The UX spike (roadmap step 2 in the active change's `proposal.md`) replaces Chromium's window with a native one.
+Clair is a macOS web browser in the style of Arc, built on ungoogled-chromium. It targets Apple Silicon only, with macOS 15.6 as the minimum. Its interface is native AppKit/SwiftUI in Crest's style (`pauljoda/Crest`): a Swift framework, `ClairUI`, that Chromium loads at start-up, with WebUI only for Chromium's internal pages. Change 1 uses it only for Sparkle 2 updates, the update menu and the About window. The UX spike (roadmap step 2 in change 1's `proposal.md`) replaces Chromium's window with a native one.
 
 Leave ungoogled-chromium alone as much as possible. Patches to existing Chromium files are for build fixes, identity, versioning and hooks only. Put new behavior in `ClairUI` or in new files under `overlay/`.
 
 ## Planning: OpenSpec
 
-The work is planned as OpenSpec changes in `openspec/changes/<name>/`, each with `proposal.md`, `design.md`, `specs/` and `tasks.md`. Product decisions, the roadmap and the MVP feature list are in the active change's `proposal.md`. Arc behavior references are in its `arc-reference/`. Arc stops working on 2026-12-22.
+The work is planned as OpenSpec changes in `openspec/changes/<name>/`, each with `proposal.md`, `design.md`, `specs/` and `tasks.md`. Change 1, `ship-plain-ungoogled-build`, is archived in `openspec/changes/archive/2026-11-05-ship-plain-ungoogled-build/`: its `proposal.md` holds the product decisions, the roadmap and the MVP feature list, and its `arc-reference/` the Arc behavior references. Its capability specs are in `openspec/specs/`. Arc stops working on 2026-12-22.
 
 - Read the relevant change's proposal, design and specs before implementing anything.
 - Mark a task `- [x]` only once its stated verification has passed. For anything that needs a build, that means the CI build passing.
@@ -14,7 +14,7 @@ The work is planned as OpenSpec changes in `openspec/changes/<name>/`, each with
 
 ## Building: engine and app
 
-Never fetch Chromium or build it by hand on the development machine; only `engine.yml` builds it. The build is split in two (design D9–D12 of the active change):
+Never fetch Chromium or build it by hand on the development machine; only `engine.yml` builds it. The build is split in two (design D9–D12 of change 1):
 
 - **Engine:** the patched Chromium. `scripts/engine-key.sh` hashes its inputs (ungoogled pin, `downloads.ini`, GN flags, `patches/`, `overlay/`, `utils/`, `native/ClairHost.h`, compiled-in branding, build scripts) into a key. `engine.yml` builds it only on the owner's self-hosted Mac (label `clair-release`, M1 Pro with 32 GB, internal disk), when the owner starts it, and publishes the prerelease `chromium-engine-<key>`. The Mac keeps its workspace, so a patch fix rebuilds incrementally. To rebuild after a fix: push the branch, then `gh workflow run engine.yml -f ref=<branch>`, and read the log. That runs `main`'s `engine.yml` against the branch; when the branch changes `engine.yml` itself, add `--ref <branch>`.
 - **App:** `ClairUI`, packaging, signing and Sparkle. It builds in minutes against the prebuilt engine for the current key.
