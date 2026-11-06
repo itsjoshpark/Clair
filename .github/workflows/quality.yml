@@ -60,7 +60,20 @@ jobs:
           (cd "$RUNNER_TEMP/engine" && shasum -a 256 -c "Clair-Chromium-Engine-$key-arm64.zip.sha256")
           echo "ENGINE_ZIP=$RUNNER_TEMP/engine/Clair-Chromium-Engine-$key-arm64.zip" >> "$GITHUB_ENV"
 
+      # package.sh builds the update's DMG with dmgbuild, which needs Python
+      # 3.10 or later (scripts/fetch-dmgbuild.sh). Only dmgbuild gets it: on
+      # PATH, it would also run the suite's web server, and macOS would then
+      # ask whether that Python may use the local network, over Clair's alerts.
+      - name: Set up Python for dmgbuild
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          update-environment: false
+
       - name: Package the app and build the tests
+        env:
+          DMGBUILD_PYTHON: ${{ steps.python.outputs.python-path }}
         run: ./tests/runtime/run.sh prepare "$ENGINE_ZIP" "$RUNNER_TEMP/engine/engine.json" "$RUNNER_TEMP/runtime"
 
       - name: Verify the app (no signing checks)

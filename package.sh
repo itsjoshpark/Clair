@@ -2,8 +2,8 @@
 # Turns an engine into Clair.app (change 1 design D3, D4, D5): embeds
 # ClairUI.framework and Sparkle.framework, writes the Clair version, the build
 # number and Sparkle's keys into Info.plist, signs every nested bundle inside
-# out without --deep, builds the DMG, and notarizes and staples both when it's
-# given an App Store Connect API key.
+# out without --deep, builds the DMG with its window layout (resources/dmg/), and
+# notarizes and staples both when it's given an App Store Connect API key.
 #
 #   package.sh [options] <engine> <out-dir>
 #
@@ -16,6 +16,8 @@
 #                        native/ClairUI.xcodeproj, Release)
 #   --sparkle <dir>      a directory from scripts/fetch-sparkle.sh (default:
 #                        fetch into build/sparkle)
+#   --dmgbuild <path>    dmgbuild, as scripts/fetch-dmgbuild.sh prints it
+#                        (default: install into build/dmgbuild)
 #   --version <x.y.z>    the Clair version (default: version.txt)
 #   --build <n>          the build number (default: git rev-list --count HEAD)
 #   --public-key <file>  the file holding Sparkle's public EdDSA key (default:
@@ -50,13 +52,14 @@ usage() {
   exit 2
 }
 
-clairui="" sparkle="" version="" build="" public_key_file="$root/.sparkle/public-ed-key.txt"
+clairui="" sparkle="" dmgbuild="" version="" build="" public_key_file="$root/.sparkle/public-ed-key.txt"
 identity="" keychain="" dmg=true notary_key="" notary_key_id="" notary_issuer=""
 args=()
 while (( $# > 0 )); do
   case "$1" in
     --clairui) clairui="${2-}"; shift 2 || usage ;;
     --sparkle) sparkle="${2-}"; shift 2 || usage ;;
+    --dmgbuild) dmgbuild="${2-}"; shift 2 || usage ;;
     --version) version="${2-}"; shift 2 || usage ;;
     --build) build="${2-}"; shift 2 || usage ;;
     --public-key) public_key_file="${2-}"; shift 2 || usage ;;
@@ -118,6 +121,13 @@ if [[ -n "$notary_key$notary_key_id$notary_issuer" ]]; then
   notarizing=true
 fi
 
+if $dmg; then
+  if [[ -z "$dmgbuild" ]]; then
+    dmgbuild="$("$root/scripts/fetch-dmgbuild.sh" "$root/build/dmgbuild")" || die "couldn't install dmgbuild"
+  fi
+  [[ -f "$dmgbuild" && -x "$dmgbuild" ]] || die "no dmgbuild at $dmgbuild"
+fi
+
 [[ -e "$engine" ]] || die "no engine at $engine"
 [[ ! -e "$out/$product.app" ]] || die "$out/$product.app already exists"
 mkdir -p "$out"
@@ -147,6 +157,12 @@ for embedded in ClairUI.framework Sparkle.framework; do
 done
 # Extended attributes, such as quarantine, would break the signatures.
 xattr -cr "$app"
+# The app's icon is also the DMG's volume icon.
+icon_file="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$info" 2>/dev/null)" ||
+  die "the engine's Info.plist has no CFBundleIconFile"
+[[ "$icon_file" == *.icns ]] || icon_file="$icon_file.icns"
+[[ "$icon_file" != */* && -f "$app/Contents/Resources/$icon_file" ]] ||
+  die "the engine has no icon at Contents/Resources/$icon_file"
 
 # --- ClairUI ------------------------------------------------------------------------
 if [[ -z "$clairui" ]]; then
@@ -339,22 +355,28 @@ fi
 if $dmg; then
   dmg_path="$out/$product-$version-arm64.dmg"
   rm -f "$dmg_path"
-  staging="$work/dmg"
-  mkdir "$staging"
-  ditto "$out/$product.app" "$staging/$product.app"
-  ln -s /Applications "$staging/Applications"
-  # hdiutil create fails now and then on the hosted runners, so try it again.
+  # dmgbuild copies the app, makes the Applications link and writes the window
+  # layout (style-release-dmg design D4). On a hosted runner, for about a
+  # minute after the job's first xcodebuild, simdiskimaged keeps retrying an
+  # unmount of a simulator runtime by its disk number. A DMG attached then can
+  # reuse that number and be unmounted under dmgbuild ("No such file or
+  # directory: '/Volumes/Clair/...'"). Waiting 30 seconds between attempts
+  # gets past that window.
+  layout="$root/resources/dmg"
   created=false
   for attempt in 1 2 3; do
-    if hdiutil create -volname "$product" -srcfolder "$staging" -fs HFS+ -format ULFO "$dmg_path" >/dev/null; then
+    if "$dmgbuild" --no-hidpi -s "$layout/settings.py" \
+        -D app="$out/$product.app" -D icon="$out/$product.app/Contents/Resources/$icon_file" \
+        -D background="$layout/background.tiff" -D layout="$layout/layout.json" \
+        "$product" "$dmg_path" >/dev/null; then
       created=true
       break
     fi
-    echo "package: hdiutil create failed (attempt $attempt of 3)" >&2
+    echo "package: dmgbuild failed (attempt $attempt of 3)" >&2
     rm -f "$dmg_path"
-    [[ "$attempt" == 3 ]] || sleep 5
+    [[ "$attempt" == 3 ]] || sleep 30
   done
-  $created || die "hdiutil couldn't create the DMG"
+  $created || die "dmgbuild couldn't create the DMG"
   if [[ -n "$identity" ]]; then
     codesign --sign "$identity" ${keychain_args[@]+"${keychain_args[@]}"} --timestamp "$dmg_path"
   fi
