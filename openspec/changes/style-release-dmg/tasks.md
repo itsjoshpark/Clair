@@ -14,12 +14,12 @@ Wherever a verification below needs a packaged or signed DMG, it means one built
 ## 3. Packaging
 
 - [x] 3.1 Add `resources/dmg/settings.py` (D3) and make `package.sh` build the DMG with `dmgbuild`, with `--dmgbuild <path>` and `fetch-dmgbuild.sh` as the default, keeping the three attempts and everything after the DMG is created (D4). Extend `package.test.sh` with D5's layout checks. Verify that `package.test.sh` passes, and that each layout check fails when its setting in `settings.py` is changed on purpose.
-- [ ] 3.2 Make `dmgbuild` available wherever `package.sh` builds a DMG: `ci.yml`'s script tests, `quality.yml` and `release.yml`'s `package` job, using a Python of 3.10 or later in each. Verify that the merge gate passes, and that a `quality.yml` run dispatched on the branch passes.
-- [ ] 3.3 Extend the runtime suite's update test to check that an update from the new DMG replaces only `Clair.app` and leaves nothing else beside it. Verify that `quality.yml` passes on the branch, and that the check fails when a layout file is copied next to the app on purpose.
+- [x] 3.2 Make `dmgbuild` available wherever `package.sh` builds a DMG: `ci.yml`'s script tests, `quality.yml` and `release.yml`'s `package` job, using a Python of 3.10 or later in each. Verify that the merge gate passes, and that a `quality.yml` run dispatched on the branch passes.
+- [x] 3.3 Extend the runtime suite's update test to check that an update from the new DMG replaces only `Clair.app` and leaves nothing else beside it. Verify that `quality.yml` passes on the branch, and that the check fails when a layout file is copied next to the app on purpose.
 
 ## 4. Release
 
-- [ ] 4.1 Update `docs/building.md`'s packaging section for `dmgbuild`, add an item to `docs/releasing.md`'s checklist for the DMG window (Light and Dark Mode, and Retina and standard displays when both are at hand), and add a Changie fragment. Verify that the pull request includes all three.
+- [x] 4.1 Update `docs/building.md`'s packaging section for `dmgbuild`, add an item to `docs/releasing.md`'s checklist for the DMG window (Light and Dark Mode, and Retina and standard displays when both are at hand), and add a Changie fragment. Verify that the pull request includes all three.
 - [ ] 4.2 Run a `release.yml` dry run, then choose the background tone by opening its DMG in Light and Dark Mode. Verify every `release-distribution` scenario from this change on that DMG, including that `verify-app.sh --dmg` passes and that dragging Clair to Applications installs an app that opens after only the standard prompt.
 
 ## Workflow follow-up
