@@ -50,6 +50,9 @@ final class PageCardView: NSView {
     container.wantsLayer = true
     container.layer?.masksToBounds = true
     container.layer?.cornerCurve = .continuous
+    container.setAccessibilityElement(true)
+    container.setAccessibilityRole(.group)
+    container.setAccessibilityLabel("Page")
     container.setAccessibilityIdentifier("clair.card")
     addSubview(container)
     updateAppearance()

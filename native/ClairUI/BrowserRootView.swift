@@ -79,6 +79,9 @@ final class BrowserRootView: NSView {
     addSubview(sidebar)
     addSubview(resizeHandle)
     commandBarScrim.isHidden = true
+    sidebar.setAccessibilityElement(true)
+    sidebar.setAccessibilityRole(.group)
+    sidebar.setAccessibilityLabel("Sidebar")
     sidebar.setAccessibilityIdentifier("clair.sidebar")
     observeModel()
   }

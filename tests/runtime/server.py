@@ -6,6 +6,7 @@ their updates, plus a download that stays in progress until it's told to finish.
 
     GET /slow-download         sends a chunk at a time until /slow-download/finish
     GET /slow-download/finish  lets every slow download end
+    GET /download/clair.txt    a small text file, as a download
 """
 
 import http.server
@@ -25,6 +26,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.respond_empty()
         elif self.path == "/slow-download":
             self.send_slow_download()
+        elif self.path == "/download/clair.txt":
+            self.send_text_download()
         else:
             super().do_GET()
 
@@ -32,6 +35,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Content-Length", "0")
         self.end_headers()
+
+    def send_text_download(self):
+        body = b"Downloaded by Clair's runtime suite.\n"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Disposition", 'attachment; filename="clair.txt"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def send_slow_download(self):
         finished.clear()

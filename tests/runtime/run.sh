@@ -68,6 +68,9 @@ prepare() {
   local www="$dir/www" dmg="Clair-$update_version-arm64.dmg"
   mkdir -p "$www/update" "$www/up-to-date"
   cp -R "$root/tests/runtime/pages" "$www/pages"
+  # The test extension, which the suite loads with --load-extension.
+  rm -rf "$dir/extensions"
+  cp -R "$root/tests/runtime/extensions" "$dir/extensions"
   cp "$dir/update/$dmg" "$www/update/$dmg"
   cp "$dir/update/$dmg" "$www/up-to-date/$dmg"
   "$root/scripts/make-test-appcast.sh" --sparkle "$sparkle" --appcast "$www/update/appcast.xml" \
