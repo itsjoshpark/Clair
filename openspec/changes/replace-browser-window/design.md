@@ -84,7 +84,7 @@ Rules:
 - **Layout**, from `arc-reference/look-and-behaviour.md`:
   - The sidebar is 228 pt wide by default.
   - The card is inset 10 pt at the top, trailing and bottom edges and 0 pt on the sidebar side, or 5 pt all round with the sidebar hidden. Its corner radius is 8 pt, with a soft shadow.
-  - The traffic lights sit at x+12/35/58, y+16 (Arc's accessibility frames), and move with the sidebar as it slides. AppKit puts them back in its own layout when it lays out the title bar again, as a new window title does, so `ClairUI` places them again after each window update.
+  - The traffic lights sit at x+12/35/58, y+16 (Arc's accessibility frames), and move with the sidebar as it slides. AppKit's own title bar layout puts them there, through a title bar frame class on `ClairNativeWindow` (`place-traffic-lights-with-appkit`), so a new window title or any other title bar layout leaves them in place.
   - The top row's buttons are 32×32 at y+8: hide-sidebar at x+77, and back, forward and reload ending 6 pt from the sidebar's trailing edge, 2 pt apart, in Arc's grey. Below 214 pt the row is compact, as in Arc: 28×28 back, forward and a "More" menu (reload and Hide Sidebar) at y+10.
   - The URL field is 36 pt high at y+46, inset 8 pt, with a 10 pt corner radius. The host starts 12 pt in; a new tab page shows a magnifier and the placeholder. Under the pointer, 30 pt copy and site-controls buttons show at its trailing end; page info still attaches where the site-controls button shows.
   - The window background is one `NSVisualEffectView` (`.sidebar` material, behind-window blending).

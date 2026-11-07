@@ -7,6 +7,7 @@
 
 #import <AppKit/AppKit.h>
 
+#import "chrome/browser/clair/ClairHost.h"
 #import "ui/base/cocoa/command_dispatcher.h"
 
 class ClairBrowserWindow;
@@ -24,7 +25,12 @@ inline constexpr NSInteger kClairHideSidebarTag = 0x436C6169;  // 'Clai'
 // commands and key equivalents through CommandDispatcher, as Chromium's own
 // windows do, so the menus, reserved shortcuts and keys a page didn't handle
 // work as in Chromium, and chrome::FindBrowserWithWindow() finds its browser.
-@interface ClairNativeWindow : NSWindow <CommandDispatchingWindow>
+//
+// It places its close, minimize and zoom buttons through AppKit's own title bar
+// layout (ClairWindowControls; place-traffic-lights-with-appkit design D1), as
+// Chromium's BrowserNativeWidgetWindow does, so no title bar layout moves them.
+@interface ClairNativeWindow
+    : NSWindow <CommandDispatchingWindow, ClairWindowControls>
 
 - (instancetype)initWithBrowserWindow:(ClairBrowserWindow*)browserWindow
                           contentRect:(NSRect)contentRect;
