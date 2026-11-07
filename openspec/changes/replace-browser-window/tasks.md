@@ -63,7 +63,7 @@ Suggested order: 1, 2, 3 (one engine build with the whole contract), then 4, 5 a
 
 ## 7. Rollout
 
-- [ ] 7.1 Verify by hand that a packaged Clair whose `ClairUI` binary is damaged shows the alert and quits without opening a window, and that the bare engine still opens Chromium's window in the engine smoke test.
+- [x] 7.1 Verify by hand that a packaged Clair whose `ClairUI` binary is damaged shows the alert and quits without opening a window, and that the bare engine still opens Chromium's window in the engine smoke test.
 - [ ] 7.2 Add a Changie fragment describing the new window, what moved into the sidebar and the command bar, Save Page As on Shift+Cmd+S, and what's gone: bookmarks UI, password saving and autofill (with how to export saved passwords), and the unavailable features. Add `docs/native-window.md`: the architecture (D1–D3), where each piece lives, and how to add a hook. Add a native-window pass in Light and Dark Mode to `docs/releasing.md`'s checklist. Verify that the pull request includes all three.
 - [ ] 7.3 Run the full quality checks on the branch, then on `main` after merging. Verify that every runtime test passes in both runs, including every item in the modified `build-pipeline` spec's native window coverage.
 

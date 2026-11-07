@@ -222,9 +222,10 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
 | `chrome/browser/resources/settings/page_visibility.ts` | hide the "Autofill and passwords" section (D17) |
 | `chrome/browser/ui/webui/new_tab_page/new_tab_page_handler.cc`, `chrome/browser/new_tab_page/feature_promo_helper/new_tab_page_feature_promo_helper.cc`, `chrome/browser/ui/extensions/extension_install_ui_desktop.cc` | skip the new tab page's footer and promo and the extension-installed toolbar hint, whose controllers only exist with a `BrowserView` (found by Crest on 156) |
 | `chrome/browser/ui/read_anything/read_anything_side_panel_controller.cc` | closing the active tab otherwise reaches `CHECK_IS_TEST()` for a browser without a side panel |
-| `components/constrained_window/constrained_window_views.cc` | place tab-modal dialogs (JavaScript dialogs, leave prompts, HTTP authentication, print preview) over the card as child windows of the native window. Chromium positions them only over a Views host, and otherwise leaves them in the middle of the screen at the modal panel level, above every app (found in task 3.4). The placement lives in `overlay/components/constrained_window/clair_native_host_mac.mm` |
+| `components/constrained_window/constrained_window_views.cc` | place tab-modal dialogs (JavaScript dialogs, leave prompts, HTTP authentication, print preview) and browser-modal ones (the extension install prompt, which Chromium makes a sheet on a Views window) over the card. Chromium positions them only over a Views host, and otherwise leaves them in the middle of the screen (found in task 3.4). The placement lives in `overlay/components/constrained_window/clair_native_host_mac.mm` |
+| `ui/views/widget/native_widget_mac.mm` | keep a Views widget whose parent view is in a native window (permission prompts, page info, extension and tab-modal dialogs) a child window of it. Otherwise it's a free top-level window, which the browser window covered, so the permission prompt couldn't be clicked (found in task 3.4's runtime tests). The attachment lives in `overlay/ui/views/cocoa/clair_native_parent.mm` |
 | `chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm` | show a page's context menu without a Views widget, which Chromium otherwise requires, so no context menu opened (found in task 3.4); drop the items of unavailable features (adapted from Crest) |
-| `chrome/browser/ui/BUILD.gn`, `components/constrained_window/BUILD.gn` | the overlay's sources |
+| `chrome/browser/ui/BUILD.gn`, `components/constrained_window/BUILD.gn`, `ui/views/BUILD.gn` | the overlay's sources |
 
 The first engine build already includes the hunks for call sites that Crest's `native-host.patch` and Chromium's own `IsWebUIBrowserEnabled()` checks show crash for a browser without a `BrowserView` on 156. Task 3.4 adds a hunk only when a surface in D9 fails without it, with the reason in the patch header, as Crest's patches state theirs. Behavior stays in the overlay, as the modified `chromium-engine` requirement needs.
 
@@ -254,7 +255,7 @@ The spike measures edit-to-run time for a `ClairUI` change. Through CI it is a p
 `scripts/run-local.sh` makes a local loop:
 1. It downloads `chromium-engine-<key>` for the checkout once, caches it, and checks it against its SHA-256.
 2. It builds `ClairUI` and packages ad hoc with `package.sh`.
-3. It launches the app with a throwaway `--user-data-dir` under the scratch area and `--use-mock-keychain`, so the owner's own Clair data and keychain are never touched, as the engine smoke test already does.
+3. It launches the app with a throwaway `--user-data-dir` under the scratch area and `--use-mock-keychain`, so the owner's own Clair data and keychain are never touched, as the engine smoke test already does. The app's user defaults (the sidebar's width and state, Sparkle's state) share the bundle ID's domain with an installed Clair, so the script saves that domain before the launch and puts it back afterwards.
 
 It never fetches or builds Chromium, and it needs only `curl`, `gh`, Xcode and the repository's scripts, with no new packages. Its `*.test.sh` covers the cache, a key with no published engine, and the throwaway profile.
 

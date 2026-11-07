@@ -32,7 +32,8 @@ Browser ── BrowserWindow ─▶ ClairBrowserWindow       BrowserWindowContro
 | Extension actions and popups | `overlay/chrome/browser/clair/window/clair_extensions.{h,mm}` |
 | Downloads | `overlay/chrome/browser/clair/window/clair_downloads.{h,mm}` |
 | The functions hooks call, menus, password and autofill prefs | `overlay/chrome/browser/clair/window/clair_window_hooks.{h,mm}` |
-| Tab-modal dialog placement over the card | `overlay/components/constrained_window/clair_native_host_mac.{h,mm}` |
+| Tab-modal and browser-modal dialog placement over the card | `overlay/components/constrained_window/clair_native_host_mac.{h,mm}` |
+| Chromium's bubbles and dialogs kept as child windows of the native window | `overlay/ui/views/cocoa/clair_native_parent.{h,mm}` |
 | Loading `ClairUI` and creating windows | `overlay/chrome/browser/clair/clair_native_layer.{h,mm}` |
 | The hooks into Chromium's own files | `patches/clair/native-window-hook.patch` |
 | Window, layout, card and overlays | `native/ClairUI/BrowserWindowController.swift`, `BrowserRootView.swift`, `PageCardView.swift`, `WindowLayout.swift`, `OverlayViews.swift` |
