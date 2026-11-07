@@ -93,10 +93,22 @@ zip="Clair-Chromium-Engine-$key-arm64.zip"
 engines="$work/engines"
 cached="$engines/$key"
 
+# gh finds the repository from the current directory, and the script may be
+# run from anywhere.
+gh_repo() {
+  (cd "$root" && gh "$@")
+}
+
 if [[ -f "$cached/.complete" && -d "$cached/$product.app" ]]; then
   echo "run-local: using the cached engine $key" >&2
 else
-  draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null || true)"
+  gh_error="$(mktemp)"
+  draft="$(gh_repo release view "$tag" --json isDraft --jq .isDraft 2>"$gh_error")" || draft=""
+  error="$(head -n 1 "$gh_error")"
+  rm -f "$gh_error"
+  if [[ -z "$draft" && "$error" != *"release not found"* ]]; then
+    die "couldn't ask GitHub about $tag: ${error:-gh failed}"
+  fi
   if [[ "$draft" != false ]]; then
     branch="$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<branch>")"
     die "no published engine for $key. Push the branch and build it with: gh workflow run engine.yml -f ref=$branch"
@@ -105,7 +117,7 @@ else
   download="$(mktemp -d "$engines/.download.XXXXXX")"
   trap 'rm -rf "$download"' EXIT
   echo "run-local: downloading $tag" >&2
-  gh release download "$tag" --dir "$download" --pattern "$zip" --pattern "$zip.sha256" ||
+  gh_repo release download "$tag" --dir "$download" --pattern "$zip" --pattern "$zip.sha256" ||
     die "couldn't download $tag"
   [[ -f "$download/$zip" && -f "$download/$zip.sha256" ]] || die "$tag has no $zip and $zip.sha256"
   (cd "$download" && shasum -a 256 -c "$zip.sha256" >/dev/null 2>&1) ||

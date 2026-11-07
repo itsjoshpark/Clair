@@ -32,10 +32,14 @@ launch_log="$workdir/launch.log"
 mkdir -p "$bin" "$releases"
 
 # gh: a release is published when $releases/<tag> exists; downloading copies
-# its files.
+# its files. Like gh, it finds the repository from the current directory, and
+# FAKE_GH_ERROR makes it fail as when GitHub can't be reached.
 cat >"$bin/gh" <<'EOF'
 #!/bin/bash
 echo "$*" >>"$GH_LOG"
+git rev-parse --git-dir >/dev/null 2>&1 ||
+  { echo "failed to run git: fatal: not a git repository (or any of the parent directories): .git" >&2; exit 1; }
+[[ -z "${FAKE_GH_ERROR-}" ]] || { echo "$FAKE_GH_ERROR" >&2; exit 1; }
 [[ "$1 $2" == "release view" || "$1 $2" == "release download" ]] || exit 2
 tag="$3"
 [[ -d "$RELEASES/$tag" ]] || { echo "release not found" >&2; exit 1; }
@@ -121,13 +125,17 @@ work="$workdir/work"
 
 output=""
 status=0
+# The directory run-local.sh runs from, and gh's error, when set.
+run_dir="$PWD"
+fake_gh_error=""
 # Runs run-local.sh for KEY with the remaining arguments.
 run() {
   local key="$1"; shift
   : >"$gh_log"
   rm -f "$launch_log"
   status=0
-  output="$(HOME="$home" PATH="$bin:$PATH" GH_LOG="$gh_log" RELEASES="$releases" \
+  output="$(cd "$run_dir" && HOME="$home" PATH="$bin:$PATH" GH_LOG="$gh_log" RELEASES="$releases" \
+    FAKE_GH_ERROR="$fake_gh_error" \
     CLAIR_RUN_LOCAL_ENGINE_KEY="$key" CLAIR_RUN_LOCAL_PACKAGE="$bin/package.sh" \
     CLAIR_RUN_LOCAL_DEFAULTS_DOMAIN="$defaults_domain" FAKE_CLAIR_DEFAULTS="$defaults_domain" \
     "$run_local" --work "$work" "$@" 2>&1)" || status=$?
@@ -164,6 +172,18 @@ if [[ ! -e "$work/engines/$key_a" ]] && ! grep -q "release download" "$gh_log"; 
   check "and downloads nothing" pass
 else
   check "and downloads nothing" fail
+fi
+
+# --- gh fails ------------------------------------------------------------------------
+fake_gh_error="error connecting to api.github.com"
+run "$key_a"
+fake_gh_error=""
+if (( status != 0 )) && [[ "$output" == *"couldn't ask GitHub about chromium-engine-$key_a: error connecting to api.github.com"* &&
+    "$output" != *"no published engine"* ]]; then
+  check "a gh failure is reported as such, not as a missing engine" pass
+else
+  check "a gh failure is reported as such, not as a missing engine" fail
+  echo "         got ($status): $output"
 fi
 
 # --- first run ------------------------------------------------------------------------
@@ -219,14 +239,16 @@ else
   echo "         gh calls: $(cat "$gh_log")"
 fi
 
-# --- changed key ------------------------------------------------------------------------
+# --- changed key, from outside the repository -------------------------------------------
 publish "$key_b"
+run_dir="$workdir"
 run "$key_b"
+run_dir="$PWD"
 if (( status == 0 )) && grep -q "release download chromium-engine-$key_b" "$gh_log" &&
     grep -qx "engine=$key_b" "$launch_log" 2>/dev/null; then
-  check "a changed key downloads and launches that key's engine" pass
+  check "a changed key downloads and launches that key's engine, from outside the repository" pass
 else
-  check "a changed key downloads and launches that key's engine" fail
+  check "a changed key downloads and launches that key's engine, from outside the repository" fail
   echo "         got ($status): $output"
 fi
 if [[ -d "$work/engines/$key_a/Clair.app" ]]; then
