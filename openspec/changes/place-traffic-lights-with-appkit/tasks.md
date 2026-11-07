@@ -19,7 +19,7 @@ Per CLAUDE.md, a task that needs a build is done only once CI passes on it. The 
 
 ## 3. Verification
 
-- [ ] 3.1 Make `testWindowControlsStayInPlace` in `NativeWindowStructureTests` the change's one automated test (D4): the close button 12 and 16 from the sidebar's corner, the top row centred on it and starting after the zoom button, checked at launch and after the page's title changes. Verify that `quality.yml`, dispatched on the branch, passes. (Its earlier version already failed as expected with the place moved 7 pt on purpose, on the throwaway branch `scratch/traffic-lights-offset-check`.)
+- [x] 3.1 Make `testWindowControlsStayInPlace` in `NativeWindowStructureTests` the change's one automated test (D4): the close button 12 and 16 from the sidebar's corner, the top row centred on it and starting after the zoom button, checked at launch and after the page's title changes. Verify that `quality.yml`, dispatched on the branch, passes. (Its earlier version already failed as expected with the place moved 7 pt on purpose, on the throwaway branch `scratch/traffic-lights-offset-check`.)
 - [x] 3.2 Compare with Arc side by side with the XCUITest probe (CLAUDE.md): the buttons' accessibility frames shown and revealed, 60 fps recordings of Cmd+S and the hover reveal with no frame showing the buttons at AppKit's default spot, and clicks on the top-row buttons and the URL field's top edge reaching them. Verify each item and note the results in the PR.
 
 ## Workflow follow-up
