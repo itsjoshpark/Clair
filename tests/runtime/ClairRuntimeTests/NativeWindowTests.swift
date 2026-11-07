@@ -35,6 +35,15 @@ extension Browser {
   }
 
   var sidebar: XCUIElement { element("clair.sidebar") }
+
+  /// Whether the sidebar is in the window, shown or revealed, rather than
+  /// moved out of it. XCUITest's isHittable can't see into the sidebar's
+  /// SwiftUI content, so this goes by its frame.
+  var isSidebarInWindow: Bool {
+    guard sidebar.exists else { return false }
+    let frame = sidebar.frame
+    return frame.width > 0 && frame.minX >= nativeWindow.frame.minX - 1
+  }
   var card: XCUIElement { element("clair.card") }
 
   var tabRows: [XCUIElement] {
@@ -179,7 +188,8 @@ final class PageHostingTests: NativeWindowTestCase {
     let first = try await browser.open(url("index.html?a"))
     let second = try await browser.open(url("index.html?b"), newWindow: true)
     let session = try await browser.browserSession()
-    let sizes = [(first, 900, 640), (second, 1100, 760)]
+    // Both fit the hosted runner's 1024×768 screen, which would clamp them.
+    let sizes = [(first, 720, 520), (second, 900, 600)]
     var expected: [String: (Int, Int)] = [:]
     for (tab, width, height) in sizes {
       let id = try await tab.targetID(in: browser) ?? ""
@@ -256,13 +266,13 @@ final class FullscreenTests: NativeWindowTestCase {
       return abs(width - Double(screen.width)) <= 2
     }
     XCTAssertTrue(filled, "The page doesn't fill the screen")
-    XCTAssertFalse(browser.sidebar.isHittable, "The sidebar shows in page full screen")
+    XCTAssertFalse(browser.isSidebarInWindow, "The sidebar shows in page full screen")
     browser.ui.typeKey(.escape, modifierFlags: [])
     let ended = await Harness.wait(for: 30) {
       try await tab.evaluate("document.fullscreenElement === null") as? Bool == true
     }
     XCTAssertTrue(ended, "Esc didn't end page full screen")
-    let back = await Harness.wait(for: 30) { browser.sidebar.isHittable }
+    let back = await Harness.wait(for: 30) { browser.isSidebarInWindow }
     XCTAssertTrue(back, "The sidebar didn't come back")
   }
 }
@@ -344,7 +354,7 @@ final class PermissionPromptTests: NativeWindowTestCase {
     let (browser, tab) = try await startWithPage("notify.html")
     defer { tab.close() }
     browser.ui.typeKey("s", modifierFlags: .command)
-    let hidden = await Harness.wait(for: 10) { !browser.sidebar.isHittable }
+    let hidden = await Harness.wait(for: 10) { !browser.isSidebarInWindow }
     try require(hidden, "Cmd+S didn't hide the sidebar")
     try await ask(browser, tab, choose: "Block", expect: "denied")
   }
@@ -397,13 +407,16 @@ final class DownloadsTests: NativeWindowTestCase {
     XCTAssertTrue(progress, "The downloads button shows no progress")
     _ = try await URLSession.shared.data(from: URL(string: "\(fixture.baseURL)/slow-download/finish")!)
 
-    let unseen = browser.element("clair.downloadsUnseen")
-    XCTAssertTrue(unseen.waitForExistence(timeout: 30), "The finished download isn't marked")
+    // The button's mark for an unseen download is part of the button, which
+    // says "New" as its value.
+    let unseen = await Harness.wait(for: 30) { (button.value as? String) == "New" }
+    XCTAssertTrue(unseen, "The finished download isn't marked")
     button.click()
     let row = browser.ui.descendants(matching: .any).matching(identifier: "clair.downloadRow").firstMatch
     try require(row.waitForExistence(timeout: 10), "The downloads list is empty")
     row.click()
-    XCTAssertTrue(unseen.waitForNonExistence(timeout: 15), "Opening the download didn't clear its mark")
+    let seen = await Harness.wait(for: 15) { (button.value as? String) != "New" }
+    XCTAssertTrue(seen, "Opening the download didn't clear its mark")
     _ = try? Harness.run("/usr/bin/pkill", ["-x", "TextEdit"])
   }
 }
@@ -480,7 +493,7 @@ final class SidebarHidingTests: NativeWindowTestCase {
     XCTAssertTrue(hidden, "Cmd+S didn't hide the sidebar and widen the card")
     browser.ui.typeKey("s", modifierFlags: .command)
     let shown = await Harness.wait(for: 10) {
-      abs(browser.card.frame.minX - browser.sidebar.frame.maxX) <= 2 && browser.sidebar.isHittable
+      abs(browser.card.frame.minX - browser.sidebar.frame.maxX) <= 2 && browser.isSidebarInWindow
     }
     XCTAssertTrue(shown, "Cmd+S didn't bring the sidebar back")
   }
@@ -506,13 +519,13 @@ final class SidebarHidingTests: NativeWindowTestCase {
     let (browser, tab) = try await startWithPage()
     defer { tab.close() }
     browser.ui.typeKey("s", modifierFlags: .command)
-    let hidden = await Harness.wait(for: 10) { !browser.sidebar.isHittable }
+    let hidden = await Harness.wait(for: 10) { !browser.isSidebarInWindow }
     try require(hidden, "Cmd+S didn't hide the sidebar")
     try await Task.sleep(for: .seconds(1))
     let width = try await tab.innerWidth
     browser.nativeWindow.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
       .withOffset(CGVector(dx: 2, dy: 0)).hover()
-    let revealed = await Harness.wait(for: 10) { browser.sidebar.isHittable }
+    let revealed = await Harness.wait(for: 10) { browser.isSidebarInWindow }
     XCTAssertTrue(revealed, "Resting at the leading edge didn't reveal the sidebar")
     let after = try await tab.innerWidth
     XCTAssertEqual(after, width, accuracy: 1, "Revealing the sidebar resized the page")
