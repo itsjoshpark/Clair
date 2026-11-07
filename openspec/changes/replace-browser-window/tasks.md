@@ -59,7 +59,7 @@ Suggested order: 1, 2, 3 (one engine build with the whole contract), then 4, 5 a
 ## 6. The command bar
 
 - [ ] 6.1 Build the command bar's panel and keyboard handling (D11): position and sizing, the field and rows, selection, Return, Shift+Return, Cmd+Return and Esc, and the highlighted "New Tab" row. Add unit tests against `FakeBrowser` suggestions for each key and for both modes. Verify that they pass.
-- [ ] 6.2 Connect it to the autocomplete session: Cmd+T and the "New Tab" row, Cmd+L and the URL field, "Switch to Tab", the empty-query list, keyword mode and incognito. Add runtime tests for typing a URL with Cmd+T (the tab opens at the top), Esc creating no tab, Cmd+L navigating the current tab, and switching to an open tab. Verify that they pass. Check a history match, a search, the empty-query list, a `wiki` keyword search, no bookmark suggestions, and incognito suggestions staying out of regular history by hand.
+- [ ] 6.2 Connect it to the autocomplete session: Cmd+T and the "New Tab" row, Cmd+L and the URL field, "Switch to Tab", the empty-query list, keyword mode and incognito. Add runtime tests for typing a URL with Cmd+T (the tab opens at the top), Esc creating no tab, Cmd+L navigating the current tab, and switching to an open tab. Verify that they pass. Check a history match, a search, the empty-query list, a site search keyword (ungoogled-chromium has no `wiki` keyword; its default engines have keywords such as `bing.com`), no bookmark suggestions, and incognito suggestions staying out of regular history by hand.
 
 ## 7. Rollout
 

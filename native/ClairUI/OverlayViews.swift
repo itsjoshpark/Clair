@@ -59,8 +59,11 @@ struct CommandBarView: View {
           model.moveSelection(by: 1)
           return .handled
         }
+        // Tab enters keyword mode when one is offered; otherwise it does
+        // nothing, rather than move focus out of the field.
         .onKeyPress(.tab) {
-          model.acceptKeyword() ? .handled : .ignored
+          _ = model.acceptKeyword()
+          return .handled
         }
         .onKeyPress(.delete) {
           model.deleteBackwardInEmptyField() ? .handled : .ignored
