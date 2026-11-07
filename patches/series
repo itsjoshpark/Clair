@@ -33,4 +33,5 @@ clair/first-run-page.patch
 clair/native-layer-hook.patch
 clair/versioning.patch
 clair/update-relaunch-hook.patch
+clair/native-window-hook.patch
 clair/settings-logo-icons.patch

@@ -1,0 +1,45 @@
+// Copyright 2026 The Clair Authors
+// Use of this source code is governed by the GNU General Public License,
+// version 3, found in the LICENSE file at the root of Clair's repository.
+
+#ifndef CHROME_BROWSER_CLAIR_WINDOW_CLAIR_BROWSER_BRIDGE_H_
+#define CHROME_BROWSER_CLAIR_WINDOW_CLAIR_BROWSER_BRIDGE_H_
+
+#import <AppKit/AppKit.h>
+
+#import "chrome/browser/clair/ClairHost.h"
+
+class ClairBrowserWindow;
+
+namespace content {
+class WebContents;
+}  // namespace content
+
+// Chromium's side of one native window's contract (design D3): ClairUI's
+// commands come in here, and Chromium's changes go out to the ClairWindow,
+// coalesced to once per run-loop turn for each tab. ClairUI gets value
+// snapshots and IDs, never anything wrapping a C++ object.
+@interface ClairChromiumBrowser : NSObject <ClairBrowser>
+
+- (instancetype)initWithBrowserWindow:(ClairBrowserWindow*)browserWindow;
+
+// Starts telling `window` what changes. Before this, nothing is posted.
+- (void)attachWindow:(id<ClairWindow>)window;
+
+// The browser window is closing: every later call does nothing, and nothing
+// more is posted.
+- (void)detach;
+
+// What changed, to post at the end of this run-loop turn.
+- (void)tabListChanged;
+- (void)tabChanged:(content::WebContents*)contents;
+- (void)activeTabChanged;
+// Tells ClairUI now, without waiting for the end of the turn.
+- (void)flush;
+
+// A snapshot of `contents`, which must be in this browser's tab strip.
+- (id<ClairTab>)snapshotOf:(content::WebContents*)contents;
+
+@end
+
+#endif  // CHROME_BROWSER_CLAIR_WINDOW_CLAIR_BROWSER_BRIDGE_H_

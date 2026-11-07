@@ -58,11 +58,11 @@ A suggestion for a page that is already open in a tab of the same profile SHALL 
 - **THEN** that existing tab becomes active, and no tab is created
 
 ### Requirement: Results with an empty query
-With an empty query, the command bar SHALL list the window's open tabs, most recently used first, followed by the profile's most visited sites.
+With an empty query, the command bar SHALL list the window's other open tabs (not the active one), most recently used first, followed by the profile's most visited sites.
 
 #### Scenario: Empty command bar
 - **WHEN** the user presses Cmd+T in a window with three tabs
-- **THEN** the results list those tabs with "Switch to Tab", the most recently used first, followed by most visited sites
+- **THEN** the results list the two tabs not shown with "Switch to Tab", the most recently used first, followed by most visited sites
 
 ### Requirement: Keyboard control
 Up and Down SHALL move the selection, Return SHALL choose the selected row, and Esc SHALL close the command bar. Shift+Return or Cmd+Return SHALL open the selected row in a new tab even when the command bar was opened with Cmd+L.

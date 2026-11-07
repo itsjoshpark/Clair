@@ -46,6 +46,7 @@ The quality checks can't cover these. Run them on a dry-run DMG of the commit yo
 - [ ] ungoogled-chromium's default settings are in place
 - [ ] System Settings lists Clair as a default browser, and a link from another app opens in it
 - [ ] Opening a page on the local network makes macOS ask for access, with the text "Clair uses your local network to access websites and devices on your network."
+- [ ] The native window, once in Light and once in Dark Mode: the sidebar, URL field, tab list and card read clearly, active and inactive; the traffic lights sit on the top row; the command bar (Cmd+T), find (Cmd+F), a toast (zoom with Cmd+=), a permission prompt and an extension popup look right and sit where they should; a JavaScript alert sits over the card; hiding the sidebar (Cmd+S) and revealing it at the left edge animate smoothly; an incognito window looks distinct.
 
 Then start the real release from the same commit.
 

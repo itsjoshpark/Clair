@@ -25,7 +25,7 @@ Never fetch Chromium or build it by hand on the development machine; only `engin
 - Every macOS job and the self-hosted Mac use Xcode 27 (hosted runner label `xcode-27`).
 - Read job logs with `gh run view --job <id> --log`, or with `gh api --allow-escape-sequences repos/itsjoshpark/Clair/actions/jobs/<id>/logs`. Fix what they show, then push.
 
-Local work is limited to editing files, running the small script tests, and building `ClairUI` with Xcode against `native/ClairHost.h`.
+To run the current `ClairUI` against the published engine for the checkout, use `scripts/run-local.sh` (see `docs/building.md`). It launches Clair with a throwaway profile and the mock keychain. The runtime suite (`tests/runtime/run.sh`) may also run locally, but it deletes the current user's Clair data, keychain item and preferences; hosted runners remain the default. The owner prefers few external packages on the development machine: ask before adding one.
 
 ## Git and PRs
 
@@ -48,7 +48,7 @@ Local work is limited to editing files, running the small script tests, and buil
 - `native/`: `ClairHost.h` (the contract between Chromium and `ClairUI`), the `ClairUI` Xcode project (JSON format, `project.xcproj`, Xcode 27.2 or later) and the Swift sources and unit tests.
 - `package.sh`: turns an engine into `Clair.app`: embeds `ClairUI` and Sparkle, writes the version and Sparkle keys into `Info.plist`, signs, and builds the DMG.
 - `build.sh`: the staged engine build (`fetch`, `prepare`, `configure`, `compile`), used by `engine.yml` and the patch check. See `docs/building.md`.
-- `tests/runtime/`: the runtime suite (XCUITest and the Chrome DevTools Protocol) that `quality.yml` runs. It deletes Clair's data for the current user, so it runs only on hosted runners.
+- `tests/runtime/`: the runtime suite (XCUITest and the Chrome DevTools Protocol) that `quality.yml` runs. It deletes Clair's data for the current user, so it runs on hosted runners by default, and locally only when losing that data is fine.
 - `.github/scripts/`: CI helpers (runner preparation, packing and unpacking the build directory, the smoke test).
 - `scripts/`: release tooling (appcast entries, deltas, release notes rendering, release preflight), each with a `*.test.sh`.
 - `.sparkle/`: `appcast.xml`, served from `main` as Sparkle's feed.

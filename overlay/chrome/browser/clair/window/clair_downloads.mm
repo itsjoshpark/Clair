@@ -1,0 +1,223 @@
+// Copyright 2026 The Clair Authors
+// Use of this source code is governed by the GNU General Public License,
+// version 3, found in the LICENSE file at the root of Clair's repository.
+
+#include "chrome/browser/clair/window/clair_downloads.h"
+
+#include <algorithm>
+#include <vector>
+
+#include "base/process/process.h"
+#include "base/strings/sys_string_conversions.h"
+#include "chrome/browser/clair/window/clair_browser_window.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
+#include "components/download/public/common/download_item.h"
+#include "content/public/browser/download_manager.h"
+
+@interface ClairChromiumDownload : NSObject <ClairDownload>
+@property(nonatomic, copy) NSString* downloadID;
+@property(nonatomic, copy) NSString* fileName;
+@property(nonatomic) ClairDownloadState state;
+@property(nonatomic) int64_t receivedBytes;
+@property(nonatomic) int64_t totalBytes;
+@property(nonatomic) BOOL needsDecision;
+@property(nonatomic, copy, nullable) NSString* warningText;
+@property(nonatomic) BOOL canResume;
+@property(nonatomic) BOOL isSeen;
+@end
+
+@implementation ClairChromiumDownload
+@end
+
+namespace {
+
+ClairDownloadState StateOf(download::DownloadItem* item) {
+  switch (item->GetState()) {
+    case download::DownloadItem::IN_PROGRESS:
+      return item->IsPaused() ? ClairDownloadStatePaused
+                              : ClairDownloadStateInProgress;
+    case download::DownloadItem::COMPLETE:
+      return ClairDownloadStateComplete;
+    case download::DownloadItem::CANCELLED:
+      return ClairDownloadStateCancelled;
+    case download::DownloadItem::INTERRUPTED:
+      return ClairDownloadStateInterrupted;
+    default:
+      return ClairDownloadStateInProgress;
+  }
+}
+
+}  // namespace
+
+namespace {
+
+// When this session's downloads start: the process's start, or failing that
+// when the first native window opened.
+base::Time SessionStart() {
+  static const base::Time start = [] {
+    base::Time created = base::Process::Current().CreationTime();
+    return created.is_null() ? base::Time::Now() : created;
+  }();
+  return start;
+}
+
+}  // namespace
+
+ClairDownloads::ClairDownloads(ClairBrowserWindow* window)
+    : window_(window), session_start_(SessionStart()) {
+  Profile* profile = window_->browser()->GetProfile();
+  if (content::DownloadManager* manager = profile->GetDownloadManager()) {
+    notifier_ =
+        std::make_unique<download::AllDownloadItemNotifier>(manager, this);
+  }
+}
+
+ClairDownloads::~ClairDownloads() = default;
+
+bool ClairDownloads::IsFromThisSession(download::DownloadItem* item) const {
+  return !item->IsTransient() &&
+         (session_start_.is_null() || item->GetStartTime() >= session_start_);
+}
+
+NSArray<id<ClairDownload>>* ClairDownloads::Snapshot() {
+  content::DownloadManager* manager = notifier_ ? notifier_->GetManager() : nullptr;
+  if (!manager) {
+    return @[];
+  }
+  content::DownloadManager::DownloadVector items;
+  manager->GetAllDownloads(&items);
+  std::vector<download::DownloadItem*> session;
+  for (download::DownloadItem* item : items) {
+    if (IsFromThisSession(item)) {
+      session.push_back(item);
+    }
+  }
+  std::ranges::sort(session, [](download::DownloadItem* a,
+                                download::DownloadItem* b) {
+    return a->GetStartTime() > b->GetStartTime();
+  });
+  NSMutableArray<id<ClairDownload>>* snapshot = [NSMutableArray array];
+  for (download::DownloadItem* item : session) {
+    ClairChromiumDownload* download = [[ClairChromiumDownload alloc] init];
+    download.downloadID = base::SysUTF8ToNSString(item->GetGuid());
+    download.fileName = base::SysUTF8ToNSString(
+        item->GetFileNameToReportUser().BaseName().AsUTF8Unsafe());
+    download.state = StateOf(item);
+    download.receivedBytes = item->GetReceivedBytes();
+    download.totalBytes = std::max<int64_t>(item->GetTotalBytes(), 0);
+    download.needsDecision = item->IsDangerous() || item->IsInsecure();
+    download.canResume = item->CanResume();
+    download.isSeen = item->GetOpened() || seen_.contains(item->GetGuid());
+    [snapshot addObject:download];
+  }
+  return snapshot;
+}
+
+download::DownloadItem* ClairDownloads::Find(const std::string& guid) {
+  content::DownloadManager* manager = notifier_ ? notifier_->GetManager() : nullptr;
+  return manager ? manager->GetDownloadByGuid(guid) : nullptr;
+}
+
+void ClairDownloads::Open(const std::string& guid) {
+  if (download::DownloadItem* item = Find(guid);
+      item && item->GetState() == download::DownloadItem::COMPLETE) {
+    seen_.insert(guid);
+    item->OpenDownload();
+    Changed();
+  }
+}
+
+void ClairDownloads::ShowInFinder(const std::string& guid) {
+  if (download::DownloadItem* item = Find(guid)) {
+    item->ShowDownloadInShell();
+  }
+}
+
+void ClairDownloads::Cancel(const std::string& guid) {
+  if (download::DownloadItem* item = Find(guid)) {
+    item->Cancel(/*user_cancel=*/true);
+  }
+}
+
+void ClairDownloads::Resume(const std::string& guid) {
+  if (download::DownloadItem* item = Find(guid); item && item->CanResume()) {
+    item->Resume(/*user_resume=*/true);
+  }
+}
+
+void ClairDownloads::Keep(const std::string& guid) {
+  if (download::DownloadItem* item = Find(guid)) {
+    item->ValidateDangerousDownload();
+  }
+}
+
+void ClairDownloads::Discard(const std::string& guid) {
+  if (download::DownloadItem* item = Find(guid)) {
+    item->Remove();
+  }
+}
+
+void ClairDownloads::MarkSeen() {
+  content::DownloadManager* manager = notifier_ ? notifier_->GetManager() : nullptr;
+  if (!manager) {
+    return;
+  }
+  content::DownloadManager::DownloadVector items;
+  manager->GetAllDownloads(&items);
+  for (download::DownloadItem* item : items) {
+    if (IsFromThisSession(item) &&
+        item->GetState() == download::DownloadItem::COMPLETE) {
+      seen_.insert(item->GetGuid());
+    }
+  }
+  Changed();
+}
+
+void ClairDownloads::OnDownloadCreated(content::DownloadManager* manager,
+                                       download::DownloadItem* item) {
+  if (IsFromThisSession(item)) {
+    Changed();
+  }
+}
+
+void ClairDownloads::OnDownloadUpdated(content::DownloadManager* manager,
+                                       download::DownloadItem* item) {
+  if (IsFromThisSession(item)) {
+    Changed();
+  }
+}
+
+void ClairDownloads::OnDownloadOpened(content::DownloadManager* manager,
+                                      download::DownloadItem* item) {
+  seen_.insert(item->GetGuid());
+  Changed();
+}
+
+void ClairDownloads::OnDownloadRemoved(content::DownloadManager* manager,
+                                       download::DownloadItem* item) {
+  seen_.erase(item->GetGuid());
+  Changed();
+}
+
+// A running download updates many times a second; the sidebar hears at most
+// once per run-loop turn.
+void ClairDownloads::Changed() {
+  if (flush_posted_) {
+    return;
+  }
+  flush_posted_ = true;
+  base::WeakPtr<ClairDownloads> weak = weak_factory_.GetWeakPtr();
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (weak) {
+      weak->Flush();
+    }
+  });
+}
+
+void ClairDownloads::Flush() {
+  flush_posted_ = false;
+  if (id<ClairWindow> window = window_->clair_window()) {
+    [window downloadsDidChange:Snapshot()];
+  }
+}
