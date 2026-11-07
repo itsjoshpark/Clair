@@ -403,6 +403,9 @@ bool ExecuteCommand(ClairBrowserWindow* window,
   if ([_commandDispatcher preSendEvent:event]) {
     return;
   }
+  if (_browserWindow && _browserWindow->HandleExclusiveAccessKey(event)) {
+    return;
+  }
   [super sendEvent:event];
 }
 

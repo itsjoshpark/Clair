@@ -804,6 +804,15 @@ void ClairBrowserWindow::WindowGeometryChanged() {
   modal_dialog_host_.NotifyPositionRequiresUpdate();
 }
 
+bool ClairBrowserWindow::HandleExclusiveAccessKey(NSEvent* event) {
+  if (!exclusive_access_context_.page_fullscreen() ||
+      (event.type != NSEventTypeKeyDown && event.type != NSEventTypeKeyUp)) {
+    return false;
+  }
+  return ExclusiveAccessManager::From(browser_)->HandleUserKeyEvent(
+      input::NativeWebKeyboardEvent(gfx::NativeEvent(event)));
+}
+
 void ClairBrowserWindow::WindowFullscreenChanged(bool entered) {
   exclusive_access_context_.WindowFullscreenChanged(entered);
   WindowGeometryChanged();
@@ -1174,8 +1183,11 @@ bool ClairBrowserWindow::IsToolbarShowing() const {
   return false;
 }
 
+// The URL field and the command bar stand in for the location bar. Chromium
+// focuses the location bar for Cmd+L and File > Open Location only while it's
+// visible (browser_command_controller.cc, browser_actions.cc).
 bool ClairBrowserWindow::IsLocationBarVisible() const {
-  return false;
+  return true;
 }
 
 void ClairBrowserWindow::ShowUpdateChromeDialog() {}

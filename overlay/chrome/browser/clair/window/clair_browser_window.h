@@ -37,6 +37,7 @@
 
 @class ClairChromiumBrowser;
 @class ClairNativeWindow;
+@class NSEvent;
 @protocol ClairWindow;
 
 class Browser;
@@ -172,6 +173,8 @@ class ClairExclusiveAccessContext : public ExclusiveAccessContext {
   // The window finished entering or leaving macOS full screen.
   void WindowFullscreenChanged(bool entered);
 
+  bool page_fullscreen() const { return page_fullscreen_; }
+
  private:
   void SetPageFullscreen(bool fullscreen);
   void HideNotice(ExclusiveAccessBubbleHideReason reason);
@@ -274,6 +277,10 @@ class ClairBrowserWindow : public BrowserWindow {
   void WindowDidBecomeKey();
   void WindowDidResignKey();
   void WindowGeometryChanged();
+  // Esc during page full screen, from the window rather than the page: it
+  // ends full screen whatever has the keyboard, as in Chromium's window.
+  // Returns whether the event was used.
+  bool HandleExclusiveAccessKey(NSEvent* event);
   void WindowFullscreenChanged(bool entered);
   // The close button: Chromium's close flow, which may keep the window open.
   void WindowCloseRequested();
