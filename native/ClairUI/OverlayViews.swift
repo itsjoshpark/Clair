@@ -17,6 +17,14 @@ protocol OverlayActions: AnyObject {
 
 /// The command bar (design D11): a field and up to five rows, floating over
 /// the window.
+/// Colours for the views over the page. They're solid rather than a material:
+/// over the page's layer a material can't sample what's behind it, and shows
+/// flat grey with its vibrant secondary text gone.
+enum OverlayStyle {
+  static let background = Color(nsColor: .windowBackgroundColor)
+  static let secondary = Color(nsColor: .secondaryLabelColor)
+}
+
 struct CommandBarView: View {
   let model: CommandBarModel
   @FocusState private var isFieldFocused: Bool
@@ -26,7 +34,7 @@ struct CommandBarView: View {
   var body: some View {
     VStack(spacing: 0) {
       HStack(spacing: 10) {
-        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+        Image(systemName: "magnifyingglass").foregroundStyle(OverlayStyle.secondary)
         if let keywordName = model.keywordName {
           Text(keywordName)
             .font(.system(size: 13, weight: .semibold))
@@ -68,7 +76,7 @@ struct CommandBarView: View {
         if let offered = model.offeredKeywordName {
           Text("Search \(offered) ⇥")
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(OverlayStyle.secondary)
         }
       }
       .padding(.horizontal, 16)
@@ -92,10 +100,17 @@ struct CommandBarView: View {
         .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .background(.regularMaterial, in: .rect(cornerRadius: 14))
+    .background(OverlayStyle.background, in: .rect(cornerRadius: 14))
     .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.08)))
     .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
-    .onAppear { isFieldFocused = true }
+    // The field can take focus only once it's laid out in the window, a
+    // moment after it's added; keep asking until it has.
+    .task {
+      for _ in 0..<20 where !isFieldFocused {
+        isFieldFocused = true
+        try? await Task.sleep(for: .milliseconds(25))
+      }
+    }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("clair.commandBar")
   }
@@ -131,10 +146,10 @@ struct SuggestionRow: View {
         }
       }
       .frame(width: 18, height: 18)
-      .foregroundStyle(isSelected ? .white : .secondary)
+      .foregroundStyle(isSelected ? .white : OverlayStyle.secondary)
       Text(suggestion.contents).lineLimit(1)
       if let domain {
-        Text("— \(domain)").lineLimit(1).foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
+        Text("— \(domain)").lineLimit(1).foregroundStyle(isSelected ? .white.opacity(0.8) : OverlayStyle.secondary)
       }
       Spacer(minLength: 0)
       if suggestion.hasTabMatch {
@@ -158,8 +173,6 @@ struct SuggestionRow: View {
 
 /// The find field at the card's top-trailing corner (design D8).
 struct FindFieldView: View {
-  static let secondary = Color(nsColor: .secondaryLabelColor)
-
   let model: BrowserWindowModel
   weak var actions: (any OverlayActions)?
   @State private var text = ""
@@ -168,7 +181,7 @@ struct FindFieldView: View {
   var body: some View {
     let find = model.find
     HStack(spacing: 6) {
-      Image(systemName: "magnifyingglass").foregroundStyle(Self.secondary)
+      Image(systemName: "magnifyingglass").foregroundStyle(OverlayStyle.secondary)
       TextField("Find", text: $text)
         .textFieldStyle(.plain)
         .frame(width: 180)
@@ -185,7 +198,7 @@ struct FindFieldView: View {
         }
       Text(find?.resultText ?? "")
         .font(.caption.monospacedDigit())
-        .foregroundStyle(Self.secondary)
+        .foregroundStyle(OverlayStyle.secondary)
         .frame(minWidth: 44, alignment: .trailing)
         .accessibilityIdentifier("clair.findResult")
       // The keys do what these buttons do (Return, Shift+Return, Esc), so
@@ -199,9 +212,7 @@ struct FindFieldView: View {
     }
     .padding(.horizontal, 10)
     .frame(height: 36)
-    // Solid rather than a material: over the page's layer a material can't
-    // sample what's behind it, and its vibrant secondary text disappears.
-    .background(Color(nsColor: .windowBackgroundColor), in: .rect(cornerRadius: 10))
+    .background(OverlayStyle.background, in: .rect(cornerRadius: 10))
     .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.1)))
     .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
     .onAppear { text = find?.text ?? "" }
@@ -232,7 +243,8 @@ struct CapsuleText: View {
       .truncationMode(.middle)
       .padding(.horizontal, 12)
       .padding(.vertical, 6)
-      .background(.regularMaterial, in: .capsule)
+      .background(OverlayStyle.background, in: .capsule)
+      .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1)))
       .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
       .accessibilityIdentifier(identifier)
   }

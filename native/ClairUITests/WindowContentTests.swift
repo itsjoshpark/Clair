@@ -40,6 +40,23 @@ struct WindowContentTests {
     #expect(controller.model.activeTabID == secondID)
   }
 
+  @Test func switchingTabsClosesTheCommandBar() throws {
+    let (browser, controller) = makeWindow()
+    controller.showCommandBar(mode: .currentTab)
+    #expect(controller.model.commandBar != nil)
+    controller.activeTabDidChange(controller.model.activeTabID)
+    #expect(controller.model.commandBar != nil)
+    browser.activate(tab: browser.tabs[1].tabID)
+    #expect(controller.model.commandBar == nil)
+  }
+
+  @Test func pageFullscreenGivesThePageTheKeyboard() {
+    let (browser, controller) = makeWindow()
+    controller.pageFullscreenDidChange(true)
+    #expect(controller.model.isPageFullscreen)
+    #expect(browser.commands.last == "focusPage")
+  }
+
   @Test func closingLetsGoOfThePages() throws {
     let (browser, controller) = makeWindow()
     let page = try #require(browser.pageView(for: browser.activeTabID))

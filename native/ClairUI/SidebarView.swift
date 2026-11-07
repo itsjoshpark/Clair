@@ -344,6 +344,7 @@ struct ExtensionsList: View {
           }
           .buttonStyle(.plain)
           .help(action.isPinned ? "Unpin" : "Pin")
+          .accessibilityLabel(action.isPinned ? "Unpin" : "Pin")
         }
         .padding(.vertical, 4)
       }
@@ -372,7 +373,7 @@ struct DownloadsButton: View {
       .frame(width: 28, height: 28)
       .overlay(alignment: .topTrailing) {
         if hasUnseen {
-          Circle().fill(Color.accentColor).frame(width: 7, height: 7).accessibilityIdentifier("clair.downloadsUnseen")
+          Circle().fill(Color.accentColor).frame(width: 7, height: 7)
         }
       }
       .contentShape(Rectangle())

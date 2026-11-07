@@ -204,23 +204,49 @@ final class BrowserRootView: NSView {
 
   private var revealTrackingArea: NSTrackingArea?
 
+  /// The area that reveals the hidden sidebar, or hides it again once the
+  /// pointer leaves; nil while the sidebar shows.
+  private var revealTrackingRect: CGRect? {
+    guard model.sidebar.isHidden, !model.isPageFullscreen else { return nil }
+    return model.sidebar.isRevealed
+      ? revealedSidebarFrame.insetBy(dx: -8, dy: -8)
+      : CGRect(x: 0, y: 0, width: Self.revealStripWidth, height: bounds.height)
+  }
+
+  /// Replaces the tracking area only when its rect changes: a new area starts
+  /// with the pointer outside, so rebuilding it on every layout would lose an
+  /// entry already under way.
   private func updateRevealTracking() {
+    let rect = revealTrackingRect
+    guard rect != revealTrackingArea?.rect else { return }
     if let revealTrackingArea {
       removeTrackingArea(revealTrackingArea)
     }
     revealTrackingArea = nil
-    guard model.sidebar.isHidden, !model.isPageFullscreen else { return }
-    let rect =
-      model.sidebar.isRevealed
-      ? revealedSidebarFrame.insetBy(dx: -8, dy: -8)
-      : CGRect(x: 0, y: 0, width: Self.revealStripWidth, height: bounds.height)
-    let area = NSTrackingArea(
-      rect: rect, options: [.mouseEnteredAndExited, .activeInKeyWindow, .assumeInside], owner: self)
+    guard let rect else { return }
+    let area = NSTrackingArea(rect: rect, options: [.mouseEnteredAndExited, .activeInKeyWindow], owner: self)
     addTrackingArea(area)
     revealTrackingArea = area
+    // Already inside, as when the strip appears under a resting pointer.
+    if let window, rect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
+      startReveal()
+    }
+  }
+
+  override func updateTrackingAreas() {
+    super.updateTrackingAreas()
+    if let revealTrackingArea {
+      removeTrackingArea(revealTrackingArea)
+      self.revealTrackingArea = nil
+    }
+    updateRevealTracking()
   }
 
   override func mouseEntered(with event: NSEvent) {
+    startReveal()
+  }
+
+  private func startReveal() {
     guard model.sidebar.isHidden else { return }
     revealTask?.cancel()
     guard !model.sidebar.isRevealed else { return }

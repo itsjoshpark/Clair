@@ -168,6 +168,11 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func activeTabDidChange(_ tabID: TabID) {
+    // The command bar belongs to the tab it opened on; another tab coming to
+    // the front, from the command bar or not, closes it.
+    if tabID != model.activeTabID {
+      model.commandBar?.cancel()
+    }
     model.setActiveTab(tabID)
     rootView.card.show(page: browser?.pageView(for: tabID))
     devToolsDidChange()
@@ -236,6 +241,15 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   func pageFullscreenDidChange(_ fullscreen: Bool) {
     model.isPageFullscreen = fullscreen
+    // Esc ends page full screen only when it reaches the page, so the page
+    // takes the keyboard from the sidebar or an overlay.
+    if fullscreen {
+      model.commandBar?.cancel()
+      if model.find != nil {
+        browser?.stopFinding()
+      }
+      browser?.focusPage()
+    }
   }
 
   func showExclusiveAccessNotice(_ text: String?) {
