@@ -116,14 +116,14 @@ struct WindowLayoutTests {
   }
 
   @Test func compactTopRowBelowArcsThreshold() {
-    #expect(WindowControlsMetrics.macOS27.hasCompactTopRow(width: 213))
-    #expect(!WindowControlsMetrics.macOS27.hasCompactTopRow(width: 214))
+    #expect(WindowControlsMetrics.macOS27.hasCompactTopRow(width: 217))
+    #expect(!WindowControlsMetrics.macOS27.hasCompactTopRow(width: 218))
     #expect(WindowControlsMetrics.macOS27.narrowestSidebar == 164)
   }
 
   @Test func hideSidebarButtonMakesRoomInANarrowRow() {
-    #expect(TopRow.hideSidebarX(width: 228, controls: .macOS27) == 77)
-    #expect(TopRow.hideSidebarX(width: 214, controls: .macOS27) == 74)
+    #expect(TopRow.hideSidebarX(width: 228, controls: .macOS27) == 81)
+    #expect(TopRow.hideSidebarX(width: 218, controls: .macOS27) == 78)
   }
 }
 

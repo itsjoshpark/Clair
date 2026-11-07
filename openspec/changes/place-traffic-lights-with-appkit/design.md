@@ -79,14 +79,16 @@ After setting the place, `BrowserRootView.layout()` reads the close and zoom but
 
 ```
   centre line = close button's vertical centre            (24 on macOS 27)
-  leading     = zoom button's trailing edge + 3           (77 on macOS 27)
+  leading     = zoom button's trailing edge + 7           (81 on macOS 27)
 
   top row (32 pt buttons)      top padding    = centre line - 16
   compact row (28 pt buttons)  top padding    = centre line - 14
   hide-sidebar button x        = min(leading, width - 6 - 3 * 34 - 32)   (as today)
-  compact below                width < leading + 137                     (214 on macOS 27)
+  compact below                width < leading + 137                     (218 on macOS 27)
   narrowest sidebar            max(164, zoom's trailing edge + 90)       (164 on macOS 27)
 ```
+
+The gap after the zoom button is 7 pt, where Arc's is 3 (hide-sidebar at 77): the owner found Arc's too tight, so the hide-sidebar button and the compact row's threshold sit 4 pt further right than Arc's.
 
 Just above the compact threshold the hide-sidebar button squeezes left, as Arc's does, by at most 3 pt, so it can meet the zoom button's edge but never overlap it. Before the window first shows, and if the buttons are hidden, the numbers keep macOS 27's values.
 

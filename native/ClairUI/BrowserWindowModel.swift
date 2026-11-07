@@ -134,11 +134,15 @@ struct WindowControlsMetrics: Equatable {
   /// The zoom button's trailing edge.
   var trailingX: CGFloat
 
-  /// Where the top row's first button may start.
-  var topRowLeading: CGFloat { trailingX + 3 }
+  /// The gap between the zoom button and the top row's first button: 4 pt
+  /// more than Arc's 3, which the owner found too tight.
+  static let topRowGap: CGFloat = 7
+
+  /// Where the top row's first button may start. 81 on macOS 27.
+  var topRowLeading: CGFloat { trailingX + Self.topRowGap }
 
   /// Below this sidebar width the top row is compact, as in Arc: back,
-  /// forward and a menu holding reload and Hide Sidebar. 214 on macOS 27.
+  /// forward and a menu holding reload and Hide Sidebar. 218 on macOS 27.
   var compactBelow: CGFloat { topRowLeading + 137 }
 
   /// The narrowest sidebar, where the compact row's back button (90 pt from
