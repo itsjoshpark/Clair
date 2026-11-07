@@ -100,6 +100,11 @@ for arg in "\$@"; do
     --user-data-dir=*) [[ -d "\${arg#*=}" ]] && echo "profile-existed=yes" >>"$launch_log" ;;
   esac
 done
+# As Clair does: ClairUI keeps the sidebar's state in the app's user defaults.
+if [[ -n "\${FAKE_CLAIR_DEFAULTS-}" ]]; then
+  defaults write "\$FAKE_CLAIR_DEFAULTS" ClairSidebarHidden -bool true
+  defaults write "\$FAKE_CLAIR_DEFAULTS" ClairSidebarWidth -int 300
+fi
 exit "\${FAKE_CLAIR_STATUS:-0}"
 EOF
   chmod +x "$app/Contents/MacOS/Clair"
@@ -124,6 +129,7 @@ run() {
   status=0
   output="$(HOME="$home" PATH="$bin:$PATH" GH_LOG="$gh_log" RELEASES="$releases" \
     CLAIR_RUN_LOCAL_ENGINE_KEY="$key" CLAIR_RUN_LOCAL_PACKAGE="$bin/package.sh" \
+    CLAIR_RUN_LOCAL_DEFAULTS_DOMAIN="$defaults_domain" FAKE_CLAIR_DEFAULTS="$defaults_domain" \
     "$run_local" --work "$work" "$@" 2>&1)" || status=$?
 }
 
@@ -133,6 +139,14 @@ launched_arg() {
 
 profile_arg() {
   sed -n 's/^arg=--user-data-dir=//p' "$launch_log" 2>/dev/null
+}
+
+# A user defaults domain of the tests' own, never Clair's.
+defaults_domain="dev.joshuapark.Clair.run-local-test.$$"
+trap 'rm -rf "$workdir"; defaults delete "$defaults_domain" >/dev/null 2>&1; rm -f "$HOME/Library/Preferences/$defaults_domain.plist"' EXIT
+# Whether the domain holds any value: a deleted one reads as an empty dictionary.
+has_defaults() {
+  [[ -n "$(defaults read "$defaults_domain" 2>/dev/null | tr -d '{}[:space:]')" ]]
 }
 
 key_a=aaaaaaaaaaaaaaaa
@@ -291,6 +305,28 @@ if (( status == 0 )) && [[ "$(profile_arg)" == "$workdir/ClairCopy" ]]; then
   check "accepts a profile whose name only starts like Clair's data folder" pass
 else
   check "accepts a profile whose name only starts like Clair's data folder" fail
+fi
+
+# --- user defaults --------------------------------------------------------------------------
+defaults write "$defaults_domain" ClairSidebarWidth -int 250
+run "$key_a"
+if [[ "$(defaults read "$defaults_domain" ClairSidebarWidth 2>/dev/null)" == 250 ]] &&
+  ! defaults read "$defaults_domain" ClairSidebarHidden >/dev/null 2>&1; then
+  check "puts back the user defaults Clair changed" pass
+else
+  check "puts back the user defaults Clair changed" fail
+fi
+defaults delete "$defaults_domain" >/dev/null 2>&1
+run "$key_a"
+if ! has_defaults; then
+  check "removes user defaults Clair created where there were none" pass
+else
+  check "removes user defaults Clair created where there were none" fail
+fi
+if [[ -z "$(find "$work" -maxdepth 1 -name 'defaults.*')" ]]; then
+  check "leaves no saved user defaults behind" pass
+else
+  check "leaves no saved user defaults behind" fail
 fi
 
 # --- the rest -------------------------------------------------------------------------------

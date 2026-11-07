@@ -21,8 +21,14 @@
 # script with the engine.yml command that builds it. Arguments after -- go to
 # Clair, after --user-data-dir and --use-mock-keychain.
 #
+# Clair's user defaults (ClairUI's sidebar width and state, Sparkle's state)
+# live in the bundle ID's domain, which an installed Clair shares. They're
+# saved before the launch and put back when Clair quits, so changes made by
+# an installed Clair while this one runs are lost.
+#
 # For tests only: CLAIR_RUN_LOCAL_ENGINE_KEY replaces the computed engine key,
-# and CLAIR_RUN_LOCAL_PACKAGE replaces package.sh.
+# CLAIR_RUN_LOCAL_PACKAGE replaces package.sh, and
+# CLAIR_RUN_LOCAL_DEFAULTS_DOMAIN replaces the user defaults domain.
 
 set -euo pipefail
 
@@ -152,8 +158,23 @@ if [[ -z "$profile" ]]; then
   profile="$(mktemp -d "$work/profiles/profile.XXXXXX")"
   throwaway=true
 fi
+defaults_domain="${CLAIR_RUN_LOCAL_DEFAULTS_DOMAIN:-dev.joshuapark.Clair}"
+saved_defaults="$(mktemp "$work/defaults.XXXXXX")"
+had_defaults=false
+# A deleted domain reads as an empty dictionary, which counts as none.
+if [[ -n "$(defaults read "$defaults_domain" 2>/dev/null | tr -d '{}[:space:]')" ]]; then
+  defaults export "$defaults_domain" "$saved_defaults" || die "can't save the $defaults_domain user defaults"
+  had_defaults=true
+fi
 lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 cleanup() {
+  # import merges into the domain, so empty it first.
+  defaults delete "$defaults_domain" >/dev/null 2>&1 || true
+  if ! $had_defaults || defaults import "$defaults_domain" "$saved_defaults"; then
+    rm -f "$saved_defaults"
+  else
+    echo "run-local: couldn't restore the $defaults_domain user defaults; they're saved in $saved_defaults" >&2
+  fi
   # The app and its notification helper register themselves with Launch
   # Services; don't leave a second dev.joshuapark.Clair for "open" to pick.
   local bundle
