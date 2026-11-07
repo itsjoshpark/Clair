@@ -222,6 +222,7 @@ final class BrowserRootView: NSView {
     resizeHandle.frame = CGRect(x: layout.sidebar.maxX - 3, y: 0, width: 6, height: bounds.height)
     if let controls = window as? any ClairWindowControls {
       WindowControlsPlacement(sidebar: sidebarFrame, isPageFullscreen: model.isPageFullscreen).apply(to: controls)
+      readWindowControls(sidebar: sidebarFrame)
     }
     layoutOverlays(card: layout.card)
     updateRevealTracking()
@@ -256,6 +257,35 @@ final class BrowserRootView: NSView {
       let height = commandBarHost.fittingSize.height
       commandBarHost.frame = CGRect(
         x: bounds.midX - width / 2, y: CommandBarView.top(inWindowHeight: bounds.height), width: width, height: height)
+    }
+  }
+
+  // MARK: Window controls (place-traffic-lights-with-appkit D3b)
+
+  /// Reads where AppKit put the close and zoom buttons, as accessibility
+  /// reports them, so the top row lines up with them. Re-tiling is
+  /// synchronous, so they're already at the place just set; hidden ones are
+  /// left alone until they show.
+  private func readWindowControls(sidebar: CGRect) {
+    guard let window, !model.isPageFullscreen,
+      let close = window.standardWindowButton(.closeButton),
+      let zoom = window.standardWindowButton(.zoomButton),
+      !close.isHidden, !zoom.isHidden
+    else { return }
+    func topLeft(_ screenRect: CGRect) -> CGRect {
+      let rect = window.convertFromScreen(screenRect)
+      return CGRect(x: rect.minX, y: window.frame.height - rect.maxY, width: rect.width, height: rect.height)
+    }
+    let closeFrame = topLeft(close.accessibilityFrame())
+    let zoomFrame = topLeft(zoom.accessibilityFrame())
+    guard closeFrame.width > 0, zoomFrame.width > 0 else { return }
+    let read = WindowControlsMetrics(
+      centreY: closeFrame.midY - sidebar.minY, trailingX: zoomFrame.maxX - sidebar.minX)
+    if read.differs(from: model.windowControls) {
+      model.windowControls = read
+      if model.sidebar.width < read.narrowestSidebar {
+        model.sidebar.width = read.narrowestSidebar
+      }
     }
   }
 

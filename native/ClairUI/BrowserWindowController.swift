@@ -39,7 +39,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     rootView.resizeHandle.currentWidth = { [weak model] in model?.sidebar.width ?? SidebarState.defaultWidth }
     rootView.resizeHandle.onResize = { [weak self] width, done in
       guard let self else { return }
-      self.model.sidebar.width = width
+      self.model.sidebar.width = max(width, self.model.windowControls.narrowestSidebar)
       if done { self.preferences.remember(self.model.sidebar) }
     }
     WindowStyle.apply(to: window, profileKind: browser.profileKind)
