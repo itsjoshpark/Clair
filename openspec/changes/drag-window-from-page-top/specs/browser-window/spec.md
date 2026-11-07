@@ -30,8 +30,8 @@ While the preference is on, a drag that starts in the top 59 points of the page 
 - **THEN** the window moves with the pointer
 
 #### Scenario: Inactive window
-- **WHEN** another app is active and the user drags from empty space at the top of a Clair window's page
-- **THEN** Clair becomes active and the window comes forward, without moving
+- **WHEN** another app is active and the user drags from the top 59 points of a Clair window's page, over empty space, text or a link
+- **THEN** Clair becomes active, and the window comes forward and moves with the pointer
 
 ### Requirement: The page keeps drags under its own cursors
 A press in the strip SHALL reach the page first. If the pointer shows any cursor other than the arrow when the press starts or when the drag begins, such as the I-beam over selectable text, the pointing hand over a link, or a cursor the page sets itself, the drag SHALL stay with the page and the window SHALL NOT move. Under the arrow cursor, the window SHALL move, whether or not the page handles the press.

@@ -46,7 +46,6 @@ See proposal.md for why, and `specs/browser-window/spec.md` for the required beh
 - Keeping drags for pages that cancel the press under the arrow cursor (some canvas apps and maps). Arc doesn't; doing better needs a signal from the renderer (D1's alternative).
 - Copying Arc's stale-state quirk of starting a window drag when a drag from below enters the strip.
 - Dragging Chromium's own windows (pop-ups, apps, undocked DevTools) from their pages.
-- Dragging an inactive window from the top of its page. The owner called it nice to have; a first press there only activates the window.
 
 ## Decisions
 
@@ -61,7 +60,8 @@ See proposal.md for why, and `specs/browser-window/spec.md` for the required beh
 
 Double-clicks are never armed (`clickCount` 2), so they go to the page.
 
-In a window that isn't key, Chromium doesn't pass the first press to the page (no click-through: `acceptsFirstMouse:` is NO by default), so neither the page nor Chromium's hit test sees its drags: the press activates the window and nothing moves it. Task 1.1 had the strip take that press to drag the window; the owner chose to leave it out (see Non-Goals).
+5. **A window that isn't key.** Chromium doesn't pass the first press in such a window to the page (no click-through: `acceptsFirstMouse:` is NO by default), so neither the page nor Chromium's hit test sees its drags. Left alone, AppKit's title bar would move the window from the window's top 40 pt whatever the preference. The strip takes that press itself instead: `hitTest` returns the strip, which accepts first mouse and answers NO to `mouseDownCanMoveWindow`, with the preference on or off, and the press activates the window as any other would. With the preference on, its first drag moves the window, whatever the cursor, which Chromium doesn't update in an inactive window, so text and links in the strip move it too. The page loses nothing, since it wouldn't have had the press.
+   - Arc, measured: its page accepts the first click (click-through), so its strip applies there as in a key window, and with the setting off nothing moves it. Click-through in Clair would change every first click in an inactive window (a link would open instead of the window activating), so it wasn't taken.
 
 - Why the cursor: it's the one signal Arc uses, it's available in `ClairUI` (Chromium sets it with `-[NSCursor set]` in the browser process), and it gives Arc's outcome for every measured row.
 - Why `hitTest`: Chromium already hit-tests the content view for every mouse event, so the strip sees the first drag without an event monitor in front of the page or held events, and the page gets exactly what it gets in Arc.
@@ -101,8 +101,8 @@ Stock Chromium's `RenderWidgetHostViewCocoa` answers `mouseDownCanMoveWindow` wi
   → No automated test guards it, by the owner's choice; checking the drag by hand after a Chromium update catches it, and it's fixed then.
 - **[Risk] `hitTest(_:)` also runs outside mouse handling** (cursor and tracking updates, accessibility).
   → The machine acts only when `NSApp.currentEvent` is a left-mouse down or drag whose location is inside the strip, and never claims the hit.
-- **[Trade-off] An inactive window doesn't drag from the top of its page**, unlike Arc: the first press only activates it.
-  → Nice to have, per the owner; the strip can take that press later if wanted (task 1.1 tried it).
+- **[Trade-off] In an inactive window, any drag from the strip moves the window**, even over text or a link, where Arc applies its cursor rule (D1, step 5).
+  → Accepted by the owner (2026-11-07): the page wouldn't get that press anyway, so nothing is lost.
 - **[Risk] The patch conflicts with a Chromium update** to `render_widget_host_view_cocoa.mm`.
   → It changes one method at the end of the file; the patch check reports a conflict.
 
@@ -116,7 +116,7 @@ Task 1.1, 2026-11-07, Clair 0.1.2's engine with this branch's `ClairUI` through 
 - **Outcomes, matching Arc's table:** empty space, the cancelled `mousedown` and the iframe's empty space moved the window, and the page got the press, one `mousemove` and the release; `cursor: text`, `pointer`, `crosshair`, `grab` and links stayed with the page (all movements, or `dragstart` for the link). The strip ended at 58/60 pt with the sidebar shown and hidden; in a 120 px header, 60 and 80 pt stayed with the page; a press at 100 pt dragged up into the strip stayed with the page. A `<button>`, an `<img>`, a `draggable` div and a range input moved the window, with the page getting the press, one `mousemove`, the release and a `click` (no `dragstart`; unlike Arc, the range didn't move a step); selectable text selected and the window stayed. A link click and a double-click in the strip reached the page (`click`, `dblclick`), and the window kept its size.
 - **`performDrag(with:)`** starts from the first drag event, and the release reaches the page afterwards. With synthetic events the window sometimes moved less than the pointer (−6 of −40 pt once) when they came 16 ms apart; at a person's speed it followed.
 - **Title bar.** A link drag in the page's top 30 pt moved the window as well as dragging the link, through AppKit's title bar. Setting `isMovable` from a press monitor only worked when it had already been false; answering NO to `mouseDownCanMoveWindow` in the strip didn't help; making the window unmovable while the pointer was over the strip fixed it, and the sidebar's top still moved the window. D3's patch replaces that; task 2.3 checks it on the built engine.
-- **Inactive window.** Chromium didn't pass the first press to the page, and no drag reached the hit test, so an inactive window didn't move. Having the strip take that press made it drag; that was left out (D1). Activation after switching to Finder with AppleScript was unreliable in this harness for any click, the sidebar included, so activation is checked by hand.
+- **Inactive window.** Chromium didn't pass the first press to the page, and no drag reached the hit test. On the patched engine, AppKit's title bar still moved an inactive window from the page's top 30 pt, with the preference off too, since no view accepted the press. With D1's step 5, drags at 20 and 50 pt moved the window (over a link too), 70 pt didn't, and with the preference off nothing did. Arc, with its setting off, didn't move an inactive window from 20 or 45 pt, and its page got the click. Activation after switching to Finder with AppleScript was unreliable in this harness for any click, the sidebar included, so activation is checked by hand.
 - **Preference off** (`defaults write`, no relaunch): drags from the strip stayed with the page in key and inactive windows, and the window didn't move; turned back on, the next drag moved it.
 
 ## Migration Plan

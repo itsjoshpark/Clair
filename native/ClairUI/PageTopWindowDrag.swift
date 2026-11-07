@@ -52,6 +52,19 @@ struct PageTopWindowDrag {
   /// The press whose first drag moves the window.
   private(set) var armedPress: Int?
 
+  /// Whether the strip takes a press itself (design D1, step 5): in a window
+  /// that isn't key, Chromium doesn't pass the first press to the page, so
+  /// the strip takes it, and AppKit's title bar can't.
+  static func takesPress(_ event: Event, isWindowKey: Bool) -> Bool {
+    event.kind == .press && !isWindowKey && event.isInStrip
+  }
+
+  /// Whether a press the strip took moves the window on its first drag. The
+  /// cursor doesn't count: Chromium doesn't update it in such a window.
+  static func dragsTakenPress(_ event: Event, isEnabled: Bool) -> Bool {
+    isEnabled && event.clickCount == 1 && !event.hasModifiers
+  }
+
   /// Takes in an event and says whether the window should move now. Both
   /// AppKit and Chromium hit-test a press, so a press may come in twice.
   mutating func handle(_ event: Event, isEnabled: Bool) -> Bool {
@@ -85,10 +98,12 @@ struct WindowDragSafetyNet {
   }
 }
 
-/// A transparent strip over the top of the page (design D1 and D2). It never
-/// takes a press: Chromium's page view hit-tests the window for every mouse
-/// event, so the strip's hit test sees the press and its first drag, and
-/// feeds them to `PageTopWindowDrag`.
+/// A transparent strip over the top of the page (design D1 and D2).
+///
+/// In a key window it never takes a press: Chromium's page view hit-tests the
+/// window for every mouse event, so the strip's hit test sees the press and
+/// its first drag, and feeds them to `PageTopWindowDrag`. In a window that
+/// isn't key, it takes the first press itself (`PageTopWindowDrag.takesPress`).
 final class PageTopDragStrip: NSView {
   /// Whether dragging from the top of the page is on for this window now.
   var isEnabled: () -> Bool = { false }
@@ -97,6 +112,33 @@ final class PageTopDragStrip: NSView {
 
   private static let modifiers: NSEvent.ModifierFlags = [.shift, .control, .option, .command]
   private var rule = PageTopWindowDrag()
+  /// Whether the press the strip took moves the window on its first drag.
+  private var dragsTakenPress = false
+
+  /// A transparent view answers YES by default, which would let AppKit's
+  /// title bar move the window from a press the strip takes.
+  override var mouseDownCanMoveWindow: Bool { false }
+
+  override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+    true
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    let observed = PageTopWindowDrag.Event(
+      kind: .press, number: event.eventNumber, clickCount: event.clickCount,
+      hasModifiers: !event.modifierFlags.intersection(Self.modifiers).isEmpty, cursorIsArrow: true)
+    dragsTakenPress = PageTopWindowDrag.dragsTakenPress(observed, isEnabled: isEnabled())
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    guard dragsTakenPress else { return }
+    dragsTakenPress = false
+    onDragWindow(event)
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    dragsTakenPress = false
+  }
 
   override func hitTest(_ point: NSPoint) -> NSView? {
     guard !isHidden, let event = NSApp.currentEvent, event.window === window else { return nil }
@@ -113,6 +155,9 @@ final class PageTopDragStrip: NSView {
       clickCount: event.clickCount,
       hasModifiers: !event.modifierFlags.intersection(Self.modifiers).isEmpty,
       cursorIsArrow: NSCursor.current === NSCursor.arrow)
+    if PageTopWindowDrag.takesPress(observed, isWindowKey: window?.isKeyWindow ?? false) {
+      return self
+    }
     if rule.handle(observed, isEnabled: isEnabled()) {
       onDragWindow(event)
     }
