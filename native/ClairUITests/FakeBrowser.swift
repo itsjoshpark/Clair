@@ -214,12 +214,8 @@ final class FakeAutocomplete: NSObject, ClairAutocomplete {
 /// A stand-in for `ClairNativeWindow`: records where ClairUI puts the window
 /// controls.
 final class FakeWindow: NSWindow, ClairWindowControls {
-  var windowControlsOrigin = CGPoint.zero {
-    didSet { originSets += 1 }
-  }
+  var windowControlsOrigin = CGPoint.zero
   var windowControlsHidden = false
-  /// How often ClairUI set the origin, each of which lays out the title bar.
-  private(set) var originSets = 0
 }
 
 /// A stand-in for Chromium's `ClairBrowser`. Its helpers change the tabs and

@@ -139,30 +139,33 @@ struct TopRow: View {
   static let trailing: CGFloat = 6
   static let gap: CGFloat = 2
 
-  /// Where hide-sidebar starts: after the window controls, or closer to them
-  /// when the sidebar is only just wide enough.
-  static func hideSidebarX(width: CGFloat) -> CGFloat {
-    min(77, width - trailing - 3 * (32 + gap) - 32)
+  /// Where hide-sidebar starts: after the window controls, or up to 3 pt
+  /// closer when the sidebar is only just wide enough, as in Arc.
+  static func hideSidebarX(width: CGFloat, controls: WindowControlsMetrics) -> CGFloat {
+    min(controls.topRowLeading, width - trailing - 3 * (32 + gap) - 32)
   }
 
   var body: some View {
     let tab = model.activeTab
     let isLoading = tab?.isLoading == true
+    let controls = model.windowControls
+    let isCompact = controls.hasCompactTopRow(width: model.sidebar.width)
     let back = SidebarButton(
       systemImage: "arrow.left", help: "Back", isEnabled: tab?.canGoBack ?? false,
-      size: model.sidebar.hasCompactTopRow ? 28 : 32
+      size: isCompact ? 28 : 32
     ) {
       actions?.goBack()
     }
     .accessibilityIdentifier("clair.back")
     let forward = SidebarButton(
       systemImage: "arrow.right", help: "Forward", isEnabled: tab?.canGoForward ?? false,
-      size: model.sidebar.hasCompactTopRow ? 28 : 32
+      size: isCompact ? 28 : 32
     ) {
       actions?.goForward()
     }
     .accessibilityIdentifier("clair.forward")
-    if model.sidebar.hasCompactTopRow {
+    // The row is centred on the window controls (design D3b).
+    if isCompact {
       HStack(spacing: 0) {
         Spacer(minLength: 0)
         back
@@ -188,12 +191,12 @@ struct TopRow: View {
       }
       .padding(.trailing, Self.trailing)
       .frame(height: 28)
-      .padding(.top, 10)
+      .padding(.top, max(0, controls.centreY - 14))
       .padding(.bottom, 2)
     } else {
       HStack(spacing: 0) {
         // The window controls sit here (design D4).
-        Color.clear.frame(width: Self.hideSidebarX(width: model.sidebar.width))
+        Color.clear.frame(width: Self.hideSidebarX(width: model.sidebar.width, controls: controls))
         SidebarButton(systemImage: "sidebar.left", help: "Hide Sidebar") { actions?.toggleSidebar() }
           .accessibilityIdentifier("clair.hideSidebar")
         Spacer(minLength: 0)
@@ -211,7 +214,7 @@ struct TopRow: View {
       }
       .padding(.trailing, Self.trailing)
       .frame(height: 32)
-      .padding(.top, 8)
+      .padding(.top, max(0, controls.centreY - 16))
     }
   }
 }

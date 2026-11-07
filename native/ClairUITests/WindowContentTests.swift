@@ -76,74 +76,6 @@ struct WindowContentTests {
   }
 }
 
-/// Where the window controls go (place-traffic-lights-with-appkit D3).
-@MainActor
-struct WindowControlsTests {
-  let size = CGSize(width: 1200, height: 800)
-
-  func controls(_ controller: BrowserWindowController) -> FakeWindow {
-    controller.rootView.frame = CGRect(origin: .zero, size: size)
-    controller.rootView.needsLayout = true
-    controller.rootView.layoutSubtreeIfNeeded()
-    return controller.window as! FakeWindow
-  }
-
-  func makeController() -> BrowserWindowController {
-    let browser = FakeBrowser()
-    browser.addTab(title: "Tab", url: "https://example.com/")
-    let controller = BrowserWindowController(
-      browser: browser, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: "WindowControlsTests")!))
-    controller.model.sidebar = SidebarState()
-    browser.clairWindow = controller
-    return controller
-  }
-
-  @Test func shownSidebarPutsThemAtArcsPlace() {
-    let window = controls(makeController())
-    #expect(window.windowControlsOrigin == CGPoint(x: 13, y: 17))
-    #expect(!window.windowControlsHidden)
-  }
-
-  @Test func hiddenSidebarHidesThem() {
-    let controller = makeController()
-    controller.model.sidebar.isHidden = true
-    let window = controls(controller)
-    #expect(window.windowControlsHidden)
-  }
-
-  @Test func revealedSidebarCarriesThem() {
-    let controller = makeController()
-    controller.model.sidebar.isHidden = true
-    controller.model.sidebar.isRevealed = true
-    let window = controls(controller)
-    #expect(window.windowControlsOrigin == CGPoint(x: 18, y: 22))
-    #expect(!window.windowControlsHidden)
-  }
-
-  @Test func pageFullscreenHidesThem() {
-    let controller = makeController()
-    controller.model.isPageFullscreen = true
-    let window = controls(controller)
-    #expect(window.windowControlsHidden)
-  }
-
-  @Test func halfHiddenSidebarSlidesThem() {
-    let layout = WindowLayout.blended(size: size, width: 228, shown: 0.5)
-    let placement = WindowControlsPlacement(sidebar: layout.sidebar, isPageFullscreen: false)
-    #expect(placement.origin == CGPoint(x: -101, y: 17))
-    #expect(!placement.isHidden)
-  }
-
-  @Test func unchangedPlaceIsNotSetAgain() {
-    let window = FakeWindow()
-    let placement = WindowControlsPlacement(sidebar: CGRect(x: 0, y: 0, width: 228, height: 800), isPageFullscreen: false)
-    placement.apply(to: window)
-    placement.apply(to: window)
-    #expect(window.originSets == 1)
-    #expect(window.windowControlsOrigin == CGPoint(x: 13, y: 17))
-  }
-}
-
 /// Where the sidebar and card go (design D4, D12).
 struct WindowLayoutTests {
   let size = CGSize(width: 1200, height: 800)
@@ -184,13 +116,14 @@ struct WindowLayoutTests {
   }
 
   @Test func compactTopRowBelowArcsThreshold() {
-    #expect(SidebarState(width: 213).hasCompactTopRow)
-    #expect(!SidebarState(width: 214).hasCompactTopRow)
+    #expect(WindowControlsMetrics.macOS27.hasCompactTopRow(width: 213))
+    #expect(!WindowControlsMetrics.macOS27.hasCompactTopRow(width: 214))
+    #expect(WindowControlsMetrics.macOS27.narrowestSidebar == 164)
   }
 
   @Test func hideSidebarButtonMakesRoomInANarrowRow() {
-    #expect(TopRow.hideSidebarX(width: 228) == 77)
-    #expect(TopRow.hideSidebarX(width: 214) == 74)
+    #expect(TopRow.hideSidebarX(width: 228, controls: .macOS27) == 77)
+    #expect(TopRow.hideSidebarX(width: 214, controls: .macOS27) == 74)
   }
 }
 

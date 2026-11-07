@@ -8,6 +8,9 @@
 
 #import "chrome/browser/clair/window/clair_native_window.h"
 
+#include <os/log.h>
+#include <stdlib.h>
+
 
 #include "base/apple/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -378,6 +381,12 @@ WEAK_IMPORT_ATTRIBUTE
 + (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle;
 @end
 
+@interface ClairNativeWindow ()
+// Whether the buttons are hidden while their place keeps changing, on a macOS
+// where they can't follow it (design D1's fallback).
+@property(nonatomic, readonly) BOOL windowControlsHiddenForMotion;
+@end
+
 // Puts the window's buttons where its ClairWindowControls ask (design D1).
 // AppKit lays the buttons out from the leading inset and a fixed distance above
 // the title bar's bottom edge, so the title bar's height sets their top. In
@@ -425,7 +434,8 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
   // AppKit's layout may show the buttons again; the window's state wins.
   for (NSWindowButton type :
        {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
-    [window standardWindowButton:type].hidden = window.windowControlsHidden;
+    [window standardWindowButton:type].hidden =
+        window.windowControlsHidden || window.windowControlsHiddenForMotion;
   }
 }
 
@@ -439,6 +449,10 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
   ClairNativeWindowDelegate* __strong _windowDelegate;
   CGPoint _windowControlsOrigin;
   BOOL _windowControlsHidden;
+  BOOL _windowControlsHiddenForMotion;
+  // Bumped on every place change in D1's fallback; a pending show for an
+  // older one does nothing.
+  NSUInteger _windowControlsMoveCount;
 }
 
 - (instancetype)initWithBrowserWindow:(ClairBrowserWindow*)browserWindow
@@ -488,12 +502,64 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
   return _windowControlsHidden;
 }
 
+- (BOOL)windowControlsHiddenForMotion {
+  return _windowControlsHiddenForMotion;
+}
+
 - (void)setWindowControlsOrigin:(CGPoint)origin {
   if (CGPointEqualToPoint(origin, _windowControlsOrigin)) {
     return;
   }
   _windowControlsOrigin = origin;
-  [self layOutTitlebarNow];
+  if (self.canRetileTitlebar) {
+    [self layOutTitlebarNow];
+  } else {
+    [self hideWindowControlsWhileMoving];
+  }
+}
+
+// Whether the theme frame can re-tile its title bar on request, which moving
+// the buttons with the sidebar needs (design D2).
+- (BOOL)canRetileTitlebar {
+  // CLAIR_WINDOW_CONTROLS_FALLBACK=1 takes the fallback on any macOS, to check
+  // it on one that doesn't need it.
+  static const bool forced_fallback =
+      getenv("CLAIR_WINDOW_CONTROLS_FALLBACK") != nullptr;
+  if (forced_fallback) {
+    return NO;
+  }
+  NSView* frame = self.contentView.superview;
+  return [frame respondsToSelector:@selector
+                (_updateTitlebarContainerViewFrameIfNecessary)] &&
+         [frame respondsToSelector:@selector(_updateButtonPositions)];
+}
+
+// D1's fallback: hides the buttons while their place keeps changing, and shows
+// them once it has been still for 150 ms, after asking AppKit to re-tile the
+// title bar by re-setting the style mask.
+- (void)hideWindowControlsWhileMoving {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    os_log(os_log_create("dev.joshuapark.Clair", "Window"),
+           "The window controls can't follow the sidebar on this macOS; "
+           "hiding them while it moves.");
+  });
+  const NSUInteger move = ++_windowControlsMoveCount;
+  if (!_windowControlsHiddenForMotion) {
+    _windowControlsHiddenForMotion = YES;
+    [self layOutTitlebarNow];
+  }
+  __weak ClairNativeWindow* weak_self = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 150 * NSEC_PER_MSEC),
+                 dispatch_get_main_queue(), ^{
+                   ClairNativeWindow* window = weak_self;
+                   if (!window || window->_windowControlsMoveCount != move) {
+                     return;
+                   }
+                   window->_windowControlsHiddenForMotion = NO;
+                   window.styleMask = window.styleMask;
+                   [window layOutTitlebarNow];
+                 });
 }
 
 - (void)setWindowControlsHidden:(BOOL)hidden {
