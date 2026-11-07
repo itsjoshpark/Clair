@@ -21,7 +21,7 @@ Suggested order: 1, 2, 3 (one engine build with the whole contract), then 4, 5 a
 
 ## 3. Engine: overlay and hooks
 
-- [ ] 3.1 Add `overlay/chrome/browser/clair/window/` with:
+- [x] 3.1 Add `overlay/chrome/browser/clair/window/` with:
   - `ClairBrowserWindow` and its helpers (D1), and `ClairNativeWindow` (D4).
   - The Objective-C bridges for `ClairBrowser` and `ClairTab`, with coalesced change notifications (D3).
   - Find, status, infobars and the modal dialog host (D8), the exclusive-access context (D6), and the docked DevTools host (D5).
@@ -31,8 +31,8 @@ Suggested order: 1, 2, 3 (one engine build with the whole contract), then 4, 5 a
   - In `clair::StartNativeLayer`, the alert and quit when `ClairUI` is present but fails to load, and a `CHECK` on a nil window (D2).
 
   Add `patches/clair/native-window-hook.patch` with D13's hunks, each with its reason in the patch header, after checking each hook site in the runner's source tree, and add the overlay's sources to `BUILD.gn`. Credit Crest and Mori in `CREDITS.md` and in the headers of files adapted from them. Verify with `./build.sh fetch prepare`, through the patch check, that the patch applies without fuzz.
-- [ ] 3.2 Add the smallest `ClairUI` window that exercises the contract: the styled `NSWindow`, the card holding the active page, and an unstyled tab list. Verify by hand that a page renders in the card, that switching tabs swaps the page, and that closing the window runs a page's `beforeunload` prompt.
-- [ ] 3.3 **(owner)** Build the engine for the branch with `engine.yml`. Verify that the run publishes `chromium-engine-<key>`, that its headless smoke test passes in Chromium's own window (the bare engine has no `ClairUI`), and that the PR's engine check passes.
+- [x] 3.2 Add the smallest `ClairUI` window that exercises the contract: the styled `NSWindow`, the card holding the active page, and an unstyled tab list. Verify by hand that a page renders in the card, that switching tabs swaps the page, and that closing the window runs a page's `beforeunload` prompt.
+- [x] 3.3 **(owner)** Build the engine for the branch with `engine.yml`. Verify that the run publishes `chromium-engine-<key>`, that its headless smoke test passes in Chromium's own window (the bare engine has no `ClairUI`), and that the PR's engine check passes.
 - [ ] 3.4 Check every row of D9's table by hand on the packaged app. For each row that crashes or misbehaves, add a hook as D13 describes, rebuild, and re-check. Update D9's table and D13's hook list to match. Verify that no row is left unchecked and that the final engine passes the smoke test.
 
 ## 4. The window
