@@ -431,8 +431,8 @@ final class RecordingWindow: NSObject, ClairWindow {
   func pageFullscreenDidChange(_ fullscreen: Bool) { calls.append("pageFullscreen \(fullscreen)") }
   func showExclusiveAccessNotice(_ text: String?) { calls.append("notice \(text ?? "-")") }
 
-  func anchor(for kind: AnchorKind, indicator: TabIndicators, extensionID: String?) -> Anchor {
-    Anchor(rect: .zero, edge: .bottom)
+  func anchor(for kind: AnchorKind, indicator: TabIndicators, extensionID: String?) -> BubbleAnchor {
+    BubbleAnchor(rect: .zero, edge: .bottom)
   }
 
   func extensionActionsDidChange(_ actions: [any ClairExtensionAction]) {

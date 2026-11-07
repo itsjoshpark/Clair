@@ -206,7 +206,7 @@ typedef NS_ENUM(NSInteger, ClairAnchorEdge) {
 } NS_SWIFT_NAME(AnchorEdge);
 
 // Where a bubble attaches.
-typedef struct NS_SWIFT_NAME(Anchor) {
+typedef struct NS_SWIFT_NAME(BubbleAnchor) {
   // The rectangle, in the window's coordinates (origin at the bottom left).
   NSRect rect;
   ClairAnchorEdge edge;

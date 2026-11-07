@@ -4,35 +4,42 @@
 
 import AppKit
 import ClairHost
+import SwiftUI
 import os
 
 /// One native browser window (`ClairWindow`, design D3 and D4). Chromium
 /// creates the `NSWindow` and the browser; this styles the window, fills it,
 /// and keeps `BrowserWindowModel` up to date with what Chromium reports.
-final class BrowserWindowController: NSObject, ClairWindow {
+final class BrowserWindowController: NSObject, ClairWindow, SidebarActions {
   /// The browser, until Chromium closes the window.
   private(set) var browser: (any ClairBrowser)?
   let window: NSWindow
   let model: BrowserWindowModel
+  let rootView: BrowserRootView
   private let preferences: SidebarPreferences
 
   init(browser: any ClairBrowser, preferences: SidebarPreferences = SidebarPreferences()) {
     self.browser = browser
     self.window = browser.window
     self.preferences = preferences
-    self.model = BrowserWindowModel(profileKind: browser.profileKind, sidebar: preferences.initialState)
+    let model = BrowserWindowModel(profileKind: browser.profileKind, sidebar: preferences.initialState)
+    self.model = model
+    let sidebarHost = NSHostingView(rootView: SidebarView(model: model, actions: nil))
+    self.rootView = BrowserRootView(model: model, sidebar: sidebarHost)
     super.init()
+    sidebarHost.rootView = SidebarView(model: model, actions: self)
     WindowStyle.apply(to: window, profileKind: browser.profileKind)
+    window.contentView = rootView
     model.setTabs(browser.tabs)
-    model.setActiveTab(browser.activeTabID)
     model.setExtensionActions(browser.extensionActions)
     model.setDownloads(browser.downloads)
+    activeTabDidChange(browser.activeTabID)
   }
 
   // MARK: ClairWindow
 
   var pageContainerView: NSView {
-    window.contentView ?? NSView()
+    rootView.card.container
   }
 
   var isSidebarHidden: Bool {
@@ -49,9 +56,14 @@ final class BrowserWindowController: NSObject, ClairWindow {
 
   func activeTabDidChange(_ tabID: TabID) {
     model.setActiveTab(tabID)
+    rootView.card.show(page: browser?.pageView(for: tabID))
+    devToolsDidChange()
   }
 
-  func devToolsDidChange() {}
+  func devToolsDidChange() {
+    guard let browser else { return }
+    rootView.card.show(devTools: browser.devToolsView, layout: browser.devToolsLayout)
+  }
 
   func showCommandBar(mode: CommandBarMode) {
     model.commandBar = mode
@@ -91,8 +103,12 @@ final class BrowserWindowController: NSObject, ClairWindow {
     model.exclusiveAccessNotice = text
   }
 
-  func anchor(for kind: AnchorKind, indicator: TabIndicators, extensionID: String?) -> Anchor {
-    Anchor(rect: .zero, edge: .bottom)
+  func anchor(for kind: AnchorKind, indicator: TabIndicators, extensionID: String?) -> BubbleAnchor {
+    // Until the sidebar's controls exist, every bubble uses the card's corner.
+    let card = rootView.convert(rootView.card.frame, to: nil)
+    return BubbleAnchor(
+      rect: NSRect(x: card.minX + AnchorPlacement.fallbackInset, y: card.maxY, width: 0, height: 0),
+      edge: .bottom)
   }
 
   func extensionActionsDidChange(_ actions: [any ClairExtensionAction]) {
@@ -110,8 +126,31 @@ final class BrowserWindowController: NSObject, ClairWindow {
   }
 
   func browserDidClose() {
+    // The pages belong to Chromium; let go of them and of the browser.
+    rootView.card.show(page: nil)
+    rootView.card.show(devTools: nil, layout: DevToolsLayout(dockSide: .none, pageBounds: .zero, hidesPage: false))
     browser = nil
   }
+
+  // MARK: SidebarActions
+
+  func activate(tab: TabID) {
+    browser?.activate(tab: tab)
+  }
+
+  func close(tab: TabID) {
+    browser?.close(tab: tab)
+  }
+
+  func newTab() {
+    showCommandBar(mode: .newTab)
+  }
+}
+
+/// Where Chromium's bubbles attach when the sidebar isn't shown in place.
+enum AnchorPlacement {
+  /// Chromium's kNoToolbarLeftOffset.
+  static let fallbackInset: CGFloat = 40
 }
 
 /// How a native window looks before its content is added (design D4): no
@@ -127,5 +166,6 @@ enum WindowStyle {
     window.backgroundColor = .clear
     window.appearance = profileKind == .incognito ? NSAppearance(named: .darkAqua) : nil
     window.tabbingMode = .disallowed
+    window.minSize = NSSize(width: 500, height: 300)
   }
 }
