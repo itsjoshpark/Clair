@@ -15,9 +15,9 @@ Suggested order: 1, 2, 3 (one engine build with the whole contract), then 4, 5 a
 
 ## 2. The window contract
 
-- [ ] 2.1 Extend `native/ClairHost.h` with D3's protocols: `ClairBrowser`, `ClairTab`, `ClairWindow`, `ClairAutocomplete` and the entry point's `+windowForBrowser:`, with value types for suggestions, downloads, extension actions, infobars, find results, anchors, indicators and the docked DevTools layout. Document every member in the header as the existing ones are. Verify that `ClairUI` and `ClairUITests` build, and that `ClairHostObjCxxTests.mm` compiles the header as Objective-C++.
-- [ ] 2.2 Add `FakeBrowser` and fake value objects to `native/ClairUITests/` implementing the new protocols, with helpers to add, change, move and close tabs and to post suggestions. Verify with a unit test that a `FakeBrowser` change reaches a `ClairWindow` test double through the same calls Chromium will make.
-- [ ] 2.3 Add `+windowForBrowser:` to `ClairUI`'s entry point (D2), returning a window for every browser. Verify with a unit test that it returns a configured window for a `FakeBrowser` of each profile kind.
+- [x] 2.1 Extend `native/ClairHost.h` with D3's protocols: `ClairBrowser`, `ClairTab`, `ClairWindow`, `ClairAutocomplete` and the entry point's `+windowForBrowser:`, with value types for suggestions, downloads, extension actions, infobars, find results, anchors, indicators and the docked DevTools layout. Document every member in the header as the existing ones are. Verify that `ClairUI` and `ClairUITests` build, and that `ClairHostObjCxxTests.mm` compiles the header as Objective-C++.
+- [x] 2.2 Add `FakeBrowser` and fake value objects to `native/ClairUITests/` implementing the new protocols, with helpers to add, change, move and close tabs and to post suggestions. Verify with a unit test that a `FakeBrowser` change reaches a `ClairWindow` test double through the same calls Chromium will make.
+- [x] 2.3 Add `+windowForBrowser:` to `ClairUI`'s entry point (D2), returning a window for every browser. Verify with a unit test that it returns a configured window for a `FakeBrowser` of each profile kind.
 
 ## 3. Engine: overlay and hooks
 

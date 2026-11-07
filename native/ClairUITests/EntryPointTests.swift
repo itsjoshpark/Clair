@@ -32,6 +32,25 @@ struct EntryPointTests {
     #expect(layer.host === first)
   }
 
+  @Test(arguments: [ProfileKind.regular, .incognito, .guest])
+  func windowForEveryBrowser(kind: ProfileKind) throws {
+    let browser = FakeBrowser(profileKind: kind)
+    browser.addTab(title: "Example", url: "https://example.com/")
+    let clairWindow = ClairUIMain.window(for: browser)
+    let controller = try #require(clairWindow as? BrowserWindowController)
+    let window = browser.window
+
+    #expect(controller.window === window)
+    #expect(window.styleMask.contains(.fullSizeContentView))
+    #expect(window.titlebarAppearsTransparent)
+    #expect(window.titleVisibility == .hidden)
+    #expect(window.toolbar == nil)
+    #expect(window.appearance?.name == (kind == .incognito ? .darkAqua : nil))
+    #expect(controller.model.profileKind == kind)
+    #expect(controller.model.tabs.map(\.title) == ["Example"])
+    #expect(controller.model.activeTabID == browser.activeTabID)
+  }
+
   @Test func layerReachesChromiumOnlyThroughTheHost() {
     let host = FakeHost()
     host.blockers = [.downloadInProgress, .audibleTab]

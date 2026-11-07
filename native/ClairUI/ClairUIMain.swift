@@ -12,4 +12,8 @@ final class ClairUIMain: NSObject, ClairUIEntryPoint {
   static func start(host: any ClairHost) {
     NativeLayer.start(host: host)
   }
+
+  static func window(for browser: any ClairBrowser) -> any ClairWindow {
+    BrowserWindowController(browser: browser)
+  }
 }
