@@ -16,6 +16,8 @@ final class PageCardView: NSView {
   let container = FlippedView()
 
   private(set) weak var pageView: NSView?
+  /// Moves the window from the top of the page (drag-window-from-page-top).
+  let dragStrip = PageTopDragStrip()
   private(set) weak var devToolsView: NSView?
 
   /// The tab's infobars, above the page.
@@ -54,6 +56,7 @@ final class PageCardView: NSView {
     container.setAccessibilityRole(.group)
     container.setAccessibilityLabel("Page")
     container.setAccessibilityIdentifier("clair.card")
+    container.addSubview(dragStrip)
     addSubview(container)
     updateAppearance()
   }
@@ -82,6 +85,7 @@ final class PageCardView: NSView {
     pageView = view
     if let view {
       container.addSubview(view, positioned: .above, relativeTo: devToolsView)
+      container.addSubview(dragStrip, positioned: .above, relativeTo: view)
     }
     needsLayout = true
   }
@@ -122,7 +126,16 @@ final class PageCardView: NSView {
       pageView?.frame = card
       pageView?.isHidden = crashedView != nil
     }
+    if let pageView, !pageView.isHidden {
+      var strip = pageView.frame
+      strip.size.height = min(strip.height, PageTopWindowDrag.stripHeight)
+      dragStrip.frame = strip
+      dragStrip.isHidden = false
+    } else {
+      dragStrip.isHidden = true
+    }
   }
+
 }
 
 /// An NSView whose origin is at the top left, as Chromium's and DevTools'

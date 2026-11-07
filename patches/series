@@ -35,3 +35,4 @@ clair/versioning.patch
 clair/update-relaunch-hook.patch
 clair/native-window-hook.patch
 clair/settings-logo-icons.patch
+clair/page-cannot-move-window.patch

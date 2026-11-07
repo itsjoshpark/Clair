@@ -24,11 +24,20 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   private var controlFrames: [AnchorControl: CGRect] = [:]
   private var extensionPopup: ExtensionPopupWindow?
   nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
+  /// Dragging the window from the top of the page (drag-window-from-page-top).
+  private let dragPreference: WindowDragPreference
+  /// Watches the rest of a press once the window server has its window drag.
+  private var safetyNetMonitor: Any?
+  private var safetyNet = WindowDragSafetyNet()
 
-  init(browser: any ClairBrowser, preferences: SidebarPreferences = SidebarPreferences()) {
+  init(
+    browser: any ClairBrowser, preferences: SidebarPreferences = SidebarPreferences(),
+    dragPreference: WindowDragPreference = WindowDragPreference()
+  ) {
     self.browser = browser
     self.window = browser.window
     self.preferences = preferences
+    self.dragPreference = dragPreference
     let model = BrowserWindowModel(profileKind: browser.profileKind, sidebar: preferences.initialState)
     self.model = model
     sidebarHost = NSHostingView.edgeToEdge(rootView: SidebarView(model: model, actions: nil))
@@ -47,6 +56,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.isWindowKey = window.isKeyWindow
     observeWindow()
     observeOverlays()
+    setUpWindowDrag()
     model.setTabs(browser.tabs)
     model.setExtensionActions(browser.extensionActions)
     model.setDownloads(browser.downloads)
@@ -147,6 +157,53 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     for observer in observers {
       NotificationCenter.default.removeObserver(observer)
     }
+  }
+
+  // MARK: Dragging the window from the top of the page
+
+  private func setUpWindowDrag() {
+    let strip = rootView.card.dragStrip
+    strip.isEnabled = { [weak self] in
+      guard let self else { return false }
+      return self.dragPreference.isEnabled && !self.model.isPageFullscreen && !self.isWindowFullscreen
+    }
+    strip.onDragWindow = { [weak self] event in self?.dragWindow(with: event) }
+  }
+
+  private func dragWindow(with event: NSEvent) {
+    removeSafetyNet()
+    safetyNet = WindowDragSafetyNet()
+    safetyNetMonitor = NSEvent.addLocalMonitorForEvents(
+      matching: [.leftMouseDragged, .leftMouseUp, .leftMouseDown]
+    ) { [weak self] event in
+      let keeps = MainActor.assumeIsolated { self?.keepsFromPage(event) ?? false }
+      return keeps ? nil : event
+    }
+    window.performDrag(with: event)
+  }
+
+  /// Keeps the page from a press whose window drag didn't start (design D1,
+  /// step 3).
+  private func keepsFromPage(_ event: NSEvent) -> Bool {
+    guard event.window === window else { return false }
+    switch event.type {
+    case .leftMouseDragged:
+      safetyNet.drag(dx: event.deltaX, dy: event.deltaY)
+      return true
+    case .leftMouseUp:
+      removeSafetyNet()
+      return safetyNet.keepsRelease
+    default:
+      removeSafetyNet()
+      return false
+    }
+  }
+
+  private func removeSafetyNet() {
+    if let safetyNetMonitor {
+      NSEvent.removeMonitor(safetyNetMonitor)
+    }
+    safetyNetMonitor = nil
   }
 
   // MARK: ClairWindow
@@ -307,6 +364,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.commandBar?.cancel()
     closeExtensionPopup()
     rootView.card.show(page: nil)
+    removeSafetyNet()
     rootView.card.show(devTools: nil, layout: DevToolsLayout(dockSide: .none, pageBounds: .zero, hidesPage: false))
     browser = nil
   }

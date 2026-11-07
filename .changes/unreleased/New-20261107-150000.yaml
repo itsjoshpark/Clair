@@ -1,0 +1,3 @@
+kind: New
+body: 'Drag from the top of a page to move the window, as in Arc: a drag that starts in the page''s top 59 points moves the window unless the pointer is over something the page uses, such as text or a link. To turn it off until Clair has a Settings window, run `defaults write dev.joshuapark.Clair ClairDragWindowFromPageTop -bool false` in Terminal'
+time: 2026-11-07T15:00:00.000000-05:00
