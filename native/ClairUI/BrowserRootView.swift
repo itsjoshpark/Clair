@@ -80,7 +80,11 @@ final class BrowserRootView: NSView {
   let revealedBackground = NSVisualEffectView()
   /// Over the revealed sidebar's material, so it's less translucent than a
   /// popover (design D18).
-  let revealedTint = DynamicFillView(color: NSColor.windowBackgroundColor.withAlphaComponent(0.55))
+  let revealedTint = DynamicFillView(color: SidebarTint.revealed)
+  /// Arc's near-black in Dark Mode over the window's and the backdrop's
+  /// material, which is grey there; clear in Light Mode (design D18).
+  let backgroundTint = DynamicFillView(color: SidebarTint.window)
+  let backdropTint = DynamicFillView(color: SidebarTint.window)
   let card = PageCardView()
   let sidebar: NSView
   let resizeHandle = SidebarResizeHandle()
@@ -143,8 +147,11 @@ final class BrowserRootView: NSView {
     revealedBackground.addSubview(revealedTint)
     revealedPanel.isHidden = true
     addSubview(background)
+    // Above the materials, not inside them, where they'd blend it.
+    addSubview(backgroundTint)
     addSubview(card)
     addSubview(sidebarBackdrop)
+    addSubview(backdropTint)
     addSubview(revealedPanel)
     addSubview(sidebar)
     addSubview(resizeHandle)
@@ -262,6 +269,7 @@ final class BrowserRootView: NSView {
     // the springs already have changes nothing.
     updateSidebarTargets()
     background.frame = bounds
+    backgroundTint.frame = bounds
     let layout = currentLayout
     card.frame = layout.card
     // The floating sidebar while it's revealed or sliding away; the one in
@@ -278,6 +286,8 @@ final class BrowserRootView: NSView {
       && layout.card.minX < layout.sidebar.maxX
     sidebarBackdrop.isHidden = !cardUnderSidebar
     sidebarBackdrop.frame = layout.sidebar
+    backdropTint.frame = layout.sidebar
+    backdropTint.isHidden = sidebarBackdrop.isHidden
     revealedPanel.frame = floating
     revealedPanel.layer?.shadowPath = CGPath(
       roundedRect: revealedPanel.bounds, cornerWidth: 10, cornerHeight: 10, transform: nil)
@@ -554,5 +564,31 @@ final class DynamicFillView: NSView {
 
   override func hitTest(_ point: NSPoint) -> NSView? {
     nil
+  }
+}
+
+/// The fills over the sidebar's materials (design D18).
+enum SidebarTint {
+  /// Arc's dark sidebar, which measures (16, 19, 25) in a window capture.
+  /// Opaque: any translucency lets the desktop behind the window lighten it.
+  /// The window draws a colour about a quarter lighter than it's given, so
+  /// these values measure as Arc's.
+  static let dark = NSColor(srgbRed: 13 / 255, green: 14 / 255, blue: 19 / 255, alpha: 1)
+
+  /// Over the window's material: nothing in Light Mode, Arc's near-black in
+  /// Dark Mode, including incognito windows.
+  static let window = NSColor(name: nil) { appearance in
+    appearance.isDark ? dark : .clear
+  }
+
+  /// Over the revealed sidebar's lighter material, so it's less see-through.
+  static let revealed = NSColor(name: nil) { appearance in
+    appearance.isDark ? dark : NSColor.windowBackgroundColor.withAlphaComponent(0.55)
+  }
+}
+
+extension NSAppearance {
+  var isDark: Bool {
+    bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]).map { [.darkAqua, .vibrantDark].contains($0) } ?? false
   }
 }

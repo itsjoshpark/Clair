@@ -86,10 +86,11 @@ struct SidebarView: View {
           .padding(.top, 6)
       }
       if model.profileKind == .incognito {
+        // Arc's row: 37 pt from 8 pt below the URL field.
         IncognitoBadge()
           .padding(.leading, 14)
           .frame(height: 37)
-          .padding(.top, 4)
+          .padding(.top, 8)
       }
       TabList(model: model, actions: actions)
         .padding(.top, model.profileKind == .incognito ? 0 : 8)
@@ -112,18 +113,24 @@ struct SidebarView: View {
   }
 }
 
-/// Arc's incognito badge, where a normal window shows its Space: a small
-/// capsule with a crossed-out eye, 22 pt high.
+/// Arc's incognito badge, where a normal window shows its Space, as measured:
+/// a barely lighter 22 pt capsule, a near-white crossed-out eye 17 pt wide
+/// and 6.5 pt in, and "Incognito" in dim grey from 27 pt in.
 struct IncognitoBadge: View {
   var body: some View {
-    HStack(spacing: 5) {
-      Image(systemName: "eye.slash").font(.system(size: 11, weight: .semibold))
-      Text("Incognito").font(.system(size: 12, weight: .semibold))
+    HStack(spacing: 3.5) {
+      Image(systemName: "eye.slash")
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(Color.primary.opacity(0.94))
+        .frame(width: 17)
+      Text("Incognito")
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(Color.primary.opacity(0.4))
     }
-    .foregroundStyle(.secondary)
-    .padding(.horizontal, 7)
+    .padding(.leading, 6.5)
+    .padding(.trailing, 6)
     .frame(height: 22)
-    .background(Color.primary.opacity(0.06), in: .capsule)
+    .background(Color.primary.opacity(0.03), in: .capsule)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Incognito")
   }
