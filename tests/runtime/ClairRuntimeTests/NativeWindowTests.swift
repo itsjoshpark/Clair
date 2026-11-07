@@ -73,12 +73,13 @@ extension Browser {
   }
 
   /// Lets downloads save to a folder without asking, as ungoogled-chromium
-  /// otherwise does for every download.
-  func allowDownloads(to folder: URL) async throws {
+  /// otherwise does for every download. The setting lasts as long as the
+  /// returned session, which the caller closes.
+  func allowDownloads(to folder: URL) async throws -> DevToolsSession {
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     let session = try await browserSession()
-    defer { session.close() }
     try await session.send("Browser.setDownloadBehavior", ["behavior": "allow", "downloadPath": folder.path])
+    return session
   }
 
   /// A point in the card, as a fraction of its size.
@@ -172,10 +173,11 @@ final class PageHostingTests: NativeWindowTestCase {
     // The page follows the card's size.
     let session = try await browser.browserSession()
     defer { session.close() }
-    let window = try await session.send("Browser.getWindowForTarget", [:])
+    let targetID = try await first.targetID(in: browser) ?? ""
+    let window = try await session.send("Browser.getWindowForTarget", ["targetId": targetID])
     let windowID = window["windowId"] as? Int ?? 0
     try await session.send(
-      "Browser.setWindowBounds", ["windowId": windowID, "bounds": ["width": 1000, "height": 700]])
+      "Browser.setWindowBounds", ["windowId": windowID, "bounds": ["width": 900, "height": 600]])
     let resized = await Harness.wait(for: 15) {
       let width = try await first.innerWidth
       return abs(width - Double(browser.card.frame.width)) <= 2
@@ -398,7 +400,8 @@ final class DownloadsTests: NativeWindowTestCase {
     let (browser, tab) = try await startWithPage()
     defer { tab.close() }
     let folder = browser.workDirectory.appending(path: "downloads")
-    try await browser.allowDownloads(to: folder)
+    let downloads = try await browser.allowDownloads(to: folder)
+    defer { downloads.close() }
 
     _ = try await tab.evaluate("location.href = '/slow-download'; 1")
     let button = browser.element("clair.downloads")
@@ -443,11 +446,18 @@ final class TabListTests: NativeWindowTestCase {
 
     // A link Cmd-clicked in that tab opens at the top, in the background.
     try await tabs[2].navigate(to: url("link.html"))
-    _ = try await tabs[2].evaluate(
-      """
-      (() => { const e = new MouseEvent('click', {metaKey: true, bubbles: true, cancelable: true});
-               document.getElementById('link').dispatchEvent(e); return 1; })()
-      """)
+    // A real click: Chromium opens a scripted click's background tab in the
+    // foreground, so a page can't open tabs behind the user.
+    let center =
+      try await tabs[2].evaluate(
+        "(() => { const r = document.getElementById('link').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()"
+      ) as? [Double] ?? [0, 0]
+    for type in ["mousePressed", "mouseReleased"] {
+      // Modifier 4 is Meta, the Command key.
+      try await tabs[2].send(
+        "Input.dispatchMouseEvent",
+        ["type": type, "x": center[0], "y": center[1], "button": "left", "clickCount": 1, "modifiers": 4])
+    }
     let opened = await browser.waitForTabs { $0.count == count + 1 }
     try require(opened, "The Cmd-clicked link opened no tab")
     let linked = try await browser.pageTargets().first { $0.url.hasSuffix("?linked") }
