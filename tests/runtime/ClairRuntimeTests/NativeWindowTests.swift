@@ -146,6 +146,49 @@ final class NativeWindowStructureTests: NativeWindowTestCase {
     XCTAssertTrue(browser.element("clair.urlField").exists, "The sidebar has no URL field")
     XCTAssertTrue(browser.element("clair.back").exists, "The sidebar has no back button")
   }
+
+  /// The window controls sit at Arc's place in the sidebar and stay there
+  /// through title and activation changes (place-traffic-lights-with-appkit).
+  func testWindowControlsStayInPlace() async throws {
+    let (browser, tab) = try await startWithPage()
+    defer { tab.close() }
+
+    func checkControls(_ when: String) {
+      let sidebar = browser.sidebar.frame
+      let buttons = [XCUIIdentifierCloseWindow, XCUIIdentifierMinimizeWindow, XCUIIdentifierZoomWindow]
+      for (identifier, x) in zip(buttons, [12.0, 35.0, 58.0]) {
+        let button = browser.nativeWindow.buttons[identifier]
+        guard button.exists else {
+          XCTFail("\(identifier) is missing \(when)")
+          continue
+        }
+        XCTAssertEqual(button.frame.minX - sidebar.minX, x, accuracy: 1.5, "\(identifier)'s x \(when)")
+        XCTAssertEqual(button.frame.minY - sidebar.minY, 16, accuracy: 1.5, "\(identifier)'s y \(when)")
+      }
+    }
+
+    checkControls("at first")
+
+    _ = try await tab.evaluate("document.title = 'A different title'; 1")
+    let retitled = await browser.waitForTabs { $0.contains("A different title") }
+    try require(retitled, "The page's new title didn't reach the sidebar")
+    // Give AppKit's title bar a moment to lay out for the new window title.
+    try await Task.sleep(for: .seconds(1))
+    checkControls("after a title change")
+
+    browser.ui.typeKey("n", modifierFlags: .command)
+    let second = await Harness.wait(for: 30) {
+      browser.ui.windows.containing(.any, identifier: "clair.sidebar").count >= 2
+    }
+    try require(second, "Cmd+N opened no second window")
+    browser.ui.typeKey("w", modifierFlags: [.command, .shift])
+    let back = await Harness.wait(for: 30) {
+      browser.ui.windows.containing(.any, identifier: "clair.sidebar").count == 1
+    }
+    try require(back, "The second window didn't close")
+    try await Task.sleep(for: .seconds(1))
+    checkControls("after another window was key")
+  }
 }
 
 /// The page in the card, and the window's place across a relaunch (task 4.2).

@@ -395,9 +395,10 @@ final class SidebarResizeHandle: NSView {
 /// sidebar is, and hidden once it's off the window or a page is in full
 /// screen. The window's own title bar layout puts them there.
 struct WindowControlsPlacement: Equatable {
-  /// The close button's top-leading corner, from the sidebar's. Arc's buttons
-  /// read 12, 35 and 58 across and 16 down.
-  static let offset = CGPoint(x: 12, y: 16)
+  /// The close button's top-leading corner, from the sidebar's. Accessibility
+  /// reports the buttons a point up and left of their frames, so this reads
+  /// back as Arc's 12, 35 and 58 across and 16 down.
+  static let offset = CGPoint(x: 13, y: 17)
 
   var origin: CGPoint
   var isHidden: Bool

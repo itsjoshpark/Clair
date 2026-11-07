@@ -100,7 +100,7 @@ struct WindowControlsTests {
 
   @Test func shownSidebarPutsThemAtArcsPlace() {
     let window = controls(makeController())
-    #expect(window.windowControlsOrigin == CGPoint(x: 12, y: 16))
+    #expect(window.windowControlsOrigin == CGPoint(x: 13, y: 17))
     #expect(!window.windowControlsHidden)
   }
 
@@ -116,7 +116,7 @@ struct WindowControlsTests {
     controller.model.sidebar.isHidden = true
     controller.model.sidebar.isRevealed = true
     let window = controls(controller)
-    #expect(window.windowControlsOrigin == CGPoint(x: 17, y: 21))
+    #expect(window.windowControlsOrigin == CGPoint(x: 18, y: 22))
     #expect(!window.windowControlsHidden)
   }
 
@@ -130,7 +130,7 @@ struct WindowControlsTests {
   @Test func halfHiddenSidebarSlidesThem() {
     let layout = WindowLayout.blended(size: size, width: 228, shown: 0.5)
     let placement = WindowControlsPlacement(sidebar: layout.sidebar, isPageFullscreen: false)
-    #expect(placement.origin == CGPoint(x: -102, y: 16))
+    #expect(placement.origin == CGPoint(x: -101, y: 17))
     #expect(!placement.isHidden)
   }
 
@@ -140,7 +140,7 @@ struct WindowControlsTests {
     placement.apply(to: window)
     placement.apply(to: window)
     #expect(window.originSets == 1)
-    #expect(window.windowControlsOrigin == CGPoint(x: 12, y: 16))
+    #expect(window.windowControlsOrigin == CGPoint(x: 13, y: 17))
   }
 }
 

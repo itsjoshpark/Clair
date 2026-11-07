@@ -5,7 +5,7 @@ Per CLAUDE.md, a task that needs a build is done only once CI passes on it. The 
 ## 1. Engine: the title bar frame and the contract
 
 - [ ] 1.1 Add the `ClairWindowControls` protocol to `native/ClairHost.h` (D2), with its comments. Verify that `ClairUI` builds against it and that `ClairHostObjCxxTests.mm` still compiles.
-- [ ] 1.2 In `clair_native_window.{h,mm}`, add `ClairWindowFrame` and `+frameViewClassForStyleMask:` (D1), and make `ClairNativeWindow` adopt `ClairWindowControls`, laying out its theme frame at once when either property changes (D2). Verify that `./build.sh fetch prepare` applies cleanly in the patch check and that the engine compiles in `engine.yml`.
+- [x] 1.2 In `clair_native_window.{h,mm}`, add `ClairWindowFrame` and `+frameViewClassForStyleMask:` (D1), and make `ClairNativeWindow` adopt `ClairWindowControls`, laying out its theme frame at once when either property changes (D2). Verify that `./build.sh fetch prepare` applies cleanly in the patch check and that the engine compiles in `engine.yml`.
 - [ ] 1.3 Spike on the built engine, before 2.1: from a scratch `ClairUI` change that removes `TrafficLights` and only sets `windowControlsOrigin` to (12, 16), read the buttons' accessibility frames. Verify that they read 12/35/58, y 16, as Arc's do, and stay there after a title change, a key change and a resize. If they're a point off, adjust D1's inset or height and record the measured offset in design.md.
 
 ## 2. Native layer
