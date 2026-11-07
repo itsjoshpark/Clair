@@ -49,6 +49,8 @@ final class BrowserWindowModel {
   var sidebar: SidebarState
   var commandBar: CommandBarModel?
   var find: FindState?
+  /// Bumped when Cmd+F asks for the find field again while it shows.
+  var findFocusRequest = 0
   var statusText: String?
   var toast: Toast?
   var exclusiveAccessNotice: String?

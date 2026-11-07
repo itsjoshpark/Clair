@@ -203,6 +203,11 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   func showFind(text: String) {
     if model.find == nil {
       model.find = FindState(text: text)
+    } else {
+      model.findFocusRequest += 1
+      if let host = rootView.findHost {
+        window.makeFirstResponder(host)
+      }
     }
   }
 

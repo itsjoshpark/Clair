@@ -158,6 +158,8 @@ struct SuggestionRow: View {
 
 /// The find field at the card's top-trailing corner (design D8).
 struct FindFieldView: View {
+  static let secondary = Color(nsColor: .secondaryLabelColor)
+
   let model: BrowserWindowModel
   weak var actions: (any OverlayActions)?
   @State private var text = ""
@@ -166,7 +168,7 @@ struct FindFieldView: View {
   var body: some View {
     let find = model.find
     HStack(spacing: 6) {
-      Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+      Image(systemName: "magnifyingglass").foregroundStyle(Self.secondary)
       TextField("Find", text: $text)
         .textFieldStyle(.plain)
         .frame(width: 180)
@@ -183,24 +185,35 @@ struct FindFieldView: View {
         }
       Text(find?.resultText ?? "")
         .font(.caption.monospacedDigit())
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Self.secondary)
         .frame(minWidth: 44, alignment: .trailing)
         .accessibilityIdentifier("clair.findResult")
+      // The keys do what these buttons do (Return, Shift+Return, Esc), so
+      // only the field takes focus, even with keyboard navigation on.
       Button { actions?.find(text, forward: false) } label: { Image(systemName: "chevron.up") }
-        .buttonStyle(.plain).disabled(text.isEmpty)
+        .buttonStyle(.plain).disabled(text.isEmpty).focusable(false)
       Button { actions?.find(text, forward: true) } label: { Image(systemName: "chevron.down") }
-        .buttonStyle(.plain).disabled(text.isEmpty)
+        .buttonStyle(.plain).disabled(text.isEmpty).focusable(false)
       Button { actions?.closeFind() } label: { Image(systemName: "xmark") }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain).focusable(false)
     }
     .padding(.horizontal, 10)
     .frame(height: 36)
-    .background(.regularMaterial, in: .rect(cornerRadius: 10))
+    // Solid rather than a material: over the page's layer a material can't
+    // sample what's behind it, and its vibrant secondary text disappears.
+    .background(Color(nsColor: .windowBackgroundColor), in: .rect(cornerRadius: 10))
+    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.1)))
     .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
-    .onAppear {
-      text = find?.text ?? ""
-      isFocused = true
+    .onAppear { text = find?.text ?? "" }
+    // The field can take focus only once it's laid out in the window, which
+    // happens a moment after it's added; keep asking until it has.
+    .task {
+      for _ in 0..<20 where !isFocused {
+        isFocused = true
+        try? await Task.sleep(for: .milliseconds(25))
+      }
     }
+    .onChange(of: model.findFocusRequest) { isFocused = true }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("clair.find")
   }
