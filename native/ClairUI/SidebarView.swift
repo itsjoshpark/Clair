@@ -120,11 +120,11 @@ struct IncognitoBadge: View {
   var body: some View {
     HStack(spacing: 3.5) {
       Image(systemName: "eye.slash")
-        .font(.system(size: 12, weight: .medium))
+        .font(.system(size: 11.5, weight: .medium))
         .foregroundStyle(Color.primary.opacity(0.94))
         .frame(width: 17)
       Text("Incognito")
-        .font(.system(size: 12, weight: .medium))
+        .font(.system(size: 11, weight: .medium))
         .foregroundStyle(Color.primary.opacity(0.4))
     }
     .padding(.leading, 6.5)
