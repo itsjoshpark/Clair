@@ -534,7 +534,7 @@ final class SidebarHidingTests: NativeWindowTestCase {
     let window = browser.nativeWindow.frame
     browser.ui.typeKey("s", modifierFlags: .command)
     let hidden = await Harness.wait(for: 10) {
-      abs(browser.card.frame.minX - window.minX - 5) <= 2
+      abs(browser.card.frame.minX - window.minX - 10) <= 2
     }
     XCTAssertTrue(hidden, "Cmd+S didn't hide the sidebar and widen the card")
     browser.ui.typeKey("s", modifierFlags: .command)

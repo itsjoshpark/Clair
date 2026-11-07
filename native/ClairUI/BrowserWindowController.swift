@@ -29,6 +29,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   /// Watches the rest of a press once the window server has its window drag.
   private var safetyNetMonitor: Any?
   private var safetyNet = WindowDragSafetyNet()
+  /// When the link status capsule shows and hides.
+  private var statusState = StatusCapsuleState()
+  private var statusTimer: Task<Void, Never>?
 
   init(
     browser: any ClairBrowser, preferences: SidebarPreferences = SidebarPreferences(),
@@ -100,7 +103,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // The command bar.
     if let commandBar = model.commandBar {
       if (rootView.commandBarHost as? NSHostingView<CommandBarView>)?.rootView.model !== commandBar {
-        let host = NSHostingView.edgeToEdge(rootView: CommandBarView(model: commandBar))
+        // Lays the window out again as results come and go, so the panel
+        // keeps its top and grows downwards (design D18).
+        let host = SelfSizingHostingView(rootView: CommandBarView(model: commandBar))
         rootView.commandBarHost = host
         window.makeFirstResponder(host)
       }
@@ -117,12 +122,25 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     } else if rootView.findHost != nil {
       rootView.findHost = nil
     }
-    // The link status.
-    if let status = model.statusText, model.commandBar == nil {
-      rootView.statusHost = NSHostingView.edgeToEdge(rootView: CapsuleText(text: status, identifier: "clair.status"))
-    } else if rootView.statusHost != nil {
-      rootView.statusHost = nil
+    // The sidebar's tooltip, fading in.
+    if let tooltip = model.tooltips.current {
+      if let host = rootView.tooltipHost as? PassthroughHostingView<TooltipView> {
+        host.rootView = TooltipView(tooltip: tooltip)
+        rootView.needsLayout = true
+      } else {
+        let host = PassthroughHostingView(rootView: TooltipView(tooltip: tooltip))
+        host.alphaValue = 0
+        rootView.tooltipHost = host
+        NSAnimationContext.runAnimationGroup { context in
+          context.duration = 0.1
+          host.animator().alphaValue = 1
+        }
+      }
+    } else if rootView.tooltipHost != nil {
+      rootView.tooltipHost = nil
     }
+    // The link status.
+    reportStatus(model.commandBar == nil ? model.statusText : nil, commandBarOpen: model.commandBar != nil)
     // Toasts.
     if let toast = model.toast {
       rootView.toastHost = NSHostingView(
@@ -150,6 +168,65 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       }
     } else if rootView.card.crashedView != nil {
       rootView.card.crashedView = nil
+    }
+  }
+
+  // MARK: The link status (design D18)
+
+  /// Hands Chromium's link status to the capsule's timing rules, once per
+  /// change; the command bar hides the capsule at once.
+  private func reportStatus(_ text: String?, commandBarOpen: Bool) {
+    guard text != statusState.reportedText || (commandBarOpen && statusState.shownText != nil) else { return }
+    if commandBarOpen {
+      statusState.reset()
+    } else {
+      statusState.report(text, at: ProcessInfo.processInfo.systemUptime)
+    }
+    applyStatus()
+  }
+
+  /// Shows what the capsule's state says, and waits for its next change.
+  private func applyStatus() {
+    statusTimer?.cancel()
+    statusTimer = nil
+    if let text = statusState.shownText {
+      let capsule = CapsuleText(text: text, identifier: "clair.status")
+      if let host = rootView.statusHost as? SelfSizingHostingView<CapsuleText> {
+        host.rootView = capsule
+        fade(host, to: 1)
+      } else {
+        let host = SelfSizingHostingView(rootView: capsule)
+        host.alphaValue = 0
+        rootView.statusHost = host
+        fade(host, to: 1)
+      }
+    } else if let host = rootView.statusHost {
+      fade(host, to: 0) { [weak self, weak host] in
+        guard let self, let host, self.statusState.shownText == nil, self.rootView.statusHost === host else { return }
+        self.rootView.statusHost = nil
+      }
+    }
+    if let deadline = statusState.deadline {
+      statusTimer = Task { [weak self] in
+        try? await Task.sleep(for: .seconds(max(0, deadline - ProcessInfo.processInfo.systemUptime)))
+        guard !Task.isCancelled, let self else { return }
+        if self.statusState.tick(at: max(deadline, ProcessInfo.processInfo.systemUptime)) {
+          self.applyStatus()
+        }
+      }
+    }
+  }
+
+  private func fade(_ view: NSView, to alpha: CGFloat, completion: (@MainActor () -> Void)? = nil) {
+    guard view.alphaValue != alpha else {
+      completion?()
+      return
+    }
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = 0.15
+      view.animator().alphaValue = alpha
+    } completionHandler: {
+      MainActor.assumeIsolated { completion?() }
     }
   }
 

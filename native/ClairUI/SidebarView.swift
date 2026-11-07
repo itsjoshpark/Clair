@@ -82,7 +82,7 @@ struct SidebarView: View {
           .padding(.top, 6)
       }
       if model.profileKind == .incognito {
-        Label("Incognito", systemImage: "eyeglasses")
+        Label("Incognito", systemImage: "eye.slash")
           .font(.headline)
           .padding(.horizontal, 14)
           .padding(.top, 10)
@@ -92,6 +92,15 @@ struct SidebarView: View {
     }
     .padding(.bottom, 8)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    // The sidebar's empty areas move the window, as in Arc (design D18).
+    .background {
+      Color.clear
+        .contentShape(Rectangle())
+        .gesture(WindowDragGesture())
+        .allowsWindowActivationEvents(true)
+    }
+    .environment(\.isWindowKey, model.isWindowKey)
+    .environment(model.tooltips)
     .coordinateSpace(name: sidebarCoordinateSpace)
     .onPreferenceChange(AnchorFramesKey.self) { frames in
       MainActor.assumeIsolated { actions?.controlFramesChanged(frames) }
@@ -99,29 +108,40 @@ struct SidebarView: View {
   }
 }
 
+/// Whether the sidebar's window is key; glyphs dim when it isn't, as in Arc.
+extension EnvironmentValues {
+  @Entry var isWindowKey = true
+}
+
+/// How fast the sidebar's hover backgrounds and buttons fade (design D18).
+let sidebarHoverFade = Animation.easeOut(duration: 0.15)
+
 /// A square button in the sidebar's style: Arc's grey glyphs, 32 pt square
 /// (28 pt in the compact top row).
 struct SidebarButton: View {
   let systemImage: String
   let help: String
+  var shortcut: [String] = []
   var isEnabled = true
   var size: CGFloat = 32
   let action: () -> Void
 
   @State private var isHovered = false
+  @Environment(\.isWindowKey) private var isWindowKey
 
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
         .font(.system(size: 16, weight: .regular))
         .frame(width: size, height: size)
-        .background(isHovered && isEnabled ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 6))
+        .background(Color.primary.opacity(isHovered && isEnabled ? 0.08 : 0), in: .rect(cornerRadius: 6))
+        .animation(sidebarHoverFade, value: isHovered)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .foregroundStyle(isEnabled ? .secondary : .tertiary)
+    .foregroundStyle(isEnabled && isWindowKey ? .secondary : .tertiary)
     .disabled(!isEnabled)
-    .help(help)
+    .tooltip(help, shortcut: shortcut)
     .accessibilityLabel(help)
     .onHover { isHovered = $0 }
   }
@@ -151,14 +171,14 @@ struct TopRow: View {
     let controls = model.windowControls
     let isCompact = controls.hasCompactTopRow(width: model.sidebar.width)
     let back = SidebarButton(
-      systemImage: "arrow.left", help: "Back", isEnabled: tab?.canGoBack ?? false,
+      systemImage: "arrow.left", help: "Go back", shortcut: ["⌘", "["], isEnabled: tab?.canGoBack ?? false,
       size: isCompact ? 28 : 32
     ) {
       actions?.goBack()
     }
     .accessibilityIdentifier("clair.back")
     let forward = SidebarButton(
-      systemImage: "arrow.right", help: "Forward", isEnabled: tab?.canGoForward ?? false,
+      systemImage: "arrow.right", help: "Go forward", shortcut: ["⌘", "]"], isEnabled: tab?.canGoForward ?? false,
       size: isCompact ? 28 : 32
     ) {
       actions?.goForward()
@@ -184,7 +204,7 @@ struct TopRow: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .foregroundStyle(.secondary)
+        .foregroundStyle(model.isWindowKey ? .secondary : .tertiary)
         .help("More")
         .accessibilityLabel("More")
         .accessibilityIdentifier("clair.topRowMenu")
@@ -197,7 +217,12 @@ struct TopRow: View {
       HStack(spacing: 0) {
         // The window controls sit here (design D4).
         Color.clear.frame(width: Self.hideSidebarX(width: model.sidebar.width, controls: controls))
-        SidebarButton(systemImage: "sidebar.left", help: "Hide Sidebar") { actions?.toggleSidebar() }
+        // Arc's wording: a revealed sidebar's button docks it.
+        SidebarButton(
+          systemImage: "sidebar.left",
+          help: model.sidebar.isHidden && model.sidebar.isRevealed ? "Lock sidebar" : "Hide sidebar",
+          shortcut: ["⌘", "S"]
+        ) { actions?.toggleSidebar() }
           .accessibilityIdentifier("clair.hideSidebar")
         Spacer(minLength: 0)
         HStack(spacing: Self.gap) {
@@ -205,7 +230,8 @@ struct TopRow: View {
           forward
           SidebarButton(
             systemImage: isLoading ? "xmark" : "arrow.clockwise",
-            help: isLoading ? "Stop" : "Reload", isEnabled: tab != nil
+            help: isLoading ? "Stop loading this page" : "Reload this page",
+            shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: tab != nil
           ) {
             actions?.reloadOrStop()
           }
@@ -237,7 +263,6 @@ struct URLField: View {
     (.microphone, "mic.fill", "Microphone"),
     (.location, "location.fill", "Location"),
     (.screenCapture, "rectangle.inset.filled.on.rectangle", "Screen sharing"),
-    (.blockedPermission, "hand.raised.slash", "Blocked"),
   ]
 
   var body: some View {
@@ -277,7 +302,7 @@ struct URLField: View {
           } label: {
             Image(systemName: symbol)
               .font(.system(size: 11))
-              .foregroundStyle(indicator == .blockedPermission ? Color.secondary : Color.red)
+              .foregroundStyle(Color.red)
               .frame(width: 22, height: Self.buttonSize)
               .contentShape(Rectangle())
           }
@@ -292,12 +317,14 @@ struct URLField: View {
         URLFieldButton(systemImage: "link", help: "Copy URL") { actions?.copyURL() }
           .accessibilityIdentifier("clair.copyURL")
           .padding(.trailing, -2)
+          .transition(.opacity)
       }
       if isHovered, hasSiteControls {
-        URLFieldButton(systemImage: "slider.horizontal.3", help: "Site Controls") {
+        URLFieldButton(systemImage: "slider.horizontal.3", help: "Site Control Center") {
           actions?.showSiteControls(indicator: [])
         }
         .accessibilityIdentifier("clair.siteControls")
+        .transition(.opacity)
       }
     }
     .padding(.trailing, isHovered || tab?.indicators.isEmpty == false ? 4 : 12)
@@ -312,8 +339,9 @@ struct URLField: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
-    .background(Color.primary.opacity(isHovered ? 0.07 : 0.05), in: .rect(cornerRadius: 10, style: .continuous))
-    .onHover { isHovered = $0 }
+    // Arc darkens the field by about 4% under the pointer (design D18).
+    .background(Color.primary.opacity(isHovered ? 0.1 : 0.05), in: .rect(cornerRadius: 10, style: .continuous))
+    .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
   }
 }
 
@@ -324,18 +352,20 @@ struct URLFieldButton: View {
   let action: () -> Void
 
   @State private var isHovered = false
+  @Environment(\.isWindowKey) private var isWindowKey
 
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
         .font(.system(size: 13, weight: .regular))
         .frame(width: URLField.buttonSize, height: URLField.buttonSize)
-        .background(isHovered ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 7))
+        .background(Color.primary.opacity(isHovered ? 0.08 : 0), in: .rect(cornerRadius: 7))
+        .animation(sidebarHoverFade, value: isHovered)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .foregroundStyle(.secondary)
-    .help(help)
+    .foregroundStyle(isWindowKey ? .secondary : .tertiary)
+    .tooltip(help)
     .accessibilityLabel(help)
     .onHover { isHovered = $0 }
   }
@@ -578,6 +608,9 @@ struct TabList: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
+  /// Room beyond the rows, so a list that fits never scrolls.
+  static let slack: CGFloat = 8
+
   var body: some View {
     List {
       NewTabRow(isHighlighted: model.commandBar?.mode == .newTab) { actions?.newTab() }
@@ -586,7 +619,9 @@ struct TabList: View {
         .listRowBackground(Color.clear)
         .moveDisabled(true)
       ForEach(model.tabs, id: \.tabID) { tab in
-        TabRow(tab: tab, isActive: tab.tabID == model.activeTabID, isWindowKey: model.isWindowKey, actions: actions)
+        TabRow(
+          tab: tab, isActive: tab.tabID == model.activeTabID, isWindowKey: model.isWindowKey,
+          isIncognito: model.profileKind == .incognito, actions: actions)
           .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: -1))
           .listRowSeparator(.hidden)
           .listRowBackground(Color.clear)
@@ -602,6 +637,10 @@ struct TabList: View {
     .listStyle(.plain)
     .scrollContentBackground(.hidden)
     .environment(\.defaultMinListRowHeight, 1)
+    // No taller than its rows, so the space below the last tab is the
+    // sidebar's, which moves the window (design D18); the list scrolls once
+    // the rows don't fit.
+    .frame(maxHeight: TabRow.pitch * CGFloat(model.tabs.count + 1) + Self.slack)
     .accessibilityIdentifier("clair.tabList")
   }
 }
@@ -644,17 +683,23 @@ struct TabRow: View {
   let tab: any ClairTab
   let isActive: Bool
   let isWindowKey: Bool
+  var isIncognito = false
   weak var actions: (any SidebarActions)?
 
   @State private var isHovered = false
 
-  // Arc's metrics: 40 pt rows on a 41 pt pitch, an 18 pt favicon 9 pt into
-  // the pill and the title 8 pt after it, and a 36 pt pill.
+  // Arc's metrics: 40 pt rows on a 41 pt pitch, an 18 pt favicon frame 9 pt
+  // into the pill with the favicon drawn at 16 pt, the title 8 pt after it,
+  // and a 36 pt pill. The close button is 26 pt, 5 pt from the pill's end.
   static let pillHeight: CGFloat = 36
   static let pillInset: CGFloat = 2
   static let spacing: CGFloat = 1
+  static let pitch = pillHeight + 2 * pillInset + spacing
   static let horizontalPadding: CGFloat = 9
   static let iconSize: CGFloat = 18
+  static let faviconSize: CGFloat = 16
+  static let closeSize: CGFloat = 26
+  static let closeTrailing: CGFloat = 5
   static let titleGap: CGFloat = 8
   static let cornerRadius: CGFloat = 10
   static let titleFont = Font.system(size: 14)
@@ -664,8 +709,12 @@ struct TabRow: View {
       Group {
         if tab.isLoading && tab.favicon == nil {
           ProgressView().controlSize(.small)
+        } else if isIncognito && tab.isNewTabPage {
+          // In place of Chromium's incognito goggles, as in the header.
+          Image(systemName: "eye.slash").foregroundStyle(.secondary)
         } else if let favicon = tab.favicon {
           Image(nsImage: favicon).resizable().interpolation(.high)
+            .frame(width: Self.faviconSize, height: Self.faviconSize)
         } else {
           Image(systemName: "globe").foregroundStyle(.secondary)
         }
@@ -685,22 +734,17 @@ struct TabRow: View {
         .accessibilityIdentifier("clair.tabSpeaker")
       }
       if isHovered {
-        Button {
-          actions?.close(tab: tab.tabID)
-        } label: {
-          Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).frame(width: 18, height: 18)
-        }
-        .buttonStyle(.plain)
-        .help("Close Tab")
-        .accessibilityIdentifier("clair.tabClose")
+        TabCloseButton { actions?.close(tab: tab.tabID) }
+          .padding(.trailing, Self.closeTrailing - Self.horizontalPadding)
       }
     }
     .padding(.horizontal, Self.horizontalPadding)
     .frame(height: Self.pillHeight)
     .background {
       if isActive {
+        // Lighter and flat while the window isn't key, as in Arc.
         RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-          .fill(Color(nsColor: .controlBackgroundColor).opacity(isWindowKey ? 0.9 : 0.5))
+          .fill(Color(nsColor: .controlBackgroundColor).opacity(isWindowKey ? 0.9 : 0.7))
           .shadow(color: .black.opacity(isWindowKey ? 0.12 : 0), radius: 2, y: 1)
       } else if isHovered {
         RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous).fill(Color.primary.opacity(0.06))
@@ -710,16 +754,10 @@ struct TabRow: View {
     .padding(.bottom, Self.pillInset + Self.spacing)
     .contentShape(Rectangle())
     .onTapGesture { actions?.activate(tab: tab.tabID) }
-    .overlay(MiddleClickCatcher { actions?.close(tab: tab.tabID) })
-    .onHover { isHovered = $0 }
-    .contextMenu {
-      Button("Copy Link") { actions?.copyLink(of: tab.tabID) }
-      Button("Duplicate") { actions?.duplicate(tab: tab.tabID) }
-      Button(tab.isMuted ? "Unmute" : "Mute") { actions?.setMuted(!tab.isMuted, tab: tab.tabID) }
-      Divider()
-      Button("Close Tab") { actions?.close(tab: tab.tabID) }
-      Button("Close Tabs Below") { actions?.closeTabs(below: tab.tabID) }
-    }
+    // AppKit's context menu rather than SwiftUI's, which makes the list draw
+    // a selection ring around the row (design D18).
+    .overlay(RowClickCatcher(onMiddleClick: { actions?.close(tab: tab.tabID) }, menuItems: menuItems))
+    .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
     .accessibilityElement(children: .contain)
     .accessibilityLabel(tab.title)
     .accessibilityIdentifier("clair.tabRow")
@@ -727,32 +765,126 @@ struct TabRow: View {
   }
 }
 
-/// Catches middle clicks and lets every other click through.
-struct MiddleClickCatcher: NSViewRepresentable {
+/// The tab's close button, as in Arc: 26 pt with a 10 pt glyph and its own
+/// hover background.
+struct TabCloseButton: View {
   let action: () -> Void
 
-  func makeNSView(context: Context) -> MiddleClickView {
-    let view = MiddleClickView()
-    view.action = action
+  @State private var isHovered = false
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: "xmark")
+        .font(.system(size: 12, weight: .bold))
+        .frame(width: TabRow.closeSize, height: TabRow.closeSize)
+        .background(Color.primary.opacity(isHovered ? 0.08 : 0), in: .rect(cornerRadius: 6))
+        .animation(sidebarHoverFade, value: isHovered)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .foregroundStyle(.secondary)
+    .help("Close Tab")
+    .accessibilityIdentifier("clair.tabClose")
+    .onHover { isHovered = $0 }
+  }
+}
+
+extension TabRow {
+  /// The row's context menu.
+  var menuItems: [RowClickCatcher.Item] {
+    let tabID = tab.tabID, isMuted = tab.isMuted
+    return [
+      .action("Copy Link") { actions?.copyLink(of: tabID) },
+      .action("Duplicate") { actions?.duplicate(tab: tabID) },
+      .action(isMuted ? "Unmute" : "Mute") { actions?.setMuted(!isMuted, tab: tabID) },
+      .separator,
+      .action("Close Tab") { actions?.close(tab: tabID) },
+      .action("Close Tabs Below") { actions?.closeTabs(below: tabID) },
+    ]
+  }
+}
+
+/// Catches middle clicks and context-menu clicks (a right click or a
+/// Control-click), and lets every other click through. Opening the menu here
+/// keeps the press from the list, which would otherwise ring the row.
+struct RowClickCatcher: NSViewRepresentable {
+  enum Item {
+    case action(String, () -> Void)
+    case separator
+  }
+
+  let onMiddleClick: () -> Void
+  let menuItems: [Item]
+
+  func makeNSView(context: Context) -> CatcherView {
+    let view = CatcherView()
+    updateNSView(view, context: context)
     return view
   }
 
-  func updateNSView(_ view: MiddleClickView, context: Context) {
-    view.action = action
+  func updateNSView(_ view: CatcherView, context: Context) {
+    view.onMiddleClick = onMiddleClick
+    view.menuItems = menuItems
   }
 
-  final class MiddleClickView: NSView {
-    var action: (() -> Void)?
+  final class CatcherView: NSView {
+    var onMiddleClick: (() -> Void)?
+    var menuItems: [Item] = []
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-      let type = NSApp.currentEvent?.type
-      return type == .otherMouseDown || type == .otherMouseUp ? super.hitTest(point) : nil
+      guard let event = NSApp.currentEvent else { return nil }
+      switch event.type {
+      case .otherMouseDown, .otherMouseUp, .rightMouseDown, .rightMouseUp:
+        return super.hitTest(point)
+      case .leftMouseDown where event.modifierFlags.contains(.control):
+        return super.hitTest(point)
+      default:
+        return nil
+      }
     }
 
     override func otherMouseUp(with event: NSEvent) {
       if event.buttonNumber == 2 {
-        action?()
+        onMiddleClick?()
       }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+      // Only a Control-click gets here.
+      NSMenu.popUpContextMenu(makeMenu(), with: event, for: self)
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+      makeMenu()
+    }
+
+    private func makeMenu() -> NSMenu {
+      let menu = NSMenu()
+      for item in menuItems {
+        switch item {
+        case .separator:
+          menu.addItem(.separator())
+        case .action(let title, let action):
+          let menuItem = NSMenuItem(title: title, action: #selector(runItem(_:)), keyEquivalent: "")
+          menuItem.target = self
+          menuItem.representedObject = ItemAction(run: action)
+          menu.addItem(menuItem)
+        }
+      }
+      return menu
+    }
+
+    @objc private func runItem(_ sender: NSMenuItem) {
+      (sender.representedObject as? ItemAction)?.run()
+    }
+  }
+
+  /// A menu item's action, boxed for `representedObject`.
+  final class ItemAction: NSObject {
+    let run: () -> Void
+
+    init(run: @escaping () -> Void) {
+      self.run = run
     }
   }
 }

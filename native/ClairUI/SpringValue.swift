@@ -13,6 +13,11 @@ struct SpringValue {
   /// Tuned against Arc, whose sidebar slides in or out in about 0.15 s with
   /// hardly any bounce.
   static let spring = Spring(response: 0.2, dampingRatio: 0.9)
+  /// The revealed sidebar's: Arc slides it in within about 0.1 s, with a
+  /// slight overshoot.
+  static let revealSpring = Spring(response: 0.14, dampingRatio: 0.8)
+
+  let spring: Spring
 
   private(set) var value: CGFloat
   private(set) var target: CGFloat
@@ -21,7 +26,8 @@ struct SpringValue {
   private var initialVelocity: CGFloat = 0
   private var start: TimeInterval = 0
 
-  init(_ value: CGFloat) {
+  init(_ value: CGFloat, spring: Spring = SpringValue.spring) {
+    self.spring = spring
     self.value = value
     target = value
     from = value
@@ -51,15 +57,15 @@ struct SpringValue {
   mutating func step(at time: TimeInterval) -> Bool {
     guard isMoving else { return false }
     let elapsed = max(0, time - start)
-    if elapsed >= Self.spring.settlingDuration {
+    if elapsed >= spring.settlingDuration {
       jump(to: target)
       return false
     }
-    value = from + Self.spring.value(target: target - from, initialVelocity: initialVelocity, time: elapsed)
+    value = from + spring.value(target: target - from, initialVelocity: initialVelocity, time: elapsed)
     return true
   }
 
   private func velocity(at time: TimeInterval) -> CGFloat {
-    Self.spring.velocity(target: target - from, initialVelocity: initialVelocity, time: max(0, time - start))
+    spring.velocity(target: target - from, initialVelocity: initialVelocity, time: max(0, time - start))
   }
 }

@@ -128,6 +128,9 @@ struct CommandBarView: View {
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("clair.commandBar")
+    // Pinned to the top of its host, so a host not yet resized to new
+    // results never moves the field (design D18).
+    .frame(maxHeight: .infinity, alignment: .top)
   }
 }
 

@@ -56,6 +56,8 @@ final class BrowserWindowModel {
   var exclusiveAccessNotice: String?
   var isPageFullscreen = false
   var isWindowKey = true
+  /// The sidebar's tooltip (design D18).
+  let tooltips = TooltipCenter()
   var windowControls = WindowControlsMetrics.macOS27
 
   init(profileKind: ProfileKind, sidebar: SidebarState) {

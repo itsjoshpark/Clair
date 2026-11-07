@@ -15,7 +15,7 @@ Every normal browser window, including incognito and guest windows, SHALL be a n
 
 #### Scenario: Incognito window
 - **WHEN** a user opens a new incognito window
-- **THEN** it is the native window in a dark appearance, labelled as incognito in its sidebar, and its tabs use the incognito profile
+- **THEN** it is the native window in a dark appearance, labelled as incognito in its sidebar with a crossed-out eye, and its tabs use the incognito profile
 
 #### Scenario: A page opens a pop-up
 - **WHEN** a page calls `window.open` with window features that make Chromium open a pop-up window
@@ -41,7 +41,7 @@ The native window SHALL have no title bar. The sidebar SHALL sit at its leading 
 
 #### Scenario: Window not focused
 - **WHEN** another window becomes key
-- **THEN** the native window shows as inactive: the active tab's highlight fades and the window controls dim, as other macOS windows do
+- **THEN** the native window shows as inactive: the active tab's highlight lightens and loses its shadow, the sidebar's glyphs and the window controls dim, as other macOS windows do
 
 ### Requirement: Page shown in the card
 The card SHALL show the active tab's page, resized with the window and the sidebar, and SHALL switch to the newly active tab's page as soon as the active tab changes. Hidden tabs' pages SHALL be reported to the page as hidden.
@@ -99,11 +99,11 @@ Cmd+F SHALL open a floating find field at the top-trailing corner of the card. I
 - **THEN** the field closes, the highlights are cleared, and focus returns to the page
 
 ### Requirement: Link status
-Hovering a link SHALL show its URL in a small capsule at the bottom-leading corner of the card, which SHALL disappear when the pointer leaves the link.
+Hovering a link SHALL show its URL in a small capsule at the bottom-leading corner of the card. The capsule SHALL fade in once the pointer has rested on links for about half a second, and fade out about half a second after the pointer leaves them; moving to another link while it shows SHALL update it at once.
 
 #### Scenario: Hovering a link
 - **WHEN** the pointer rests on a link
-- **THEN** the link's URL shows in a capsule at the card's bottom-leading corner, and leaving the link hides it
+- **THEN** after about half a second the link's URL fades in, in a capsule at the card's bottom-leading corner, and about half a second after the pointer leaves the link it fades out
 
 ### Requirement: Infobars
 Infobars that Chromium attaches to a tab, such as the warning that the browser is being controlled by automated software or that an extension is debugging the browser, SHALL show as a bar at the top of that tab's card with their message, link and buttons, and SHALL act as Chromium's do.

@@ -26,6 +26,37 @@ final class FittingHostingView<Content: View>: NSHostingView<Content> {
   }
 }
 
+/// A hosting view that asks its superview to lay out again whenever its
+/// content's size changes, so an overlay's frame follows its content within
+/// the same pass (design D18). Without it, content that grows is centred in
+/// the old frame until the next layout, and moves.
+final class SelfSizingHostingView<Content: View>: NSHostingView<Content> {
+  required init(rootView: Content) {
+    super.init(rootView: rootView)
+    safeAreaRegions = []
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not used")
+  }
+
+  override func invalidateIntrinsicContentSize() {
+    super.invalidateIntrinsicContentSize()
+    superview?.needsLayout = true
+  }
+
+  // SwiftUI lays the hosting view out whenever its content changes; a
+  // content size that no longer matches the frame lays the window out again
+  // in the same pass.
+  override func layout() {
+    super.layout()
+    if abs(fittingSize.height - bounds.height) > 0.5 {
+      superview?.needsLayout = true
+    }
+  }
+}
+
 /// The native window's content view (design D4): one translucent material
 /// behind everything, the sidebar at the leading edge, the card with the page,
 /// and the overlays above it. Laid out in AppKit, so a resize lays out the
@@ -33,10 +64,16 @@ final class FittingHostingView<Content: View>: NSHostingView<Content> {
 final class BrowserRootView: NSView {
   /// The strip at the leading edge that reveals a hidden sidebar.
   static let revealStripWidth: CGFloat = 6
-  static let revealDelay: Duration = .milliseconds(150)
+  /// Arc reveals 100–117 ms after the pointer arrives; event delivery adds
+  /// about 50 ms to this.
+  static let revealDelay: Duration = .milliseconds(70)
   static let concealDelay: Duration = .milliseconds(300)
 
   let background = NSVisualEffectView()
+  /// The window's material again, between the card and the sidebar, for
+  /// while the card is under the docked sidebar, as when a revealed sidebar
+  /// docks and the card slides out from under it (design D18).
+  let sidebarBackdrop = NSVisualEffectView()
   /// The revealed sidebar's panel: a shadow around a lighter material.
   let revealedPanel = NSView()
   let revealedBackground = NSVisualEffectView()
@@ -51,6 +88,7 @@ final class BrowserRootView: NSView {
   var toastHost: NSView? { didSet { replace(oldValue, with: toastHost) } }
   var noticeHost: NSView? { didSet { replace(oldValue, with: noticeHost) } }
   var commandBarHost: NSView? { didSet { replace(oldValue, with: commandBarHost, scrim: true) } }
+  var tooltipHost: NSView? { didSet { replace(oldValue, with: tooltipHost) } }
   private let commandBarScrim = ClickCatcherView()
   /// Called when the scrim behind the command bar is clicked.
   var onScrimClick: (() -> Void)? {
@@ -58,10 +96,12 @@ final class BrowserRootView: NSView {
     set { commandBarScrim.onClick = newValue }
   }
 
-  // The sidebar's motion (design D12): how far it's shown in place (0 hidden,
-  // 1 shown) and how far the hidden sidebar is revealed over the page.
-  private var shown: SpringValue
-  private var revealed = SpringValue(0)
+  // The sidebar's motion (design D12): how far the sidebar and the card are
+  // shown in place (0 hidden, 1 shown), which differ only while a revealed
+  // sidebar docks, and how far the hidden sidebar is revealed over the page.
+  private var sidebarShown: SpringValue
+  private var cardShown: SpringValue
+  private var revealed = SpringValue(0, spring: SpringValue.revealSpring)
   private var animationLink: CADisplayLink?
 
   private var revealTask: Task<Void, Never>?
@@ -71,12 +111,17 @@ final class BrowserRootView: NSView {
   init(model: BrowserWindowModel, sidebar: NSView) {
     self.model = model
     self.sidebar = sidebar
-    shown = SpringValue(model.sidebar.isHidden ? 0 : 1)
+    sidebarShown = SpringValue(model.sidebar.isHidden ? 0 : 1)
+    cardShown = SpringValue(model.sidebar.isHidden ? 0 : 1)
     super.init(frame: .zero)
     wantsLayer = true
     background.material = .sidebar
     background.blendingMode = .behindWindow
     background.state = .followsWindowActiveState
+    sidebarBackdrop.material = .sidebar
+    sidebarBackdrop.blendingMode = .behindWindow
+    sidebarBackdrop.state = .followsWindowActiveState
+    sidebarBackdrop.isHidden = true
     revealedBackground.material = .popover
     revealedBackground.blendingMode = .withinWindow
     revealedBackground.state = .active
@@ -95,6 +140,7 @@ final class BrowserRootView: NSView {
     revealedPanel.isHidden = true
     addSubview(background)
     addSubview(card)
+    addSubview(sidebarBackdrop)
     addSubview(revealedPanel)
     addSubview(sidebar)
     addSubview(resizeHandle)
@@ -138,6 +184,7 @@ final class BrowserRootView: NSView {
       _ = model.toast
       _ = model.exclusiveAccessNotice
       _ = model.commandBar
+      _ = model.tooltips.current
     } onChange: { [weak self] in
       Task { @MainActor in
         guard let self else { return }
@@ -154,14 +201,22 @@ final class BrowserRootView: NSView {
     let shownTarget: CGFloat = model.sidebar.isHidden ? 0 : 1
     let revealedTarget: CGFloat = model.sidebar.isHidden && model.sidebar.isRevealed ? 1 : 0
     guard window?.isVisible == true, !model.isPageFullscreen else {
-      shown.jump(to: shownTarget)
+      sidebarShown.jump(to: shownTarget)
+      cardShown.jump(to: shownTarget)
       revealed.jump(to: revealedTarget)
       return
     }
+    // Showing a revealed sidebar docks it where it is: it takes the docked
+    // place at once (5 pt from where it floats), and only the card moves.
+    if shownTarget == 1, sidebarShown.target == 0, revealed.value > 0.5 {
+      sidebarShown.jump(to: 1)
+      revealed.jump(to: 0)
+    }
     let now = CACurrentMediaTime()
-    shown.animate(to: shownTarget, at: now)
+    sidebarShown.animate(to: shownTarget, at: now)
+    cardShown.animate(to: shownTarget, at: now)
     revealed.animate(to: revealedTarget, at: now)
-    if shown.isMoving || revealed.isMoving {
+    if sidebarShown.isMoving || cardShown.isMoving || revealed.isMoving {
       startAnimating()
     }
   }
@@ -175,7 +230,7 @@ final class BrowserRootView: NSView {
 
   @objc private func animationStep(_ link: CADisplayLink) {
     let now = CACurrentMediaTime()
-    let moving = [shown.step(at: now), revealed.step(at: now)].contains(true)
+    let moving = [sidebarShown.step(at: now), cardShown.step(at: now), revealed.step(at: now)].contains(true)
     // Lay out now rather than on the next pass, so the page resizes in step.
     needsLayout = true
     layoutSubtreeIfNeeded()
@@ -189,7 +244,8 @@ final class BrowserRootView: NSView {
     if model.isPageFullscreen {
       return WindowLayout(size: bounds.size, sidebar: model.sidebar, isPageFullscreen: true)
     }
-    return WindowLayout.blended(size: bounds.size, width: model.sidebar.width, shown: shown.value)
+    return WindowLayout.blended(
+      size: bounds.size, width: model.sidebar.width, sidebarShown: sidebarShown.value, cardShown: cardShown.value)
   }
 
   /// Where the hidden sidebar is while it floats over the page.
@@ -215,6 +271,10 @@ final class BrowserRootView: NSView {
     // take it out of the accessibility tree (issue #93).
     sidebar.isHidden = model.isPageFullscreen
     revealedPanel.isHidden = !floats
+    let cardUnderSidebar = !floats && !model.isPageFullscreen && layout.sidebar.maxX > 0
+      && layout.card.minX < layout.sidebar.maxX
+    sidebarBackdrop.isHidden = !cardUnderSidebar
+    sidebarBackdrop.frame = layout.sidebar
     revealedPanel.frame = floating
     revealedPanel.layer?.shadowPath = CGPath(
       roundedRect: revealedPanel.bounds, cornerWidth: 10, cornerHeight: 10, transform: nil)
@@ -227,6 +287,7 @@ final class BrowserRootView: NSView {
       readWindowControls(sidebar: sidebarFrame)
     }
     layoutOverlays(card: layout.card)
+    layoutTooltip(sidebar: sidebarFrame)
     updateRevealTracking()
   }
 
@@ -259,6 +320,23 @@ final class BrowserRootView: NSView {
       let height = commandBarHost.fittingSize.height
       commandBarHost.frame = CGRect(
         x: bounds.midX - width / 2, y: CommandBarView.top(inWindowHeight: bounds.height), width: width, height: height)
+    }
+  }
+
+  /// Puts the tooltip below and after the pointer that showed it, inside the
+  /// window, above everything else.
+  private func layoutTooltip(sidebar: CGRect) {
+    guard let tooltipHost, let tooltip = model.tooltips.current else { return }
+    let size = tooltipHost.fittingSize
+    var origin = CGPoint(
+      x: sidebar.minX + tooltip.point.x + TooltipView.offset.width - 8,
+      y: sidebar.minY + tooltip.point.y + TooltipView.offset.height - 8)
+    // The view has 8 pt around the capsule for its shadow.
+    origin.x = max(-4, min(origin.x, bounds.width - size.width + 4))
+    origin.y = max(-4, min(origin.y, bounds.height - size.height + 4))
+    tooltipHost.frame = CGRect(origin: origin, size: size)
+    if tooltipHost !== subviews.last {
+      addSubview(tooltipHost)
     }
   }
 
