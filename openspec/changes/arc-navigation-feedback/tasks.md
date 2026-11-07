@@ -13,7 +13,7 @@ Suggested order: 1, 2 (one engine build), then 3 and 4 in `ClairUI`, which can s
 ## 2. Contract and engine
 
 - [ ] 2.1 Add to `native/ClairHost.h`: `ClairTab.loadProgress`, the `isLoading` comment stating it's Chromium's loading-UI state (D1), and `ClairHistoryDirection`, `ClairHistoryItem`, `ClairHistoryMenu`, `ClairHistoryMenuDelegate` and `-[ClairBrowser startHistoryMenuWithDirection:delegate:]` (D3). Implement them in `FakeBrowser`, with entries and late favicons it can script. Verify that `ClairUI`'s build and unit tests pass in CI.
-- [ ] 2.2 In the overlay: report `IsLoading() && ShouldShowLoadingUI()` as `isLoading` (D1); observe each tab's `LoadProgressChanged` and add `loadProgress` to the snapshot (D4); add `ClairHistoryMenuSession` over `BackForwardMenuModel`, listing history entries only, pushing icon changes, and opening entries through `ActivatedAt` with the disposition's flags (D3), in `clair_browser_bridge.mm` so the hook patch's source list stays as it is. Verify that `patches/` is unchanged, that the patch check applies and `engine.yml` builds the engine for the branch's key.
+- [ ] 2.2 In the overlay: report `IsLoading() && ShouldShowLoadingUI()` as `isLoading` (D1); observe each tab's `LoadProgressChanged` and add `loadProgress` to the snapshot (D4); add `ClairHistoryMenuSession` over `BackForwardMenuModel`, listing history entries and then "Show Full History", pushing icon changes, and opening entries through `ActivatedAt` with the disposition's flags (D3), in `clair_browser_bridge.mm` so the hook patch's source list stays as it is. Verify that `patches/` is unchanged, that the patch check applies and `engine.yml` builds the engine for the branch's key.
 
 ## 3. Reload and stop
 

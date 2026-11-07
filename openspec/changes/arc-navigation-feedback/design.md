@@ -39,7 +39,7 @@ See proposal.md for why, and `specs/sidebar/spec.md` and `specs/browser-window/s
 
 **Non-Goals:**
 - **Tooltips.** `replace-browser-window`'s polish group (D18) already draws Arc-style tooltips with shortcut key caps, since AppKit's never show in Chromium's window. This change only gives the history menu's buttons their labels through that same tooltip.
-- A history page, history search or "Show Full History" (Clair has no history UI yet; Chromium's `chrome://history` stays reachable by URL).
+- A native history page or history search. "Show Full History" opens Chromium's `chrome://history` instead.
 - Progress for background tabs, or in the tab rows.
 - Pruning skippable entries or otherwise changing what Chromium keeps in a tab's history.
 
@@ -83,11 +83,11 @@ See proposal.md for why, and `specs/sidebar/spec.md` and `specs/browser-window/s
   ```
 
   `startHistoryMenu` returns nil when the active tab can't go that way. Asking at the moment the menu opens is a query in response to the user, as autocomplete is, not polling; later favicons are pushed to the delegate.
-- **Overlay.** `ClairHistoryMenuSession`, in `clair_browser_bridge.mm` (a new overlay file would need a line in the hook patch's `chrome/browser/ui/BUILD.gn` hunk, and `BackForwardMenuModel` is already in that target), owns a `BackForwardMenuModel` for the window's browser and direction and is its `ui::MenuModelDelegate`. `items` lists the model's history entries only, in order, skipping separators, chapter stops, "Show Full History" and the back-to-opener entry unless task 1.1 finds Arc shows an equivalent. `itemID` is the model index. `OnIconChanged` re-reads the items and calls the delegate. `openItem` calls `ActivatedAt(index, flags)` with the flags for the disposition (none, or Cmd for a new background tab), so Chromium's own navigation and new-tab code runs; a new tab then lands at the top of the list through the existing tab-strip hook. Activating or `close` ends the session, as does the tab changing.
+- **Overlay.** `ClairHistoryMenuSession`, in `clair_browser_bridge.mm` (a new overlay file would need a line in the hook patch's `chrome/browser/ui/BUILD.gn` hunk, and `BackForwardMenuModel` is already in that target), owns a `BackForwardMenuModel` for the window's browser and direction and is its `ui::MenuModelDelegate`. `items` lists the model's history entries in order, then "Show Full History" after a separator, skipping chapter stops and the back-to-opener entry unless task 1.1 finds Arc shows an equivalent. `itemID` is the model index. `OnIconChanged` re-reads the items and calls the delegate. `openItem` calls `ActivatedAt(index, flags)` with the flags for the disposition (none, or Cmd for a new background tab), so Chromium's own navigation and new-tab code runs; a new tab then lands at the top of the list through the existing tab-strip hook. Activating or `close` ends the session, as does the tab changing.
 - **`ClairUI`.** An AppKit `NSMenu`, popped up under the button with `popUp(positioning:at:in:)`, since SwiftUI's `contextMenu` can't open on a long press or update an open item's image. An `NSView` behind each back and forward `SidebarButton` (full and compact rows) handles `rightMouseDown` and a press held for Arc's duration (task 1.1; Chromium uses about 0.5 s), and leaves a short click to the button. While the menu is open, the delegate's updates set the matching items' images in place. Cmd-choosing maps to `NewBackgroundTab`. A `HistoryMenuBuilder` turns items into menu entries and choices into calls; it's unit-tested against `FakeBrowser`.
 - Alternative: build entries from `NavigationController` directly. Rejected: it reimplements Chromium's labels, favicon fetching, cap and new-tab handling, which `BackForwardMenuModel` already tests.
 
-- **Owner's decisions (2026-11-07):** the menu lists history entries only, without "Show Full History", chapter stops or other extra items, even where Arc has equivalents, so there's no custom UI to build for them. Cmd-choosing an entry opens it in a new background tab, as Chromium does, whatever Arc does.
+- **Owner's decisions (2026-11-07):** the menu keeps Chromium's "Show Full History" at the end, which opens `chrome://history` through Chromium's own code (in a new tab, or reusing an open history tab or the current new tab page), so there's no history UI to build. Cmd-choosing an entry opens it in a new background tab, as Chromium does, whatever Arc does.
 
 ### D4. Load progress and the loading indicator
 
@@ -103,7 +103,7 @@ The header additions (D3, D4) and the overlay changes (D1, D3, D4) land together
 ## Risks / Trade-offs
 
 - **[Risk] A page that never leaves `LOADING_UI_REQUESTED`** (a main-frame load that hangs) shows stop and the indicator indefinitely. → That's Chromium's toolbar behavior too, and stop ends it.
-- **[Risk] `BackForwardMenuModel` changes between Chromium versions** (in 156 it builds its items from sections: history, chapter stops, back-to-opener, "Show Full History"). → The overlay reads only history items through the `ui::MenuModel` interface, so a rebase breaks the build, not behavior, and the patch check catches it.
+- **[Risk] `BackForwardMenuModel` changes between Chromium versions** (in 156 it builds its items from sections: history, chapter stops, back-to-opener, "Show Full History"). → The overlay reads only history items and "Show Full History" through the `ui::MenuModel` interface, so a rebase breaks the build, not behavior, and the patch check catches it.
 - **[Risk] Updating an open `NSMenu`'s item images** may not redraw on every macOS version. → Fallback: the session waits briefly (up to about 100 ms) for missing favicons before `ClairUI` opens the menu, and otherwise shows a globe.
 - **[Risk] The glow over the card's top edge** could hide the page-top window-drag strip's area or draw over the card's corner mask. → It sits in the inset above the card and takes no mouse events (`hitTest` returns nil).
 

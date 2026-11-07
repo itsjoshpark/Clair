@@ -41,3 +41,10 @@ Choosing an entry in the history menu SHALL take the tab to that page. Choosing 
 #### Scenario: Opening an entry in a new tab
 - **WHEN** the user Cmd-chooses an entry in the back menu
 - **THEN** a new tab opens at the top of the tab list on that page, in the background, and the active tab doesn't navigate
+
+### Requirement: Full history from the history menu
+The history menu SHALL end with "Show Full History", after a separator, which SHALL open Chromium's history page as Chromium's own menu does.
+
+#### Scenario: Showing full history
+- **WHEN** the user right-clicks back and chooses Show Full History
+- **THEN** `chrome://history` opens in a tab, and the tab the menu was opened from doesn't navigate unless it was a new tab page
