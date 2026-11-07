@@ -74,6 +74,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
           MainActor.assumeIsolated {
             guard let self else { return }
             self.model.isWindowKey = self.window.isKeyWindow
+            self.offerCommandBarIfNew()
           }
         })
     }
@@ -82,8 +83,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       observers.append(
         center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
           MainActor.assumeIsolated {
-            self?.rootView.needsLayout = true
-            self?.extensionPopup?.dismiss()
+            guard let self else { return }
+            self.model.isWindowFullscreen = self.isWindowFullscreen
+            self.rootView.needsLayout = true
+            self.extensionPopup?.dismiss()
           }
         })
     }
@@ -121,23 +124,6 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       }
     } else if rootView.findHost != nil {
       rootView.findHost = nil
-    }
-    // The sidebar's tooltip, fading in.
-    if let tooltip = model.tooltips.current {
-      if let host = rootView.tooltipHost as? PassthroughHostingView<TooltipView> {
-        host.rootView = TooltipView(tooltip: tooltip)
-        rootView.needsLayout = true
-      } else {
-        let host = PassthroughHostingView(rootView: TooltipView(tooltip: tooltip))
-        host.alphaValue = 0
-        rootView.tooltipHost = host
-        NSAnimationContext.runAnimationGroup { context in
-          context.duration = 0.1
-          host.animator().alphaValue = 1
-        }
-      }
-    } else if rootView.tooltipHost != nil {
-      rootView.tooltipHost = nil
     }
     // The link status.
     reportStatus(model.commandBar == nil ? model.statusText : nil, commandBarOpen: model.commandBar != nil)
@@ -299,6 +285,31 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   func tabDidChange(_ tab: any ClairTab) {
     model.updateTab(tab)
+    offerCommandBarIfNew()
+    // The command bar a new window opened with gives way to a page that
+    // loads without it, as a link from another app.
+    if let offered = offeredCommandBar, offered === model.commandBar, tab.tabID == model.activeTabID,
+      !tab.isNewTabPage, offered.text.isEmpty {
+      offered.cancel()
+    }
+  }
+
+  // MARK: The command bar in a new window (design D18)
+
+  /// Whether the window may still open the command bar for its first tab.
+  private var offersCommandBar = true
+  private weak var offeredCommandBar: CommandBarModel?
+
+  /// Opens the command bar once, when the window first shows a single new tab
+  /// page, so typing goes straight into it, as in Arc.
+  private func offerCommandBarIfNew() {
+    guard offersCommandBar, window.isKeyWindow, let tab = model.activeTab else { return }
+    // A new tab has no URL until its first navigation starts.
+    guard tab.isNewTabPage || !(tab.urlText.isEmpty && (tab.url?.absoluteString ?? "").isEmpty) else { return }
+    offersCommandBar = false
+    guard model.tabs.count == 1, tab.isNewTabPage, model.commandBar == nil else { return }
+    editURL()
+    offeredCommandBar = model.commandBar
   }
 
   func activeTabDidChange(_ tabID: TabID) {
@@ -310,6 +321,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.setActiveTab(tabID)
     rootView.card.show(page: browser?.pageView(for: tabID))
     devToolsDidChange()
+    offerCommandBarIfNew()
   }
 
   func devToolsDidChange() {

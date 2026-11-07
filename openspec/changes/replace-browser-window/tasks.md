@@ -86,6 +86,20 @@ Fixes from the owner's side-by-side pass against Arc (D18), all in `ClairUI`. Ar
 - [x] 9.9 Investigate the page receiving the pointer a few points above where it is, seen once on the new tab page and gone after a relaunch (D18). Try what moves the page's view without resizing it (hiding and showing the sidebar, the hover reveal, docking a revealed sidebar, infobars, full screen, moving the window between displays) while a test page reports the pointer's position. Verify by recording the trigger and fixing it, or, if it can't be reproduced, record what was tried in D18 and open an issue.
 - [x] 9.10 Run the full quality checks on the branch. Verify that every runtime test passes.
 
+## 10. Second polish pass
+
+More fixes from the owner's pass (D18), all in `ClairUI`. Arc's figures were measured with the probe on 2026-11-07.
+
+- [ ] 10.1 New windows (D18): open the command bar when a window first shows a single new tab page, as Arc does, and close it if the page navigates without it. Verify by hand with Cmd+N and Shift+Cmd+N that typing goes straight into the field, and that the runtime tests still pass.
+- [ ] 10.2 Colours and weights (D18): Arc's flat URL field fill in Light and Dark Mode, a lighter active tab in Dark Mode and incognito, Arc's incognito badge, and medium-weight glyphs in the top row and the URL field. Verify by hand against Arc in a normal and an incognito window.
+- [ ] 10.3 Tooltips everywhere (D18): draw them in a tooltip window of their own, with the shadow on the capsule only and flat key caps; give every control that had a system tooltip Clair's, with the tab's close button reading "Close tab ⌘W", Copy URL "⇧⌘C", the compact row's menu "More options" with a hover state, and a tab's full title after 3 s on its row; the innermost control under the pointer owns the tooltip. Verify by hand, including in an extension or downloads popover and in full screen.
+- [ ] 10.4 Copy URL (D18): Edit > Copy URL on Shift+Cmd+C after Copy, running Chromium's command; `copy-url-shortcut.patch` drops Shift+Cmd+C from Chromium's own table, where it inspects an element; and Copy URL in the URL field's context menu. Verify that the patch check applies the patch and `engine.yml` builds the engine for the branch's key, then by hand that the menu item, the shortcut and the context menu copy the URL, and that Opt+Cmd+C still inspects.
+- [ ] 10.5 The URL field (D18): show its buttons while the pointer is over the key window's sidebar, and the host without a leading `www.`. Add unit tests for the `www.` rule. Verify that they pass, and check the buttons by hand.
+- [ ] 10.6 Hidden sidebar (D18): reveal from anywhere in the 10 pt leading inset, with a less translucent revealed sidebar. Verify by hand.
+- [ ] 10.7 Full screen (D18): keep the top row at Arc's y+8 with hide-sidebar 13 pt in. Verify by hand against Arc.
+- [ ] 10.8 Investigate the sidebar changing colour for about 2 s when the pointer moves over the tabs in full screen. Verify by finding and fixing the cause, or, if it can't be reproduced, record what was tried in D18 and open an issue.
+- [ ] 10.9 Run the full quality checks on the branch. Verify that every runtime test passes.
+
 ## Workflow follow-up
 
 - Run a `release.yml` dry run and the updated release checklist on its DMG before the first release that ships the native window.

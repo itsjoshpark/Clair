@@ -22,22 +22,34 @@ The sidebar's top row SHALL hold, after the window controls, a button that hides
 - **THEN** the top row shows back, forward and a "More" menu with Reload and Hide Sidebar
 
 ### Requirement: Tooltips in Arc's wording
-The sidebar's buttons SHALL have tooltips in Arc's wording: "Hide sidebar" ("Lock sidebar" while the hidden sidebar is revealed), "Go back", "Go forward", "Reload this page" or "Stop loading this page", "Copy URL" and "Site Control Center".
+The sidebar's controls SHALL have Clair's own tooltips, never the system's, in Arc's wording and with their shortcuts: "Hide sidebar" ("Lock sidebar" while the hidden sidebar is revealed), "Go back", "Go forward", "Reload this page" or "Stop loading this page", "Copy URL", "Site Control Center", "Close tab" and "More options". Resting the pointer on a tab row for about 3 seconds SHALL show the tab's full title.
 
 #### Scenario: Tooltip on back
 - **WHEN** the pointer rests on the back button
 - **THEN** a tooltip reads "Go back"
+
+#### Scenario: Tooltip on a tab's close button
+- **WHEN** the pointer rests on a tab's close button
+- **THEN** a tooltip reads "Close tab" with the keys ⌘ and W
+
+#### Scenario: Full title of a tab
+- **WHEN** the pointer rests on a tab row for 3 seconds
+- **THEN** a tooltip shows the tab's full title
 
 #### Scenario: Tooltip on the revealed sidebar's button
 - **WHEN** the hidden sidebar is revealed and the pointer rests on its sidebar button
 - **THEN** a tooltip reads "Lock sidebar"
 
 ### Requirement: URL field
-Below the top row, the sidebar SHALL show the active tab's host, or its full URL for pages without a host such as `chrome://` pages and files, with a search icon and "Search or Enter URL…" for a new tab page. Clicking the field SHALL open the command bar on the current URL. While the pointer is over the field, its background SHALL darken and its trailing end SHALL show a copy button and the site-controls button, both fading in and out.
+Below the top row, the sidebar SHALL show the active tab's host without a leading `www.`, or its full URL for pages without a host such as `chrome://` pages and files, with a search icon and "Search or Enter URL…" for a new tab page. Clicking the field SHALL open the command bar on the current URL, and its context menu SHALL offer Copy URL. While the pointer is over the field, its background SHALL darken.
 
 #### Scenario: Web page
 - **WHEN** the active tab shows `https://news.ycombinator.com/item?id=1`
 - **THEN** the URL field reads `news.ycombinator.com`
+
+#### Scenario: Host with www
+- **WHEN** the active tab shows `https://www.apple.com/mac/`
+- **THEN** the URL field reads `apple.com`
 
 #### Scenario: Clicking the field
 - **WHEN** the user clicks the URL field
@@ -46,6 +58,13 @@ Below the top row, the sidebar SHALL show the active tab's host, or its full URL
 #### Scenario: Copying the URL
 - **WHEN** the pointer is over the URL field and the user clicks its copy button
 - **THEN** the tab's full URL is on the pasteboard and a toast confirms it
+
+### Requirement: URL field buttons
+While the pointer is anywhere over the key window's sidebar, the URL field's trailing end SHALL show a copy button and the site-controls button, fading in and out.
+
+#### Scenario: Pointer over the tab list
+- **WHEN** the pointer moves over the tab list of the key window
+- **THEN** the URL field shows its copy and site-controls buttons
 
 ### Requirement: Site controls and indicators
 The URL field SHALL have a site-controls button, shown while the pointer is over the field, that opens Chromium's page info for the active tab, showing its connection security and permissions. While the active tab uses the camera, microphone, location or screen capture, the URL field SHALL show an indicator for each, which opens the matching controls. A blocked permission SHALL show no indicator; page info lists it.
@@ -133,7 +152,7 @@ Cmd+S, the sidebar button and View > Hide Sidebar SHALL hide the sidebar with a 
 - **THEN** Cmd+S hides the sidebar without opening a save panel, and Shift+Cmd+S opens the save panel for the page
 
 ### Requirement: Revealing the hidden sidebar
-While the sidebar is hidden, resting the pointer at the window's leading edge for about 100 ms SHALL slide the sidebar in as a floating overlay above the page, without resizing the page. Moving the pointer away SHALL slide it back out. Showing the sidebar while it's revealed SHALL dock it where it is, with only the card moving to make room.
+While the sidebar is hidden, resting the pointer anywhere in the window's leading inset for about 100 ms SHALL slide the sidebar in as a floating overlay above the page, without resizing the page. Moving the pointer away SHALL slide it back out. Showing the sidebar while it's revealed SHALL dock it where it is, with only the card moving to make room.
 
 #### Scenario: Hover reveal
 - **WHEN** the sidebar is hidden and the pointer rests at the window's leading edge
