@@ -270,8 +270,9 @@ final class FullscreenTests: NativeWindowTestCase {
     XCTAssertTrue(filled, "The page doesn't fill the screen")
     XCTAssertFalse(browser.isSidebarInWindow, "The sidebar shows in page full screen")
     // The notice appears once the window has finished moving into full screen.
-    XCTAssertTrue(
-      browser.element("clair.fullscreenNotice").waitForExistence(timeout: 15), "No notice says how to leave full screen")
+    // The window hides its sidebar now, so look for it in the whole app.
+    let notice = browser.ui.descendants(matching: .any).matching(identifier: "clair.fullscreenNotice").firstMatch
+    XCTAssertTrue(notice.waitForExistence(timeout: 15), "No notice says how to leave full screen")
     browser.ui.typeKey(.escape, modifierFlags: [])
     let ended = await Harness.wait(for: 30) {
       try await tab.evaluate("document.fullscreenElement === null") as? Bool == true
