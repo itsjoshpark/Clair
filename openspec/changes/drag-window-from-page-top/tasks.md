@@ -16,7 +16,7 @@ Per CLAUDE.md, a task that needs a build is done only once CI passes on it. D3's
 
 ## 3. Verification
 
-- [ ] 3.1 Check by hand against Arc, side by side, with the XCUITest probe or CGEvents: double-click in the strip, a link click in the strip, a cancelled `mousedown` under the arrow, custom cursors, a tall page header, a drag from below into the strip (Clair stays, Arc moves), a drag over text in an inactive window (Clair moves the window, Arc applies its cursor rule), the find field and the command bar over the strip, docked DevTools, the crashed-page view, window and page full screen, a scrolled page, and the pointer after a window drag (no selection, nothing left pressed). Verify each item and note the results in the PR.
+- [x] 3.1 Check by hand against Arc, side by side, with the XCUITest probe or CGEvents: double-click in the strip, a link click in the strip, a cancelled `mousedown` under the arrow, custom cursors, a tall page header, a drag from below into the strip (Clair stays, Arc moves), a drag over text in an inactive window (Clair moves the window, Arc applies its cursor rule), the find field and the command bar over the strip, docked DevTools, the crashed-page view, window and page full screen, a scrolled page, and the pointer after a window drag (no selection, nothing left pressed). Verify each item and note the results in the PR.
 - [ ] 3.2 Run `quality.yml` on the branch to confirm the existing runtime suite still passes. No new runtime test.
 - [x] 3.3 Add a Changie fragment describing the new behavior and the `defaults write` command that turns it off until the Settings window exists. Verify that `changie batch --dry-run` renders it.
 
