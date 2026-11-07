@@ -10,6 +10,7 @@ final class FittingHostingView<Content: View>: NSHostingView<Content> {
   required init(rootView: Content) {
     super.init(rootView: rootView)
     sizingOptions = []
+    safeAreaRegions = []
   }
 
   @available(*, unavailable)
@@ -296,5 +297,16 @@ enum TrafficLights {
       let y = max(0, height - top - button.frame.height)
       button.setFrameOrigin(NSPoint(x: x, y: y))
     }
+  }
+}
+
+extension NSHostingView {
+  /// A hosting view without the title bar's safe area. The window's content
+  /// view is full size and Clair lays its views out over all of it (design
+  /// D4), so the sidebar's top row shares the traffic lights' line.
+  static func edgeToEdge(rootView: Content) -> NSHostingView<Content> {
+    let host = NSHostingView(rootView: rootView)
+    host.safeAreaRegions = []
+    return host
   }
 }

@@ -31,7 +31,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     self.preferences = preferences
     let model = BrowserWindowModel(profileKind: browser.profileKind, sidebar: preferences.initialState)
     self.model = model
-    sidebarHost = NSHostingView(rootView: SidebarView(model: model, actions: nil))
+    sidebarHost = NSHostingView.edgeToEdge(rootView: SidebarView(model: model, actions: nil))
     rootView = BrowserRootView(model: model, sidebar: sidebarHost)
     super.init()
     sidebarHost.rootView = SidebarView(model: model, actions: self)
@@ -90,7 +90,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // The command bar.
     if let commandBar = model.commandBar {
       if (rootView.commandBarHost as? NSHostingView<CommandBarView>)?.rootView.model !== commandBar {
-        let host = NSHostingView(rootView: CommandBarView(model: commandBar))
+        let host = NSHostingView.edgeToEdge(rootView: CommandBarView(model: commandBar))
         rootView.commandBarHost = host
         window.makeFirstResponder(host)
       }
@@ -100,7 +100,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // Find.
     if model.find != nil {
       if rootView.findHost == nil {
-        let host = NSHostingView(rootView: FindFieldView(model: model, actions: self))
+        let host = NSHostingView.edgeToEdge(rootView: FindFieldView(model: model, actions: self))
         rootView.findHost = host
         window.makeFirstResponder(host)
       }
@@ -109,7 +109,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     }
     // The link status.
     if let status = model.statusText, model.commandBar == nil {
-      rootView.statusHost = NSHostingView(rootView: CapsuleText(text: status, identifier: "clair.status"))
+      rootView.statusHost = NSHostingView.edgeToEdge(rootView: CapsuleText(text: status, identifier: "clair.status"))
     } else if rootView.statusHost != nil {
       rootView.statusHost = nil
     }
@@ -130,13 +130,13 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // The active tab's infobars and crashed page.
     let tab = model.activeTab
     if let tab, !tab.infobars.isEmpty {
-      rootView.card.infobarView = NSHostingView(rootView: InfobarsView(tab: tab, actions: self))
+      rootView.card.infobarView = NSHostingView.edgeToEdge(rootView: InfobarsView(tab: tab, actions: self))
     } else if rootView.card.infobarView != nil {
       rootView.card.infobarView = nil
     }
     if tab?.isCrashed == true {
       if rootView.card.crashedView == nil {
-        rootView.card.crashedView = NSHostingView(rootView: CrashedPageView(actions: self))
+        rootView.card.crashedView = NSHostingView.edgeToEdge(rootView: CrashedPageView(actions: self))
       }
     } else if rootView.card.crashedView != nil {
       rootView.card.crashedView = nil
