@@ -575,11 +575,8 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
 // re-tiles the title bar, which a layout pass alone doesn't do (task 1.3).
 - (void)layOutTitlebarNow {
   NSView* frame = self.contentView.superview;
-  if ([frame respondsToSelector:@selector
-             (_updateTitlebarContainerViewFrameIfNecessary)]) {
+  if (self.canRetileTitlebar) {
     [(NSThemeFrame*)frame _updateTitlebarContainerViewFrameIfNecessary];
-  }
-  if ([frame respondsToSelector:@selector(_updateButtonPositions)]) {
     [(NSThemeFrame*)frame _updateButtonPositions];
   }
   frame.needsLayout = YES;

@@ -26,7 +26,7 @@ The sidebar's top-row buttons SHALL be vertically centred on the window controls
 
 #### Scenario: Default top row on macOS 27
 - **WHEN** a native window opens with the sidebar shown on macOS 27
-- **THEN** the top-row buttons are centred 24 points below the sidebar's top, on the window controls' centre line, and the hide-sidebar button starts 3 points after the zoom button, at 77 points
+- **THEN** the top-row buttons are centred 24 points below the sidebar's top, on the window controls' centre line, and the hide-sidebar button starts 7 points after the zoom button, at 81 points
 
 #### Scenario: Window controls drawn elsewhere
 - **WHEN** the system draws the window controls a few points higher or lower, or wider apart, than on macOS 27
