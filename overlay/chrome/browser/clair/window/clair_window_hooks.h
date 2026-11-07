@@ -19,6 +19,8 @@ class BrowserWindowInterface;
 class Profile;
 class TabStripModel;
 
+class GURL;
+
 namespace content {
 class WebContents;
 }  // namespace content
@@ -64,6 +66,13 @@ gfx::Rect PageInfoAnchorRect(BrowserWindowInterface* browser);
 // toast_controller.cc: shows a toast's text in a native window (D8). False
 // when `browser` isn't one.
 bool ShowToast(BrowserWindowInterface* browser, const std::u16string& text);
+
+// browser_web_contents_delegate.cc: the URL of the link under the pointer,
+// and the pointer leaving the page, for a native window's status capsule
+// (D8). Chromium's own status bubbles are Views; a native window has none.
+// False when `source` isn't in a native window.
+bool UpdateTargetURL(content::WebContents* source, const GURL& url);
+bool ContentsMouseEvent(content::WebContents* source, bool exited);
 
 // download_ui_controller.cc: hands a new download to the sidebar of the
 // native window it belongs to (D7). False when it belongs to none, and

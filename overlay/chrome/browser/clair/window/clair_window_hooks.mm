@@ -32,6 +32,7 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/browser/web_contents.h"
+#include "url/gurl.h"
 
 namespace {
 
@@ -136,6 +137,28 @@ bool ShowToast(BrowserWindowInterface* browser, const std::u16string& text) {
     return false;
   }
   window->ShowToast(text);
+  return true;
+}
+
+bool UpdateTargetURL(content::WebContents* source, const GURL& url) {
+  ClairBrowserWindow* window = ClairBrowserWindow::FromWebContents(source);
+  if (!window) {
+    return false;
+  }
+  if (window->browser()->tab_strip_model()->GetActiveWebContents() == source) {
+    window->SetStatusURL(url);
+  }
+  return true;
+}
+
+bool ContentsMouseEvent(content::WebContents* source, bool exited) {
+  ClairBrowserWindow* window = ClairBrowserWindow::FromWebContents(source);
+  if (!window) {
+    return false;
+  }
+  if (exited) {
+    window->SetStatusURL(GURL());
+  }
   return true;
 }
 

@@ -124,7 +124,7 @@ Rules:
 ### D8. Find, status, infobars and toasts
 
 - **Find:** `ClairFindBar` implements `FindBar` (as `FindBarOwnerWebUIBrowser` does) and reports `FindNotificationDetails` to `ClairUI`. The field calls `FindTabHelper::StartFinding` and `StopFinding`. Cmd+F, Cmd+G and Shift+Cmd+G stay Chromium's commands, which reach the find bar through `BrowserWindow`.
-- **Status:** `GetStatusBubbles` returns `ClairStatusBubble`, which forwards the URL text.
+- **Status:** the `browser_web_contents_delegate.cc` hook hands the hovered link's URL to `ClairStatusBubble`, which forwards the URL text. `GetStatusBubbles` returns none, since Chromium treats every bubble it returns as a Views one.
 - **Infobars:** the overlay observes each tab's `InfoBarManager` and sends `ConfirmInfoBarDelegate`s as message, link and button snapshots, with their actions coming back through `ClairBrowser`. Infobars of other kinds are logged and dismissed, and none is expected in this release's flows.
 - **Toasts:** the hook in `toast_controller.cc` sends a toast's string to `ClairUI` for a native window. Without it, `ToastController` reaches `CHECK_IS_TEST()` when it finds no anchor view. Zoom changes use the same toast path through the zoom bubble's entry point.
 
@@ -215,6 +215,7 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
 | `chrome/browser/ui/toasts/toast_controller.cc` | toast to `ClairUI` (D8) |
 | `chrome/browser/ui/sad_tab_controller.cc` | skip the Views sad tab, which dereferences the `BrowserView`; the overlay's tab snapshot reports the crash (D5) |
 | `chrome/browser/download/download_ui_controller.cc` | new download to the sidebar (D7) |
+| `chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc` | the hovered link's URL to the status capsule: Chromium casts every status bubble to its Views one, so a native window returns none and is told directly (D8; found on the first engine, where hovering a page crashed) |
 | `chrome/browser/prefs/browser_prefs.cc` | Clair's password and autofill defaults (D17) |
 | `chrome/browser/resources/settings/page_visibility.ts` | hide the "Autofill and passwords" section (D17) |
 | `chrome/browser/ui/webui/new_tab_page/new_tab_page_handler.cc`, `chrome/browser/new_tab_page/feature_promo_helper/new_tab_page_feature_promo_helper.cc`, `chrome/browser/ui/extensions/extension_install_ui_desktop.cc` | skip the new tab page's footer and promo and the extension-installed toolbar hint, whose controllers only exist with a `BrowserView` (found by Crest on 156) |

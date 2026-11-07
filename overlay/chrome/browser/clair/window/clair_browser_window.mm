@@ -1007,7 +1007,14 @@ void ClairBrowserWindow::SetTopControlsGestureScrollInProgress(
     bool in_progress) {}
 
 std::vector<StatusBubble*> ClairBrowserWindow::GetStatusBubbles() {
-  return {&status_bubble_};
+  // Chromium treats every status bubble it gets here as a Views one
+  // (BrowserWebContentsDelegate), so the native window's is reached through
+  // the hook instead.
+  return {};
+}
+
+void ClairBrowserWindow::SetStatusURL(const GURL& url) {
+  status_bubble_.SetURL(url);
 }
 
 void ClairBrowserWindow::UpdateTitleBar() {
@@ -1052,6 +1059,11 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
   }
   UpdateDevTools();
   UpdateTitleBar();
+  // As BrowserView: the page takes focus when its tab becomes active in the
+  // key window.
+  if (IsActive()) {
+    new_contents->RestoreFocus();
+  }
 }
 
 void ClairBrowserWindow::OnTabDetached(content::WebContents* contents,

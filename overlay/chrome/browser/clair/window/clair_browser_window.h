@@ -282,6 +282,9 @@ class ClairBrowserWindow : public BrowserWindow {
   // The active tab's docked DevTools changed (D5).
   void UpdateDevTools();
 
+  // The link under the pointer, or an empty URL to hide the status (D8).
+  void SetStatusURL(const GURL& url);
+
   // Shows a toast in the card (D8).
   void ShowToast(const std::u16string& text);
 

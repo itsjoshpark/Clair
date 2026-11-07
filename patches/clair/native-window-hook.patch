@@ -19,6 +19,8 @@
 #   native window shows a crashed page itself (D5).
 # - download_ui_controller.cc: a new download goes to the sidebar instead of
 #   Chromium's download bubble (D7).
+# - browser_web_contents_delegate.cc: Chromium treats every status bubble as a
+#   Views one; a native window shows the hovered link's URL itself (D8).
 # - browser_prefs.cc, page_visibility.ts: passwords and autofill are off, and
 #   their settings section is hidden (D17). In Chromium 156 the section is
 #   gated by `yourSavedInfo`; a partial visibility object would hide the other
@@ -236,6 +238,39 @@
 +  }
    delegate_->OnNewDownloadReady(item);
  }
+--- a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
++++ b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+@@ -12,6 +12,7 @@
+ #include "chrome/browser/actor/actor_util.h"
+ #include "chrome/browser/background/background_contents.h"
+ #include "chrome/browser/background/background_contents_service.h"
++#include "chrome/browser/clair/window/clair_window_hooks.h"
+ #include "chrome/browser/background/background_contents_service_factory.h"
+ #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+ #include "chrome/browser/content_settings/page_specific_content_settings_delegate.h"
+@@ -796,6 +797,10 @@
+ 
+ void BrowserWebContentsDelegate::UpdateTargetURL(content::WebContents* source,
+                                                  const GURL& url) {
++  // Clair: a native window shows the link status itself.
++  if (clair::UpdateTargetURL(source, url)) {
++    return;
++  }
+   std::vector<StatusBubble*> status_bubbles =
+       browser_ui_controller_->GetStatusBubbles();
+   for (StatusBubble* status_bubble : status_bubbles) {
+@@ -822,6 +827,11 @@
+     exclusive_access_manager_->OnUserInput();
+   }
+ 
++  // Clair: a native window has no Views status bubble.
++  if (clair::ContentsMouseEvent(source, exited)) {
++    return;
++  }
++
+   // Mouse motion events update the status bubble, if it exists.
+   std::vector<StatusBubble*> status_bubbles =
+       browser_ui_controller_->GetStatusBubbles();
 --- a/chrome/browser/prefs/browser_prefs.cc
 +++ b/chrome/browser/prefs/browser_prefs.cc
 @@ -22,6 +22,7 @@
