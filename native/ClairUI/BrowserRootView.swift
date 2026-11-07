@@ -3,6 +3,7 @@
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
 import AppKit
+import ClairHost
 import SwiftUI
 
 /// A hosting view sized to its SwiftUI content.
@@ -43,7 +44,6 @@ final class BrowserRootView: NSView {
   let sidebar: NSView
   let resizeHandle = SidebarResizeHandle()
   private let model: BrowserWindowModel
-  private lazy var trafficLights = TrafficLights()
 
   // Overlays, set by the controller.
   var findHost: NSView? { didSet { replace(oldValue, with: findHost) } }
@@ -199,6 +199,9 @@ final class BrowserRootView: NSView {
 
   override func layout() {
     super.layout()
+    // Catch up with a model change whose observation hasn't run yet; a target
+    // the springs already have changes nothing.
+    updateSidebarTargets()
     background.frame = bounds
     let layout = currentLayout
     card.frame = layout.card
@@ -219,8 +222,10 @@ final class BrowserRootView: NSView {
     card.isBare = model.isPageFullscreen
     resizeHandle.isHidden = model.sidebar.isHidden || model.isPageFullscreen
     resizeHandle.frame = CGRect(x: layout.sidebar.maxX - 3, y: 0, width: 6, height: bounds.height)
-    trafficLights.place(
-      in: window, sidebarOrigin: sidebarFrame.origin, visible: !model.isPageFullscreen && sidebarFrame.maxX > 0)
+    if let controls = window as? any ClairWindowControls {
+      WindowControlsPlacement(sidebar: sidebarFrame, isPageFullscreen: model.isPageFullscreen).apply(to: controls)
+      readWindowControls(sidebar: sidebarFrame)
+    }
     layoutOverlays(card: layout.card)
     updateRevealTracking()
   }
@@ -254,6 +259,35 @@ final class BrowserRootView: NSView {
       let height = commandBarHost.fittingSize.height
       commandBarHost.frame = CGRect(
         x: bounds.midX - width / 2, y: CommandBarView.top(inWindowHeight: bounds.height), width: width, height: height)
+    }
+  }
+
+  // MARK: Window controls (place-traffic-lights-with-appkit D3b)
+
+  /// Reads where AppKit put the close and zoom buttons, as accessibility
+  /// reports them, so the top row lines up with them. Re-tiling is
+  /// synchronous, so they're already at the place just set; hidden ones are
+  /// left alone until they show.
+  private func readWindowControls(sidebar: CGRect) {
+    guard let window, !model.isPageFullscreen,
+      let close = window.standardWindowButton(.closeButton),
+      let zoom = window.standardWindowButton(.zoomButton),
+      !close.isHidden, !zoom.isHidden
+    else { return }
+    func topLeft(_ screenRect: CGRect) -> CGRect {
+      let rect = window.convertFromScreen(screenRect)
+      return CGRect(x: rect.minX, y: window.frame.height - rect.maxY, width: rect.width, height: rect.height)
+    }
+    let closeFrame = topLeft(close.accessibilityFrame())
+    let zoomFrame = topLeft(zoom.accessibilityFrame())
+    guard closeFrame.width > 0, zoomFrame.width > 0 else { return }
+    let read = WindowControlsMetrics(
+      centreY: closeFrame.midY - sidebar.minY, trailingX: zoomFrame.maxX - sidebar.minX)
+    if read.differs(from: model.windowControls) {
+      model.windowControls = read
+      if model.sidebar.width < read.narrowestSidebar {
+        model.sidebar.width = read.narrowestSidebar
+      }
     }
   }
 
@@ -388,80 +422,31 @@ final class SidebarResizeHandle: NSView {
   }
 }
 
-/// The window controls, in the sidebar (design D4). AppKit puts them back in
-/// the title bar's own layout whenever it lays that out again, such as when
-/// the window's title changes, so this puts them back where they belong.
-@MainActor
-final class TrafficLights {
-  /// The buttons' leading edges, and their top, from the sidebar's top left.
-  /// These read back through accessibility as Arc's 12, 35, 58 and 16, which
-  /// report the buttons a point further out than their frames.
-  static let xPositions: [CGFloat] = [13, 36, 59]
-  static let top: CGFloat = 17
-  static let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+/// Where the window controls go (design D4; place-traffic-lights-with-appkit
+/// D3): at Arc's offsets from the sidebar's top-leading corner, wherever the
+/// sidebar is, and hidden once it's off the window or a page is in full
+/// screen. The window's own title bar layout puts them there.
+struct WindowControlsPlacement: Equatable {
+  /// The close button's top-leading corner, from the sidebar's. Accessibility
+  /// reports the buttons a point up and left of their frames, so this reads
+  /// back as Arc's 12, 35 and 58 across and 16 down.
+  static let offset = CGPoint(x: 13, y: 17)
 
-  private weak var window: NSWindow?
-  private var sidebarOrigin = CGPoint.zero
-  private var visible = true
-  private var observers: [any NSObjectProtocol] = []
-  private var isPlacing = false
+  var origin: CGPoint
+  var isHidden: Bool
 
-  func place(in window: NSWindow?, sidebarOrigin: CGPoint, visible: Bool) {
-    guard let window else { return }
-    if window !== self.window {
-      self.window = window
-      observe(window)
-    }
-    self.sidebarOrigin = sidebarOrigin
-    self.visible = visible
-    apply()
+  init(sidebar: CGRect, isPageFullscreen: Bool) {
+    origin = CGPoint(x: sidebar.minX + Self.offset.x, y: sidebar.minY + Self.offset.y)
+    isHidden = isPageFullscreen || sidebar.maxX <= 0
   }
 
-  private func observe(_ window: NSWindow) {
-    for observer in observers {
-      NotificationCenter.default.removeObserver(observer)
+  /// Sets what changed, so an unchanged place doesn't lay the title bar out.
+  func apply(to controls: any ClairWindowControls) {
+    if controls.windowControlsOrigin != origin {
+      controls.windowControlsOrigin = origin
     }
-    let center = NotificationCenter.default
-    let reapply: @Sendable (Notification) -> Void = { [weak self] _ in
-      MainActor.assumeIsolated { self?.apply() }
-    }
-    observers = Self.types.compactMap { window.standardWindowButton($0) }.map { button in
-      button.postsFrameChangedNotifications = true
-      return center.addObserver(forName: NSView.frameDidChangeNotification, object: button, queue: .main, using: reapply)
-    }
-    // Not every move of the title bar's buttons reports a frame change, such
-    // as the one a new title brings; catch the rest after each event.
-    observers.append(center.addObserver(forName: NSWindow.didUpdateNotification, object: window, queue: .main, using: reapply))
-  }
-
-  private func apply() {
-    guard let window, !isPlacing else { return }
-    isPlacing = true
-    defer { isPlacing = false }
-    // The content view is flipped and fills the window, so its top left is
-    // the window's.
-    let windowHeight = window.contentView?.bounds.height ?? window.frame.height
-    for (type, x) in zip(Self.types, Self.xPositions) {
-      guard let button = window.standardWindowButton(type), let titlebar = button.superview else { continue }
-      button.isHidden = !visible
-      // From the window's top left to its base coordinates, then to the
-      // title bar's; keep the buttons inside the title bar, which clips them.
-      let top = sidebarOrigin.y + Self.top
-      let base = NSPoint(x: sidebarOrigin.x + x, y: windowHeight - top - button.frame.height)
-      var origin = titlebar.convert(base, from: nil)
-      origin.y = min(max(0, origin.y), max(0, titlebar.bounds.height - button.frame.height))
-      if button.frame.origin != origin {
-        button.setFrameOrigin(origin)
-      }
-      // The title bar view can sit a point off the window's edge; correct by
-      // where the button actually landed.
-      let landed = button.convert(button.bounds, to: nil).origin
-      let error = CGPoint(x: base.x - landed.x, y: base.y - landed.y)
-      if abs(error.x) >= 0.5 || abs(error.y) >= 0.5 {
-        var corrected = CGPoint(x: origin.x + error.x, y: origin.y + error.y)
-        corrected.y = min(max(0, corrected.y), max(0, titlebar.bounds.height - button.frame.height))
-        button.setFrameOrigin(corrected)
-      }
+    if controls.windowControlsHidden != isHidden {
+      controls.windowControlsHidden = isHidden
     }
   }
 }

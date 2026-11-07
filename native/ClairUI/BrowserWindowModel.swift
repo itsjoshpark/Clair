@@ -56,6 +56,7 @@ final class BrowserWindowModel {
   var exclusiveAccessNotice: String?
   var isPageFullscreen = false
   var isWindowKey = true
+  var windowControls = WindowControlsMetrics.macOS27
 
   init(profileKind: ProfileKind, sidebar: SidebarState) {
     self.profileKind = profileKind
@@ -98,11 +99,9 @@ struct Toast: Equatable, Identifiable {
 /// The sidebar's state in one window (design D12).
 struct SidebarState: Equatable {
   static let defaultWidth: CGFloat = 228
-  /// Arc's limits.
+  /// Arc's limits. The window controls can raise the lower one
+  /// (`WindowControlsMetrics.narrowestSidebar`).
   static let widthRange: ClosedRange<CGFloat> = 164...500
-  /// Below this width the top row is compact, as in Arc: back, forward and a
-  /// menu holding reload and Hide Sidebar.
-  static let compactTopRowWidth: CGFloat = 214
 
   var width: CGFloat
   var isHidden: Bool
@@ -118,11 +117,44 @@ struct SidebarState: Equatable {
     min(max(width, widthRange.lowerBound), widthRange.upperBound)
   }
 
-  var hasCompactTopRow: Bool { width < Self.compactTopRowWidth }
-
   /// Whether the sidebar takes its place beside the card, so its controls are
   /// where Chromium's bubbles attach.
   var isShownInPlace: Bool { !isHidden }
+}
+
+/// Where the window controls landed, relative to the sidebar's top-leading
+/// corner, as accessibility reads them (place-traffic-lights-with-appkit D3b).
+/// The top row is laid out from them, so the two line up on any macOS.
+struct WindowControlsMetrics: Equatable {
+  /// macOS 27's, which match Arc's, until the buttons are first read.
+  static let macOS27 = WindowControlsMetrics(centreY: 24, trailingX: 74)
+
+  /// The close button's vertical centre.
+  var centreY: CGFloat
+  /// The zoom button's trailing edge.
+  var trailingX: CGFloat
+
+  /// The gap between the zoom button and the top row's first button: 4 pt
+  /// more than Arc's 3, which the owner found too tight.
+  static let topRowGap: CGFloat = 7
+
+  /// Where the top row's first button may start. 81 on macOS 27.
+  var topRowLeading: CGFloat { trailingX + Self.topRowGap }
+
+  /// Below this sidebar width the top row is compact, as in Arc: back,
+  /// forward and a menu holding reload and Hide Sidebar. 218 on macOS 27.
+  var compactBelow: CGFloat { topRowLeading + 137 }
+
+  /// The narrowest sidebar, where the compact row's back button (90 pt from
+  /// the trailing edge) starts at the zoom button's edge. 164 on macOS 27.
+  var narrowestSidebar: CGFloat { max(SidebarState.widthRange.lowerBound, trailingX + 90) }
+
+  func hasCompactTopRow(width: CGFloat) -> Bool { width < compactBelow }
+
+  /// Whether `other` differs by half a point or more.
+  func differs(from other: WindowControlsMetrics) -> Bool {
+    abs(centreY - other.centreY) >= 0.5 || abs(trailingX - other.trailingX) >= 0.5
+  }
 }
 
 /// Find in page, while the find field is open.

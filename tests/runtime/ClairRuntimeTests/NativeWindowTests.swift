@@ -146,6 +146,38 @@ final class NativeWindowStructureTests: NativeWindowTestCase {
     XCTAssertTrue(browser.element("clair.urlField").exists, "The sidebar has no URL field")
     XCTAssertTrue(browser.element("clair.back").exists, "The sidebar has no back button")
   }
+
+  /// The window controls sit at Arc's place and the top row lines up with
+  /// them, before and after a title change (place-traffic-lights-with-appkit).
+  func testWindowControlsStayInPlace() async throws {
+    let (browser, tab) = try await startWithPage()
+    defer { tab.close() }
+
+    func check(_ when: String) {
+      let sidebar = browser.sidebar.frame
+      let close = browser.nativeWindow.buttons[XCUIIdentifierCloseWindow]
+      // A window that can go full screen has a full-screen button for zoom.
+      let fullScreen = browser.nativeWindow.buttons[XCUIIdentifierFullScreenWindow]
+      let zoom = fullScreen.exists ? fullScreen : browser.nativeWindow.buttons[XCUIIdentifierZoomWindow]
+      let hideSidebar = browser.element("clair.hideSidebar")
+      guard close.exists, zoom.exists, hideSidebar.exists else {
+        XCTFail("The window controls or the hide-sidebar button are missing \(when)")
+        return
+      }
+      XCTAssertEqual(close.frame.minX - sidebar.minX, 12, accuracy: 1.5, "The close button's x \(when)")
+      XCTAssertEqual(close.frame.minY - sidebar.minY, 16, accuracy: 1.5, "The close button's y \(when)")
+      XCTAssertEqual(hideSidebar.frame.midY, close.frame.midY, accuracy: 1, "The top row isn't centred on the window controls \(when)")
+      XCTAssertGreaterThanOrEqual(hideSidebar.frame.minX, zoom.frame.maxX, "The hide-sidebar button overlaps the zoom button \(when)")
+    }
+
+    check("at first")
+    _ = try await tab.evaluate("document.title = 'A different title'; 1")
+    let retitled = await browser.waitForTabs { $0.contains("A different title") }
+    try require(retitled, "The page's new title didn't reach the sidebar")
+    // Give AppKit's title bar a moment to lay out for the new window title.
+    try await Task.sleep(for: .seconds(1))
+    check("after a title change")
+  }
 }
 
 /// The page in the card, and the window's place across a relaunch (task 4.2).

@@ -8,6 +8,10 @@
 
 #import "chrome/browser/clair/window/clair_native_window.h"
 
+#include <os/log.h>
+#include <stdlib.h>
+
+
 #include "base/apple/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
@@ -358,12 +362,99 @@ bool ExecuteCommand(ClairBrowserWindow* window,
 
 @end
 
+// AppKit's frame view for titled windows. Private, and weak so Clair still
+// launches on a macOS without it, with AppKit's own button places. Chromium
+// declares and subclasses it the same way (BrowserWindowFrame in
+// components/remote_cocoa/app_shim/browser_native_widget_window_mac.mm).
+WEAK_IMPORT_ATTRIBUTE
+@interface NSThemeFrame : NSView
+@end
+
+@interface NSThemeFrame (ClairPrivateTitlebarAPI)
+- (CGFloat)_titlebarHeight;
+- (CGFloat)_minXTitlebarWidgetInset;
+- (void)_updateTitlebarContainerViewFrameIfNecessary;
+- (void)_updateButtonPositions;
+@end
+
+@interface NSWindow (ClairPrivateFrameAPI)
++ (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle;
+@end
+
+@interface ClairNativeWindow ()
+// Whether the buttons are hidden while their place keeps changing, on a macOS
+// where they can't follow it (design D1's fallback).
+@property(nonatomic, readonly) BOOL windowControlsHiddenForMotion;
+// Whether the theme frame can re-tile its title bar on request (design D2).
+@property(nonatomic, readonly) BOOL canRetileTitlebar;
+@end
+
+// Puts the window's buttons where its ClairWindowControls ask (design D1).
+// AppKit lays the buttons out from the leading inset and a fixed distance above
+// the title bar's bottom edge, so the title bar's height sets their top. In
+// window full screen, AppKit's title bar sits in the reveal strip, so it keeps
+// its own values.
+@interface ClairWindowFrame : NSThemeFrame
+@end
+
+@implementation ClairWindowFrame
+
+// From the requested top to the title bar's bottom edge, which AppKit anchors
+// the buttons to: measured on macOS 27 (task 1.3) as where the buttons'
+// accessibility frames land for ClairUI's requested place.
+static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
+
+- (ClairNativeWindow*)clairWindow {
+  return base::apple::ObjCCast<ClairNativeWindow>(self.window);
+}
+
+- (BOOL)usesAppKitPlaces {
+  ClairNativeWindow* window = self.clairWindow;
+  return !window || (window.styleMask & NSWindowStyleMaskFullScreen);
+}
+
+- (CGFloat)_titlebarHeight {
+  if (self.usesAppKitPlaces) {
+    return [super _titlebarHeight];
+  }
+  return self.clairWindow.windowControlsOrigin.y + kButtonsTopToTitlebarBottom;
+}
+
+- (CGFloat)_minXTitlebarWidgetInset {
+  if (self.usesAppKitPlaces) {
+    return [super _minXTitlebarWidgetInset];
+  }
+  return self.clairWindow.windowControlsOrigin.x;
+}
+
+- (void)layout {
+  [super layout];
+  ClairNativeWindow* window = self.clairWindow;
+  if (!window) {
+    return;
+  }
+  // AppKit's layout may show the buttons again; the window's state wins.
+  for (NSWindowButton type :
+       {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
+    [window standardWindowButton:type].hidden =
+        window.windowControlsHidden || window.windowControlsHiddenForMotion;
+  }
+}
+
+@end
+
 @implementation ClairNativeWindow {
   ClairBrowserWindow* _browserWindow;  // Weak; owns this window.
   CommandDispatcher* __strong _commandDispatcher;
   ClairCommandDispatcherDelegate* __strong _commandDispatcherDelegate;
   id<UserInterfaceItemCommandHandler> __strong _commandHandler;
   ClairNativeWindowDelegate* __strong _windowDelegate;
+  CGPoint _windowControlsOrigin;
+  BOOL _windowControlsHidden;
+  BOOL _windowControlsHiddenForMotion;
+  // Bumped on every place change in D1's fallback; a pending show for an
+  // older one does nothing.
+  NSUInteger _windowControlsMoveCount;
 }
 
 - (instancetype)initWithBrowserWindow:(ClairBrowserWindow*)browserWindow
@@ -377,6 +468,8 @@ bool ExecuteCommand(ClairBrowserWindow* window,
                                  backing:NSBackingStoreBuffered
                                    defer:YES])) {
     _browserWindow = browserWindow;
+    // Arc's place until ClairUI says otherwise.
+    _windowControlsOrigin = CGPointMake(12, 16);
     self.releasedWhenClosed = NO;
     self.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
     _commandDispatcher = [[CommandDispatcher alloc] initWithOwner:self];
@@ -390,8 +483,106 @@ bool ExecuteCommand(ClairBrowserWindow* window,
   return self;
 }
 
++ (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle {
+  if ((windowStyle & NSWindowStyleMaskTitled) && [ClairWindowFrame class]) {
+    return [ClairWindowFrame class];
+  }
+  return [super frameViewClassForStyleMask:windowStyle];
+}
+
 - (ClairBrowserWindow*)browserWindow {
   return _browserWindow;
+}
+
+// ClairWindowControls (design D2).
+
+- (CGPoint)windowControlsOrigin {
+  return _windowControlsOrigin;
+}
+
+- (BOOL)windowControlsHidden {
+  return _windowControlsHidden;
+}
+
+- (BOOL)windowControlsHiddenForMotion {
+  return _windowControlsHiddenForMotion;
+}
+
+- (void)setWindowControlsOrigin:(CGPoint)origin {
+  if (CGPointEqualToPoint(origin, _windowControlsOrigin)) {
+    return;
+  }
+  _windowControlsOrigin = origin;
+  if (self.canRetileTitlebar) {
+    [self layOutTitlebarNow];
+  } else {
+    [self hideWindowControlsWhileMoving];
+  }
+}
+
+// Whether the theme frame can re-tile its title bar on request, which moving
+// the buttons with the sidebar needs (design D2).
+- (BOOL)canRetileTitlebar {
+  // CLAIR_WINDOW_CONTROLS_FALLBACK=1 takes the fallback on any macOS, to check
+  // it on one that doesn't need it.
+  static const bool forced_fallback =
+      getenv("CLAIR_WINDOW_CONTROLS_FALLBACK") != nullptr;
+  if (forced_fallback) {
+    return NO;
+  }
+  NSView* frame = self.contentView.superview;
+  return [frame respondsToSelector:@selector
+                (_updateTitlebarContainerViewFrameIfNecessary)] &&
+         [frame respondsToSelector:@selector(_updateButtonPositions)];
+}
+
+// D1's fallback: hides the buttons while their place keeps changing, and shows
+// them once it has been still for 150 ms, after asking AppKit to re-tile the
+// title bar by re-setting the style mask.
+- (void)hideWindowControlsWhileMoving {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    os_log(os_log_create("dev.joshuapark.Clair", "Window"),
+           "The window controls can't follow the sidebar on this macOS; "
+           "hiding them while it moves.");
+  });
+  const NSUInteger move = ++_windowControlsMoveCount;
+  if (!_windowControlsHiddenForMotion) {
+    _windowControlsHiddenForMotion = YES;
+    [self layOutTitlebarNow];
+  }
+  __weak ClairNativeWindow* weak_self = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 150 * NSEC_PER_MSEC),
+                 dispatch_get_main_queue(), ^{
+                   ClairNativeWindow* window = weak_self;
+                   if (!window || window->_windowControlsMoveCount != move) {
+                     return;
+                   }
+                   window->_windowControlsHiddenForMotion = NO;
+                   window.styleMask = window.styleMask;
+                   [window layOutTitlebarNow];
+                 });
+}
+
+- (void)setWindowControlsHidden:(BOOL)hidden {
+  if (hidden == _windowControlsHidden) {
+    return;
+  }
+  _windowControlsHidden = hidden;
+  [self layOutTitlebarNow];
+}
+
+// Moves the buttons at once, so they move in the same display frame as the
+// sidebar that asked. AppKit reads the height and inset again only when it
+// re-tiles the title bar, which a layout pass alone doesn't do (task 1.3).
+- (void)layOutTitlebarNow {
+  NSView* frame = self.contentView.superview;
+  if (self.canRetileTitlebar) {
+    [(NSThemeFrame*)frame _updateTitlebarContainerViewFrameIfNecessary];
+    [(NSThemeFrame*)frame _updateButtonPositions];
+  }
+  frame.needsLayout = YES;
+  [frame layoutSubtreeIfNeeded];
 }
 
 - (void)detachBrowserWindow {

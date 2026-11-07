@@ -211,11 +211,18 @@ final class FakeAutocomplete: NSObject, ClairAutocomplete {
   }
 }
 
+/// A stand-in for `ClairNativeWindow`: records where ClairUI puts the window
+/// controls.
+final class FakeWindow: NSWindow, ClairWindowControls {
+  var windowControlsOrigin = CGPoint.zero
+  var windowControlsHidden = false
+}
+
 /// A stand-in for Chromium's `ClairBrowser`. Its helpers change the tabs and
 /// tell the window through the same `ClairWindow` calls Chromium makes, and
 /// it records the commands ClairUI sends.
 final class FakeBrowser: NSObject, ClairBrowser {
-  let window: NSWindow
+  let window: NSWindow & ClairWindowControls
   let profileKind: ProfileKind
   private(set) var tabs: [any ClairTab] = []
   private(set) var activeTabID: TabID = ClairTabIDNone
@@ -236,7 +243,7 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   init(profileKind: ProfileKind = .regular) {
     self.profileKind = profileKind
-    window = NSWindow(
+    window = FakeWindow(
       contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), styleMask: [.titled, .closable, .resizable],
       backing: .buffered, defer: true)
     window.isReleasedWhenClosed = false
