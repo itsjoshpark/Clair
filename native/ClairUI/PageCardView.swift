@@ -17,6 +17,24 @@ final class PageCardView: NSView {
 
   private(set) weak var pageView: NSView?
   private(set) weak var devToolsView: NSView?
+
+  /// The tab's infobars, above the page.
+  var infobarView: NSView? {
+    didSet {
+      oldValue?.removeFromSuperview()
+      if let infobarView { container.addSubview(infobarView) }
+      needsLayout = true
+    }
+  }
+
+  /// The crashed-page view, in place of the page.
+  var crashedView: NSView? {
+    didSet {
+      oldValue?.removeFromSuperview()
+      if let crashedView { container.addSubview(crashedView) }
+      needsLayout = true
+    }
+  }
   private var devToolsLayout = DevToolsLayout(dockSide: .none, pageBounds: .zero, hidesPage: false)
 
   /// Whether the card shows the page alone, as in page full screen: no corners
@@ -83,15 +101,23 @@ final class PageCardView: NSView {
     container.frame = bounds
     layer?.shadowPath = isBare ? nil : CGPath(
       roundedRect: bounds, cornerWidth: Self.cornerRadius, cornerHeight: Self.cornerRadius, transform: nil)
-    let card = container.bounds
+    var card = container.bounds
+    if let infobarView {
+      let height = infobarView.fittingSize.height
+      infobarView.frame = CGRect(x: 0, y: 0, width: card.width, height: height)
+      card = card.divided(atDistance: height, from: .minYEdge).remainder
+    }
+    if let crashedView {
+      crashedView.frame = card
+    }
     if let devToolsView {
       devToolsView.frame = card
       let page = DevToolsPlacement.pageFrame(in: card.size, layout: devToolsLayout)
-      pageView?.frame = page ?? .zero
-      pageView?.isHidden = page == nil
+      pageView?.frame = page?.offsetBy(dx: card.minX, dy: card.minY) ?? .zero
+      pageView?.isHidden = page == nil || crashedView != nil
     } else {
       pageView?.frame = card
-      pageView?.isHidden = false
+      pageView?.isHidden = crashedView != nil
     }
   }
 }

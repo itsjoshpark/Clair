@@ -25,14 +25,35 @@ final class BrowserWindowModel {
   private(set) var extensionActions: [any ClairExtensionAction] = []
   private(set) var downloads: [any ClairDownload] = []
 
+  var pinnedExtensionActions: [any ClairExtensionAction] {
+    extensionActions.filter(\.isPinned)
+  }
+
+  /// Whether the downloads button shows a finished download the user hasn't
+  /// looked at.
+  var hasUnseenDownloads: Bool {
+    downloads.contains { $0.state == .complete && !$0.isSeen }
+  }
+
+  /// The overall progress of running downloads, 0 to 1, or nil when none runs
+  /// or none knows its size.
+  var downloadProgress: Double? {
+    let running = downloads.filter { $0.state == .inProgress && $0.totalBytes > 0 }
+    guard !running.isEmpty else { return nil }
+    let received = running.reduce(Int64(0)) { $0 + $1.receivedBytes }
+    let total = running.reduce(Int64(0)) { $0 + $1.totalBytes }
+    return total > 0 ? Double(received) / Double(total) : nil
+  }
+
   // --- the window's own state ---
   var sidebar: SidebarState
-  var commandBar: CommandBarMode?
+  var commandBar: CommandBarModel?
   var find: FindState?
   var statusText: String?
-  var toast: String?
+  var toast: Toast?
   var exclusiveAccessNotice: String?
   var isPageFullscreen = false
+  var isWindowKey = true
 
   init(profileKind: ProfileKind, sidebar: SidebarState) {
     self.profileKind = profileKind
@@ -65,6 +86,13 @@ final class BrowserWindowModel {
   }
 }
 
+/// A toast at the bottom of the card. Each has its own ID, so the same
+/// message twice still shows twice.
+struct Toast: Equatable, Identifiable {
+  let id = UUID()
+  let message: String
+}
+
 /// The sidebar's state in one window (design D12).
 struct SidebarState: Equatable {
   static let defaultWidth: CGFloat = 228
@@ -76,8 +104,12 @@ struct SidebarState: Equatable {
   var isRevealed = false
 
   init(width: CGFloat = SidebarState.defaultWidth, isHidden: Bool = false) {
-    self.width = min(max(width, Self.widthRange.lowerBound), Self.widthRange.upperBound)
+    self.width = Self.clamp(width)
     self.isHidden = isHidden
+  }
+
+  static func clamp(_ width: CGFloat) -> CGFloat {
+    min(max(width, widthRange.lowerBound), widthRange.upperBound)
   }
 
   /// Whether the sidebar takes its place beside the card, so its controls are
@@ -93,5 +125,12 @@ struct FindState: Equatable {
   static func == (lhs: FindState, rhs: FindState) -> Bool {
     lhs.text == rhs.text && lhs.result.activeMatch == rhs.result.activeMatch
       && lhs.result.matchCount == rhs.result.matchCount && lhs.result.finished == rhs.result.finished
+  }
+
+  /// "1 of 3", or nothing before there's a result.
+  var resultText: String {
+    if text.isEmpty { return "" }
+    if result.matchCount == 0 { return result.finished ? "0 of 0" : "" }
+    return "\(result.activeMatch) of \(result.matchCount)"
   }
 }
