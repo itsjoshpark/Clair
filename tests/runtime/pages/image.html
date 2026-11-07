@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair image page</title>
+<style>body { margin: 0 } canvas { display: block }</style>
+<img id="image" width="400" height="300" alt="test image">
+<script>
+  // A generated image, so the page needs nothing from the network.
+  const canvas = document.createElement('canvas');
+  canvas.width = 400;
+  canvas.height = 300;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#3366cc';
+  context.fillRect(0, 0, 400, 300);
+  context.fillStyle = '#ffffff';
+  context.fillText('Clair', 180, 150);
+  document.getElementById('image').src = canvas.toDataURL('image/png');
+</script>

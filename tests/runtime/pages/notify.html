@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair permission page</title>
+<!-- Asks for notifications: Chromium's prompt shows before macOS's, so this
+     works on a runner without a camera or location. -->
+<button id="ask" onclick="ask()">Ask</button>
+<p id="state">none</p>
+<script>
+  window.permissionResult = null;
+  function ask() {
+    Notification.requestPermission().then((result) => {
+      window.permissionResult = result;
+      document.getElementById('state').textContent = result;
+    });
+  }
+</script>

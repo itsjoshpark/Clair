@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair leave page</title>
+<p>Click anywhere, then close the window: Clair asks before leaving.</p>
+<script>
+  window.addEventListener('beforeunload', (event) => {
+    event.preventDefault();
+    event.returnValue = '';
+  });
+</script>

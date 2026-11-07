@@ -77,7 +77,8 @@ Rules:
 
 ### D4. The window and key handling
 
-- **The `NSWindow` comes from Chromium.** `ClairBrowser` hands `ClairUI` an `NSWindow` subclass from the overlay, `ClairNativeWindow`, which adopts Chromium's `CommandDispatchingWindow` with a `CommandDispatcher` and `ChromeCommandDispatcherDelegate`, as Chromium's own windows do. `ClairUI` styles it (borderless title bar, full-size content view, traffic-light positions) and fills its content view.
+- **The `NSWindow` comes from Chromium.** `ClairBrowser` hands `ClairUI` an `NSWindow` subclass from the overlay, `ClairNativeWindow`, which adopts Chromium's `CommandDispatchingWindow` with a `CommandDispatcher`, as Chromium's own windows do. `ClairUI` styles it (borderless title bar, full-size content view, traffic-light positions) and fills its content view. The window's delegate stays the overlay's, which reports activation, geometry, full screen and the close button to `ClairBrowserWindow`.
+  - Chromium's `ChromeCommandDispatcherDelegate` and `BrowserWindowCommandHandler` reach the browser through Views' window bridge, which a native window doesn't have. The overlay has its own delegate and command handler with the same order and rules (reserved commands before the page, the rest after it), calling the browser directly, as `BrowserNativeWidgetMac` does.
   - Why: key equivalents, Chromium's reserved shortcuts (`PreHandleKeyboardEvent`), and the redispatch of keys a page didn't handle then work through Chromium's tested Mac code, and `chrome::FindBrowserWithWindow` finds the browser for menu commands.
   - Alternative: a Swift `NSWindow` with a forwarding hook for shortcuts, as Crest's `handleShortcutEvent:` does. Rejected, because it re-implements Chromium's dispatch order in Swift.
 - **Layout**, from `arc-reference/look-and-behaviour.md`:
@@ -104,6 +105,7 @@ Rules:
 
 - Window full screen is macOS's. `ClairBrowserWindow` reports it through `IsFullscreen` and the bounds methods, and Chromium hears each transition, as Crest's `CrestExclusiveAccessContext` does.
 - Page full screen: `ClairExclusiveAccessContext::EnterFullscreen` asks `ClairUI` to show the page alone (no sidebar, insets or corners) and puts the window into macOS full screen if it isn't already. `ExitFullscreen` reverses only what it changed, so a window that was already full screen stays so. Chromium's exclusive-access bubble ("Press Esc to exit full screen") is a Views bubble; for this change it is replaced by a native capsule at the top of the screen that disappears after Chromium's usual time.
+- Esc: Chromium ends page full screen when Esc reaches the page (`BrowserWebContentsDelegate::PreHandleKeyboardEvent`). The native window also hands Esc to the `ExclusiveAccessManager` itself during page full screen, so it works whatever has the keyboard, as Chromium's `BrowserView` accelerator does. An Esc while the window is still animating into full screen, when AppKit ignores a request to leave, ends full screen once the window is in.
 
 ### D7. The toolbar in the sidebar, and where Chromium's bubbles attach
 
@@ -112,7 +114,7 @@ Rules:
 - **Extension actions:**
   - `ClairExtensionsContainer` reads `ToolbarActionsModel` for pinned order, and each action's `ExtensionActionViewModel` for icon, badge, title and popup, and pushes snapshots.
   - A click runs the action through Chromium.
-  - A popup is a native `NSPopover` attached to the clicked button. It hosts the popup's `ExtensionViewHost` page view and follows its auto-resize (25×25 to 800×600), as Crest hosts its extension popups.
+  - A popup's page view comes from the popup's `ExtensionViewHost`, and `ClairUI` shows it attached to the clicked button, following its auto-resize (25×25 to 800×600), as Crest hosts its extension popups. `ClairUI` presents it in a borderless child window rather than an `NSPopover`: Crest found that on macOS 27 a popover tints the page it hosts with its own material.
   - `chrome.action.openPopup()` reaches the same container through `ShowToolbarActionPopupForAPICall`.
 - **Indicators** come from the capture indicator and the tab's content settings, in the tab snapshot.
 - **Downloads:**
@@ -123,7 +125,7 @@ Rules:
 ### D8. Find, status, infobars and toasts
 
 - **Find:** `ClairFindBar` implements `FindBar` (as `FindBarOwnerWebUIBrowser` does) and reports `FindNotificationDetails` to `ClairUI`. The field calls `FindTabHelper::StartFinding` and `StopFinding`. Cmd+F, Cmd+G and Shift+Cmd+G stay Chromium's commands, which reach the find bar through `BrowserWindow`.
-- **Status:** `GetStatusBubbles` returns `ClairStatusBubble`, which forwards the URL text.
+- **Status:** the `browser_web_contents_delegate.cc` hook hands the hovered link's URL to `ClairStatusBubble`, which forwards the URL text. `GetStatusBubbles` returns none, since Chromium treats every bubble it returns as a Views one.
 - **Infobars:** the overlay observes each tab's `InfoBarManager` and sends `ConfirmInfoBarDelegate`s as message, link and button snapshots, with their actions coming back through `ClairBrowser`. Infobars of other kinds are logged and dismissed, and none is expected in this release's flows.
 - **Toasts:** the hook in `toast_controller.cc` sends a toast's string to `ClairUI` for a native window. Without it, `ToastController` reaches `CHECK_IS_TEST()` when it finds no anchor view. Zoom changes use the same toast path through the zoom bubble's entry point.
 
@@ -137,14 +139,15 @@ Rules:
 | Docked DevTools | Native host in the card for Chromium's DevTools page (D5) |
 | Permission prompt, page info, extension install prompt | Chromium's Views bubble, anchored (D7) |
 | Extension popup | Native popover hosting Chromium's popup page (D7) |
-| JavaScript dialogs, HTTP auth, print preview, other tab-modal dialogs | Chromium's, through `ClairModalDialogHost` |
-| Context menus, file pickers, color picker, date pickers | Chromium's, unchanged (already native `NSMenu` and panels, or owned by the page) |
+| JavaScript dialogs, HTTP auth, print preview, other tab-modal dialogs | Chromium's, through `ClairModalDialogHost`, placed over the card as child windows by a hook (D13) |
+| Context menus | Chromium's `NSMenu`, shown through a hook (D13), without the items of unavailable features: split view, reading mode, QR code, send tab to self, Lens and translate |
+| File pickers, color picker, date pickers | Chromium's, unchanged (native panels, or owned by the page) |
 | Undocked DevTools, pop-up, app and Picture-in-Picture windows, profile picker, task manager | Chromium's own windows |
 | `chrome://` pages | Tabs, unchanged |
 | Zoom bubble | Toast (D8) |
 | Bookmark bubble, bookmark star, bookmarks bar, Bookmarks menu | Removed (D10): the `BrowserWindow` methods do nothing |
 | Password and autofill bubbles and popups | Turned off at the source (D17); the `BrowserWindow` methods also do nothing |
-| Side panels (reading list, reader mode, extension side panels), tab search, Chrome Labs, Lens, QR code, send tab to self, sharing hub, cast, app menu, profile menu, tab groups UI, customize Chrome, PWA install and intent picker, EyeDropper, caret browsing dialog, translate | Unavailable: the `BrowserWindow` method does nothing (returns null where it creates something, so the EyeDropper API rejects), logs once, and D10 hides the menu item |
+| Side panels (reading list, reader mode, extension side panels), tab search, Chrome Labs, Lens, QR code, send tab to self, sharing hub, cast, app menu, profile menu, tab groups UI, split view, customize Chrome, PWA install and intent picker, EyeDropper, caret browsing dialog, translate | Unavailable: the `BrowserWindow` method does nothing (returns null where it creates something, so the EyeDropper API rejects), logs once, and D10 hides the menu item |
 
 Task 3.4 checks each row against the engine. A row that fails (a crash or missing UI) is fixed with a hook into overlay code. Its handling may move between "anchored" and "native" without a spec change, since the specs describe what the user sees, not who draws it.
 
@@ -154,13 +157,15 @@ Chromium's main menu stays, with these changes, applied by the overlay once `Cla
 
 - **Hidden** (by command tag), with their key equivalents:
   - The whole Bookmarks menu, which takes Cmd+D, Shift+Cmd+B and Opt+Cmd+B with it.
-  - The items for D9's unavailable features: View > Always Show Bookmarks Bar, Always Show Toolbar in Full Screen, Always Show Full URLs, Customize Chrome, the tab search and tab group items, and Chrome Labs.
+  - The items for D9's unavailable features: View > Always Show Bookmarks Bar, Always Show Toolbar in Full Screen, Always Show Full URLs, Customize Chrome, the tab search, tab group and split view items, Cast, and Chrome Labs.
+  - View's omnibox settings (Always Show Image Search Shortcut, Always Show AI Mode, Show Search Shortcuts), with no omnibox to apply to.
   - Any password or autofill item.
 
   Cmd+D stays unassigned until the MVP gives it Pin/Unpin Tab.
-- **Cmd+T, File > New Tab:** the item is retargeted to open the command bar in the key native window, the same way change 1 retargets "About Clair", so no `browser_commands.cc` patch is needed. With a Chromium window key (DevTools, a pop-up) it runs `IDC_NEW_TAB` as before.
+- **Cmd+T, File > New Tab:** in a native window, the window's command handler opens the command bar for `IDC_NEW_TAB`, whether it comes from the menu or the key, so no `browser_commands.cc` patch is needed. With a Chromium window key (DevTools, a pop-up) it runs `IDC_NEW_TAB` as before.
 - **Cmd+L:** stays `IDC_FOCUS_LOCATION`, which reaches `ClairBrowserWindow::SetFocusToLocationBar` and opens the command bar on the current URL.
-- **Cmd+S and Shift+Cmd+S:** Cmd+S moves from File > Save Page As… to a new View > Hide Sidebar item, which reads Show Sidebar while the sidebar is hidden. Save Page As… gets Shift+Cmd+S, as in Arc (`menus-and-shortcuts.md`). Shift+Cmd+S is free in Chromium's Mac menus.
+- **Cmd+S and Shift+Cmd+S:** Cmd+S moves from File > Save Page As… to a new View > Hide Sidebar item, which reads Show Sidebar while the sidebar is hidden. Save Page As… gets Shift+Cmd+S, as in Arc (`menus-and-shortcuts.md`). Shift+Cmd+S is free in Chromium's Mac menus. The native window's command dispatcher treats Hide Sidebar as reserved, so a page that handles Cmd+S itself can't keep it.
+- Hidden items also lose their key equivalents, since AppKit still fires a hidden item's shortcut, and the native window's command handler keeps them hidden and disabled whenever the menu is validated.
 
 The rest of `arc-reference/clair-menus.md` is the MVP's.
 
@@ -177,7 +182,7 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
 
   Up to five rows show, as in Arc.
 - **Opening:** `Navigate` with the match's destination and transition. Cmd+T, Shift+Return and Cmd+Return use a new foreground tab, which D12's placement puts at the top of the sidebar. Cmd+L uses the current tab. A match with an open tab activates that tab and its window instead.
-- **Empty query:** the window's tabs by last active time, then `TopSites` for the profile, built in the overlay rather than through zero-suggest, which ungoogled-chromium leaves without a remote source.
+- **Empty query:** the window's tabs other than the active one, by last active time, then `TopSites` for the profile, built in the overlay rather than through zero-suggest, which ungoogled-chromium leaves without a remote source.
 - **Keywords:** Tab on a match with an associated keyword re-runs the query in keyword mode, as `OmniboxEditModel::AcceptKeyword` does, and the bar shows the engine's icon and name.
 - **Panel:** a SwiftUI view about 760 pt wide (shrinking to fit the window), centred on the window, its top about a third of the way down, with a large soft shadow and no dimming. The selected row uses the accent colour.
 
@@ -208,15 +213,22 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
 | `chrome/browser/ui/views/frame/browser_window_factory.cc` | create `ClairBrowserWindow` (D2) |
 | `chrome/browser/ui/tabs/tab_strip_model.cc` | new tabs at index 0 in a native window (D12) |
 | `chrome/browser/devtools/devtools_window_views.cc` | docked DevTools to the overlay when there's no `DevtoolsUIController` (D5) |
+| `chrome/browser/devtools/devtools_window.cc` | let a native window dock DevTools (Chromium only docks where a `DevtoolsUIController` exists), and hand the docked DevTools to the overlay when it first shows (D5) |
 | `chrome/browser/ui/views/bubble_anchor_util_views.cc` | anchor rect for a browser without `BrowserView` (D7) |
 | `chrome/browser/ui/toasts/toast_controller.cc` | toast to `ClairUI` (D8) |
-| `chrome/browser/ui/sad_tab_controller.cc` or `tabs/tab_features.cc` | crashed page to `ClairUI` (D5) |
+| `chrome/browser/ui/sad_tab_controller.cc` | skip the Views sad tab, which dereferences the `BrowserView`; the overlay's tab snapshot reports the crash (D5) |
 | `chrome/browser/download/download_ui_controller.cc` | new download to the sidebar (D7) |
+| `chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc` | the hovered link's URL to the status capsule: Chromium casts every status bubble to its Views one, so a native window returns none and is told directly (D8; found on the first engine, where hovering a page crashed) |
 | `chrome/browser/prefs/browser_prefs.cc` | Clair's password and autofill defaults (D17) |
-| `chrome/browser/resources/settings/page_visibility.ts` | `autofill: false`, hiding the section (D17) |
-| `chrome/browser/ui/BUILD.gn` | the overlay's sources |
+| `chrome/browser/resources/settings/page_visibility.ts` | hide the "Autofill and passwords" section (D17) |
+| `chrome/browser/ui/webui/new_tab_page/new_tab_page_handler.cc`, `chrome/browser/new_tab_page/feature_promo_helper/new_tab_page_feature_promo_helper.cc`, `chrome/browser/ui/extensions/extension_install_ui_desktop.cc` | skip the new tab page's footer and promo and the extension-installed toolbar hint, whose controllers only exist with a `BrowserView` (found by Crest on 156) |
+| `chrome/browser/ui/read_anything/read_anything_side_panel_controller.cc` | closing the active tab otherwise reaches `CHECK_IS_TEST()` for a browser without a side panel |
+| `components/constrained_window/constrained_window_views.cc` | place tab-modal dialogs (JavaScript dialogs, leave prompts, HTTP authentication, print preview) and browser-modal ones (the extension install prompt, which Chromium makes a sheet on a Views window) over the card. Chromium positions them only over a Views host, and otherwise leaves them in the middle of the screen (found in task 3.4). The placement lives in `overlay/components/constrained_window/clair_native_host_mac.mm` |
+| `ui/views/widget/native_widget_mac.mm` | keep a Views widget whose parent view is in a native window (permission prompts, page info, extension and tab-modal dialogs) a child window of it. Otherwise it's a free top-level window, which the browser window covered, so the permission prompt couldn't be clicked (found in task 3.4's runtime tests). The attachment lives in `overlay/ui/views/cocoa/clair_native_parent.mm` |
+| `chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm` | show a page's context menu without a Views widget, which Chromium otherwise requires, so no context menu opened (found in task 3.4); drop the items of unavailable features (adapted from Crest) |
+| `chrome/browser/ui/BUILD.gn`, `components/constrained_window/BUILD.gn`, `ui/views/BUILD.gn` | the overlay's sources |
 
-Task 3.4 adds a hunk only when a surface in D9 fails without it, with the reason in the patch header, as Crest's patches state theirs. Behavior stays in the overlay, as the modified `chromium-engine` requirement needs.
+The first engine build already includes the hunks for call sites that Crest's `native-host.patch` and Chromium's own `IsWebUIBrowserEnabled()` checks show crash for a browser without a `BrowserView` on 156. Task 3.4 adds a hunk only when a surface in D9 fails without it, with the reason in the patch header, as Crest's patches state theirs. Behavior stays in the overlay, as the modified `chromium-engine` requirement needs.
 
 ### D14. Tests
 
@@ -244,7 +256,7 @@ The spike measures edit-to-run time for a `ClairUI` change. Through CI it is a p
 `scripts/run-local.sh` makes a local loop:
 1. It downloads `chromium-engine-<key>` for the checkout once, caches it, and checks it against its SHA-256.
 2. It builds `ClairUI` and packages ad hoc with `package.sh`.
-3. It launches the app with a throwaway `--user-data-dir` under the scratch area and `--use-mock-keychain`, so the owner's own Clair data and keychain are never touched, as the engine smoke test already does.
+3. It launches the app with a throwaway `--user-data-dir` under the scratch area and `--use-mock-keychain`, so the owner's own Clair data and keychain are never touched, as the engine smoke test already does. The app's user defaults (the sidebar's width and state, Sparkle's state) share the bundle ID's domain with an installed Clair, so the script saves that domain before the launch and puts it back afterwards.
 
 It never fetches or builds Chromium, and it needs only `curl`, `gh`, Xcode and the repository's scripts, with no new packages. Its `*.test.sh` covers the cache, a key with no published engine, and the throwaway profile.
 
@@ -268,7 +280,7 @@ Users are expected to keep passwords in a dedicated password manager, so Clair d
 
 - **Defaults:** the `browser_prefs.cc` hook calls `clair::RegisterProfilePrefOverrides`, which sets the default of each pref to false: `credentials_enable_service` (password saving and filling), `credentials_enable_autosignin`, `autofill.profile_enabled` (addresses, and Chromium's single-field autocomplete) and `autofill.credit_card_enabled`.
 - **Existing profiles:** when the first native window for a profile is created, the overlay clears any user-set value for those prefs, so a 0.1.x profile that had them on follows the new defaults. There's no UI to turn them back on.
-- **Settings:** the `page_visibility.ts` hook sets `autofill: false`, the switch Chromium already uses to hide the section for guest profiles. `chrome://password-manager` still opens when typed, so passwords saved earlier can be exported.
+- **Settings:** the `page_visibility.ts` hook hides the section for regular profiles with the switches Chromium already uses for guest profiles. In 156 the section's menu item and page are gated by `yourSavedInfo` (with `autofill` beside it), and the menu hides any item a visibility object leaves out, so the hook lists every other section as visible. `chrome://password-manager` still opens when typed, so passwords saved earlier can be exported.
 - **Bubbles:** with saving off, Chromium never asks for the password bubbles, and the `BrowserWindow` methods for them do nothing anyway (D9).
 - An extension can still set these prefs through `chrome.privacy.services`. That's left alone. It's rare, and blocking it would mean patching the extension API.
 

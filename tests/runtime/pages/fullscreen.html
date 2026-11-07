@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair full screen page</title>
+<style>#stage { width: 320px; height: 180px; background: #222 }</style>
+<div id="stage"></div>
+<script>
+  function enter() {
+    return document.getElementById('stage').requestFullscreen().then(() => 'entered');
+  }
+</script>

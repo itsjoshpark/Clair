@@ -9,6 +9,8 @@
 
 #include <string>
 
+#import <objc/runtime.h>
+
 #import "ClairHost.h"
 
 @interface ObjCxxHost : NSObject <ClairHost>
@@ -45,6 +47,31 @@
                  ClairRelaunchBlockersIncognitoWindow);
 }
 
+// The window contract's value types and protocols, used from C++ as the
+// overlay uses them.
+- (void)testWindowContractCompilesInObjectiveCxx {
+  ClairDevToolsLayout layout = {ClairDevToolsDockSideRight, NSMakeRect(0, 0, 640, 480), false};
+  XCTAssertEqual(layout.dockSide, ClairDevToolsDockSideRight);
+  ClairAnchor anchor = {NSMakeRect(12, 700, 24, 24), ClairAnchorEdgeTrailing};
+  XCTAssertEqual(anchor.edge, ClairAnchorEdgeTrailing);
+  ClairFindResult find = {1, 3, true};
+  XCTAssertEqual(find.matchCount, 3);
+  ClairTabIndicators indicators = ClairTabIndicatorsCamera | ClairTabIndicatorsBlockedPermission;
+  XCTAssertTrue(indicators & ClairTabIndicatorsCamera);
+  ClairTabID none = ClairTabIDNone;
+  XCTAssertEqual(none, -1);
+  std::string kinds[] = {"regular", "incognito", "guest"};
+  XCTAssertEqual(kinds[ClairProfileKindGuest], "guest");
+  for (Protocol* protocol in @[
+         @protocol(ClairBrowser), @protocol(ClairWindow), @protocol(ClairTab),
+         @protocol(ClairAutocomplete), @protocol(ClairAutocompleteDelegate),
+         @protocol(ClairSuggestion), @protocol(ClairDownload),
+         @protocol(ClairExtensionAction), @protocol(ClairInfobar)
+       ]) {
+    XCTAssertTrue(protocol_conformsToProtocol(protocol, @protocol(NSObject)));
+  }
+}
+
 - (void)testFrameworkPrincipalClassConformsToEntryPoint {
   NSBundle* bundle = [NSBundle bundleWithIdentifier:@"dev.joshuapark.Clair.ClairUI"];
   XCTAssertNotNil(bundle);
@@ -53,6 +80,7 @@
   XCTAssertNotNil(principal);
   XCTAssertTrue([principal conformsToProtocol:@protocol(ClairUIEntryPoint)]);
   XCTAssertTrue([principal respondsToSelector:@selector(startWithHost:)]);
+  XCTAssertTrue([principal respondsToSelector:@selector(windowForBrowser:)]);
 }
 
 @end

@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Save Page As is now Shift+Cmd+S. Bookmarks, password saving and autofill are gone from the new window: export saved passwords from chrome://password-manager/settings before relying on another password manager. Tab groups, split view, side panels such as reading mode, tab search, Lens, translate, Cast and the EyeDropper aren''t available in it'
+time: 2026-11-06T23:46:09.293238-05:00
