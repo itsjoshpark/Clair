@@ -84,7 +84,9 @@ Rules:
 - **Layout**, from `arc-reference/look-and-behaviour.md`:
   - The sidebar is 228 pt wide by default.
   - The card is inset 10 pt at the top, trailing and bottom edges and 0 pt on the sidebar side, or 5 pt all round with the sidebar hidden. Its corner radius is 8 pt, with a soft shadow.
-  - The traffic lights sit at x+12/35/58, y+16, and the top row's buttons are 32×32.
+  - The traffic lights sit at x+12/35/58, y+16 (Arc's accessibility frames), and move with the sidebar as it slides. AppKit puts them back in its own layout when it lays out the title bar again, as a new window title does, so `ClairUI` places them again after each window update.
+  - The top row's buttons are 32×32 at y+8: hide-sidebar at x+77, and back, forward and reload ending 6 pt from the sidebar's trailing edge, 2 pt apart, in Arc's grey. Below 214 pt the row is compact, as in Arc: 28×28 back, forward and a "More" menu (reload and Hide Sidebar) at y+10.
+  - The URL field is 36 pt high at y+46, inset 8 pt, with a 10 pt corner radius. The host starts 12 pt in; a new tab page shows a magnifier and the placeholder. Under the pointer, 30 pt copy and site-controls buttons show at its trailing end; page info still attaches where the site-controls button shows.
   - The window background is one `NSVisualEffectView` (`.sidebar` material, behind-window blending).
   - There's no Space theme yet, so the accent colour is the system's.
 - **Views:** AppKit for the window, the card container and the page view host, so a resize lays out the page directly. SwiftUI in `NSHostingView`s for the sidebar, command bar, find field, toasts, infobars and downloads list. Overlays (command bar, find, toasts, status capsule, revealed sidebar) are views above the card in the same window, so the window stays key and its first responder can move between the page and the field.
@@ -163,7 +165,7 @@ Chromium's main menu stays, with these changes, applied by the overlay once `Cla
 
   Cmd+D stays unassigned until the MVP gives it Pin/Unpin Tab.
 - **Cmd+T, File > New Tab:** in a native window, the window's command handler opens the command bar for `IDC_NEW_TAB`, whether it comes from the menu or the key, so no `browser_commands.cc` patch is needed. With a Chromium window key (DevTools, a pop-up) it runs `IDC_NEW_TAB` as before.
-- **Cmd+L:** stays `IDC_FOCUS_LOCATION`, which reaches `ClairBrowserWindow::SetFocusToLocationBar` and opens the command bar on the current URL.
+- **Cmd+L:** stays `IDC_FOCUS_LOCATION`, which reaches `ClairBrowserWindow::SetFocusToLocationBar` and opens the command bar on the current URL. `ClairUI` renames its File menu item from "Open Location…" to "Open Location Bar" when it starts, since "location" alone is vague to most people.
 - **Cmd+S and Shift+Cmd+S:** Cmd+S moves from File > Save Page As… to a new View > Hide Sidebar item, which reads Show Sidebar while the sidebar is hidden. Save Page As… gets Shift+Cmd+S, as in Arc (`menus-and-shortcuts.md`). Shift+Cmd+S is free in Chromium's Mac menus. The native window's command dispatcher treats Hide Sidebar as reserved, so a page that handles Cmd+S itself can't keep it.
 - Hidden items also lose their key equivalents, since AppKit still fires a hidden item's shortcut, and the native window's command handler keeps them hidden and disabled whenever the menu is validated.
 
@@ -184,14 +186,15 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
 - **Opening:** `Navigate` with the match's destination and transition. Cmd+T, Shift+Return and Cmd+Return use a new foreground tab, which D12's placement puts at the top of the sidebar. Cmd+L uses the current tab. A match with an open tab activates that tab and its window instead.
 - **Empty query:** the window's tabs other than the active one, by last active time, then `TopSites` for the profile, built in the overlay rather than through zero-suggest, which ungoogled-chromium leaves without a remote source.
 - **Keywords:** Tab on a match with an associated keyword re-runs the query in keyword mode, as `OmniboxEditModel::AcceptKeyword` does, and the bar shows the engine's icon and name.
-- **Panel:** a SwiftUI view about 760 pt wide (shrinking to fit the window), centred on the window, its top about a third of the way down, with a large soft shadow and no dimming. The selected row uses the accent colour.
+- **Panel:** a SwiftUI view 764 pt wide (shrinking to fit the window), centred on the window, its top at 34% of the window's height, with a large soft shadow and no dimming. As measured in Arc: a 64 pt field row with an 18 pt magnifier 20 pt in and 19 pt text 50 pt in, a hairline inset 12 pt, then 50 pt rows whose 46 pt highlight is inset 10 pt, with a 16 pt icon and 15 pt text ("title — domain"). The selected row uses the accent colour.
+- **Toggling:** the shortcut that opened the command bar closes it again, as in Arc; the other one swaps it for its own mode.
 
 ### D12. Sidebar behavior
 
 - **Tab list:** a SwiftUI list over the tab snapshots, in `TabStripModel` order, which always matches the sidebar.
   - Keeping the two in step means Cmd+1–9, Ctrl+Tab, the choice of the next active tab after a close, and session restore all follow the sidebar with no extra code.
   - Drag to reorder calls `MoveTab`.
-  - Rows are 40 pt high with an 18 pt favicon.
+  - Rows are 40 pt high on a 41 pt pitch with an 18 pt favicon, as in Arc: a 36 pt pill from x+8 to 8 pt short of the trailing edge, the favicon at x+17 and the 14 pt title at x+43. The "New Tab" row has the same metrics. The list starts at y+90.
   - The active row is a translucent pill with a soft shadow that fades when the window isn't key.
   - Hover shows the close button, and the speaker toggles mute.
   - Incognito windows use a dark appearance and an "Incognito" header.
@@ -200,9 +203,10 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
   - Covered: Cmd+T, links opened in new tabs (foreground or background) and `chrome.tabs.create` without an index.
   - Not affected: session restore and Reopen Closed Tab, which pass explicit indices and so return tabs to their old positions.
   - Opener tracking still records the opener, so closing a tab opened from a link still returns to its opener, as Chromium does.
-- **Hide and show:** the card's frame animates with a spring (SwiftUI `.spring(response: 0.35, dampingFraction: 0.85)` to start, tuned by hand against Arc). The page resizes live during the animation. If that judders, the fallback is a snapshot of the page during the animation, resizing once at the end (Risks).
-- **Hover reveal:** a 6 pt tracking strip at the leading edge, a short delay (about 150 ms) before revealing, and a translucent rounded overlay inset a few points from the window edges. Leaving the overlay hides it after a short delay.
-- **Width:** draggable between 180 and 400 pt. The width and the hidden state are stored in `ClairUI`'s user defaults and used for new windows. Restored windows use them too, since Chromium's session doesn't record them.
+- **Hide and show:** the sidebar slides and the card's frame grows or shrinks with a spring (SwiftUI's `Spring(response: 0.2, dampingRatio: 0.9)`, tuned against a 60 fps recording of Arc, which takes about 0.15 s). `NSAnimationContext` can't drive this: the frames are laid out in `layout()`, so a display link steps the spring and lays out each frame, and a second Cmd+S mid-flight turns around from the current velocity. The page resizes live during the animation. If that judders, the fallback is a snapshot of the page during the animation, resizing once at the end (Risks).
+- **Hover reveal:** a 6 pt tracking strip at the leading edge, a short delay (about 150 ms) before revealing, and a translucent rounded overlay inset 5 pt from the window edges, sliding in on the same spring. Leaving the overlay hides it after a short delay.
+  - The tracking area is rebuilt whenever the window lays out, so a pending reveal isn't restarted by a new request, and only the current area's enter and exit events count: AppKit still reports the exit of the strip the overlay's area replaced, which otherwise conceals the overlay as soon as it shows.
+- **Width:** draggable between 164 and 500 pt, Arc's limits. The width and the hidden state are stored in `ClairUI`'s user defaults and used for new windows. Restored windows use them too, since Chromium's session doesn't record them.
 
 ### D13. Engine hooks
 

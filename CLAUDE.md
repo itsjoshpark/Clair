@@ -27,6 +27,16 @@ Never fetch Chromium or build it by hand on the development machine; only `engin
 
 To run the current `ClairUI` against the published engine for the checkout, use `scripts/run-local.sh` (see `docs/building.md`). It launches Clair with a throwaway profile and the mock keychain. The runtime suite (`tests/runtime/run.sh`) may also run locally, but it deletes the current user's Clair data, keychain item and preferences; hosted runners remain the default. The owner prefers few external packages on the development machine: ask before adding one.
 
+### Comparing with Arc and driving the UI
+
+To compare Clair with Arc, or check a UI change by hand, drive both apps with XCUITest rather than synthetic mouse events, which Arc ignores:
+
+- Write a throwaway UI-testing bundle in the scratchpad (a copy of `tests/runtime/ClairRuntimeTests.xcodeproj` with one test that reads steps from a file) and run it with `xcodebuild test-without-building`. `XCUIApplication(bundleIdentifier:)` attaches to a running app: Arc is `company.thebrowser.Browser`. Hover, click, drag and `typeKey` all work on Arc; a drag that misses its sidebar edge moves the window.
+- XCUITest only finds Clair when Launch Services knows the running copy: launch the `run-local.sh --no-launch` package with `open -n <app> --args --user-data-dir=<profile> --use-mock-keychain --no-first-run --no-default-browser-check`, and unregister stale copies (`lsregister -dump` lists them; old DMG mounts, delta tests and the runner's build dir pile up), or it reports "does not have a process ID".
+- The first XCUITest run and the first debugger attach each show a macOS permission prompt on the owner's screen. Ask the owner to approve it rather than waiting on a hung run, and never kill an attached `lldb`: that kills the app.
+- Measure from accessibility frames (`AXPosition`/`AXSize` through a small Swift script) and from `screencapture -l <window id>`; an XCUITest window screenshot captures only the web content. Record animations with `screencapture -v -V <s> -R <rect>` and step through frames with `AVAssetImageGenerator`.
+- Don't commit the screenshots or recordings.
+
 ## Git and PRs
 
 - Use Conventional Commits (`feat:`, `fix:`, `build:`, `ci:`, `docs:`, `chore:`…) for commits and PR titles. The PR title becomes the squash commit message.

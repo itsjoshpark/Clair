@@ -37,6 +37,7 @@ final class NativeLayer {
     let about = AboutWindowController(host: host, info: AboutInfo(bundle: .main, host: host))
     about.install(in: NSApp.mainMenu)
     self.about = about
+    MainMenuTitles.apply(to: NSApp.mainMenu)
 
     let updates = UpdateController(host: host, configuration: .current)
     updates.start()

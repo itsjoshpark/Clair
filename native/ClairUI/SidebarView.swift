@@ -69,20 +69,27 @@ struct SidebarView: View {
   weak var actions: (any SidebarActions)?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    // Arc's metrics: the top row at y+8, the URL field at y+46, the list
+    // from y+90 with rows the sidebar's width less 8 pt each side.
+    VStack(alignment: .leading, spacing: 0) {
       TopRow(model: model, actions: actions)
       URLField(model: model, actions: actions)
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
       if !model.extensionActions.isEmpty || !model.downloads.isEmpty {
         ToolsRow(model: model, actions: actions)
+          .padding(.horizontal, 8)
+          .padding(.top, 6)
       }
       if model.profileKind == .incognito {
         Label("Incognito", systemImage: "eyeglasses")
           .font(.headline)
-          .padding(.horizontal, 6)
+          .padding(.horizontal, 14)
+          .padding(.top, 10)
       }
       TabList(model: model, actions: actions)
+        .padding(.top, 8)
     }
-    .padding(.horizontal, 8)
     .padding(.bottom, 8)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .coordinateSpace(name: sidebarCoordinateSpace)
@@ -92,11 +99,13 @@ struct SidebarView: View {
   }
 }
 
-/// A square button in the sidebar's style.
+/// A square button in the sidebar's style: Arc's grey glyphs, 32 pt square
+/// (28 pt in the compact top row).
 struct SidebarButton: View {
   let systemImage: String
   let help: String
   var isEnabled = true
+  var size: CGFloat = 32
   let action: () -> Void
 
   @State private var isHovered = false
@@ -104,13 +113,13 @@ struct SidebarButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 14, weight: .medium))
-        .frame(width: 28, height: 28)
+        .font(.system(size: 16, weight: .regular))
+        .frame(width: size, height: size)
         .background(isHovered && isEnabled ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 6))
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .foregroundStyle(isEnabled ? .primary : .tertiary)
+    .foregroundStyle(isEnabled ? .secondary : .tertiary)
     .disabled(!isEnabled)
     .help(help)
     .accessibilityLabel(help)
@@ -118,48 +127,107 @@ struct SidebarButton: View {
   }
 }
 
-/// The top row: room for the window controls, then hide-sidebar, back,
-/// forward and reload or stop.
+/// The top row, as in Arc: room for the window controls, hide-sidebar, then
+/// back, forward and reload or stop at the trailing edge. A narrow sidebar
+/// gets the compact row: back, forward and a menu with reload and Hide
+/// Sidebar.
 struct TopRow: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
+  /// The trailing margin, and the gap between back, forward and reload.
+  static let trailing: CGFloat = 6
+  static let gap: CGFloat = 2
+
+  /// Where hide-sidebar starts: after the window controls, or closer to them
+  /// when the sidebar is only just wide enough.
+  static func hideSidebarX(width: CGFloat) -> CGFloat {
+    min(77, width - trailing - 3 * (32 + gap) - 32)
+  }
+
   var body: some View {
     let tab = model.activeTab
-    HStack(spacing: 0) {
-      // The window controls sit here (design D4).
-      Color.clear.frame(width: 70)
-      SidebarButton(systemImage: "sidebar.left", help: "Hide Sidebar") { actions?.toggleSidebar() }
-        .accessibilityIdentifier("clair.hideSidebar")
-      Spacer(minLength: 0)
-      SidebarButton(systemImage: "arrow.left", help: "Back", isEnabled: tab?.canGoBack ?? false) {
-        actions?.goBack()
-      }
-      .accessibilityIdentifier("clair.back")
-      SidebarButton(systemImage: "arrow.right", help: "Forward", isEnabled: tab?.canGoForward ?? false) {
-        actions?.goForward()
-      }
-      .accessibilityIdentifier("clair.forward")
-      SidebarButton(
-        systemImage: tab?.isLoading == true ? "xmark" : "arrow.clockwise",
-        help: tab?.isLoading == true ? "Stop" : "Reload", isEnabled: tab != nil
-      ) {
-        actions?.reloadOrStop()
-      }
-      .accessibilityIdentifier("clair.reload")
+    let isLoading = tab?.isLoading == true
+    let back = SidebarButton(
+      systemImage: "arrow.left", help: "Back", isEnabled: tab?.canGoBack ?? false,
+      size: model.sidebar.hasCompactTopRow ? 28 : 32
+    ) {
+      actions?.goBack()
     }
-    .frame(height: 40)
-    .padding(.top, 2)
+    .accessibilityIdentifier("clair.back")
+    let forward = SidebarButton(
+      systemImage: "arrow.right", help: "Forward", isEnabled: tab?.canGoForward ?? false,
+      size: model.sidebar.hasCompactTopRow ? 28 : 32
+    ) {
+      actions?.goForward()
+    }
+    .accessibilityIdentifier("clair.forward")
+    if model.sidebar.hasCompactTopRow {
+      HStack(spacing: 0) {
+        Spacer(minLength: 0)
+        back
+        forward
+        Menu {
+          Button(isLoading ? "Stop" : "Reload") { actions?.reloadOrStop() }
+            .disabled(tab == nil)
+          Button("Hide Sidebar") { actions?.toggleSidebar() }
+        } label: {
+          Image(systemName: "ellipsis")
+            .font(.system(size: 16, weight: .regular))
+            .frame(width: 28, height: 28)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .foregroundStyle(.secondary)
+        .help("More")
+        .accessibilityLabel("More")
+        .accessibilityIdentifier("clair.topRowMenu")
+      }
+      .padding(.trailing, Self.trailing)
+      .frame(height: 28)
+      .padding(.top, 10)
+      .padding(.bottom, 2)
+    } else {
+      HStack(spacing: 0) {
+        // The window controls sit here (design D4).
+        Color.clear.frame(width: Self.hideSidebarX(width: model.sidebar.width))
+        SidebarButton(systemImage: "sidebar.left", help: "Hide Sidebar") { actions?.toggleSidebar() }
+          .accessibilityIdentifier("clair.hideSidebar")
+        Spacer(minLength: 0)
+        HStack(spacing: Self.gap) {
+          back
+          forward
+          SidebarButton(
+            systemImage: isLoading ? "xmark" : "arrow.clockwise",
+            help: isLoading ? "Stop" : "Reload", isEnabled: tab != nil
+          ) {
+            actions?.reloadOrStop()
+          }
+          .accessibilityIdentifier("clair.reload")
+        }
+      }
+      .padding(.trailing, Self.trailing)
+      .frame(height: 32)
+      .padding(.top, 8)
+    }
   }
 }
 
-/// The URL field: site controls, the host or full URL, indicators and the copy
-/// button. A click opens the command bar on the current URL.
+/// The URL field, as in Arc: the host or full URL, or a magnifier and the
+/// placeholder on a new tab page; the indicators; and, under the pointer, copy
+/// and site-controls buttons at its trailing end. A click opens the command
+/// bar on the current URL.
 struct URLField: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
   @State private var isHovered = false
+
+  static let height: CGFloat = 36
+  static let buttonSize: CGFloat = 30
 
   static let indicatorSymbols: [(TabIndicators, String, String)] = [
     (.camera, "video.fill", "Camera"),
@@ -172,25 +240,22 @@ struct URLField: View {
   var body: some View {
     let tab = model.activeTab
     let display = URLDisplay.text(for: tab)
-    HStack(spacing: 4) {
-      Button {
-        actions?.showSiteControls(indicator: [])
-      } label: {
-        Image(systemName: "slider.horizontal.3")
-          .font(.system(size: 11, weight: .semibold))
-          .frame(width: 22, height: 22)
-          .contentShape(Rectangle())
+    let hasSiteControls = tab != nil && tab?.isNewTabPage != true
+    HStack(spacing: 0) {
+      if display == nil {
+        Image(systemName: "magnifyingglass")
+          .font(.system(size: 13, weight: .medium))
+          .foregroundStyle(.secondary)
+          .frame(width: 24, height: 24)
+          .padding(.leading, 6)
+          .padding(.trailing, 3)
       }
-      .buttonStyle(.plain)
-      .help("Site Controls")
-      .accessibilityIdentifier("clair.siteControls")
-      .anchorFrame(.siteControls)
-      .disabled(tab == nil || tab?.isNewTabPage == true)
-
       Text(display ?? URLDisplay.placeholder)
+        .font(.system(size: 13))
         .lineLimit(1)
-        .truncationMode(.middle)
-        .foregroundStyle(display == nil ? .secondary : .primary)
+        .truncationMode(.tail)
+        .foregroundStyle(display == nil ? Color.secondary : Color.primary.opacity(0.85))
+        .padding(.leading, display == nil ? 0 : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture { actions?.editURL() }
@@ -205,9 +270,10 @@ struct URLField: View {
             actions?.showSiteControls(indicator: indicator)
           } label: {
             Image(systemName: symbol)
-              .font(.system(size: 10))
+              .font(.system(size: 11))
               .foregroundStyle(indicator == .blockedPermission ? Color.secondary : Color.red)
-              .frame(width: 18, height: 22)
+              .frame(width: 22, height: Self.buttonSize)
+              .contentShape(Rectangle())
           }
           .buttonStyle(.plain)
           .help(label)
@@ -217,21 +283,54 @@ struct URLField: View {
       }
 
       if isHovered, display != nil {
-        Button {
-          actions?.copyURL()
-        } label: {
-          Image(systemName: "link")
-            .font(.system(size: 11))
-            .frame(width: 22, height: 22)
+        URLFieldButton(systemImage: "link", help: "Copy URL") { actions?.copyURL() }
+          .accessibilityIdentifier("clair.copyURL")
+          .padding(.trailing, -2)
+      }
+      if isHovered, hasSiteControls {
+        URLFieldButton(systemImage: "slider.horizontal.3", help: "Site Controls") {
+          actions?.showSiteControls(indicator: [])
         }
-        .buttonStyle(.plain)
-        .help("Copy URL")
-        .accessibilityIdentifier("clair.copyURL")
+        .accessibilityIdentifier("clair.siteControls")
       }
     }
-    .padding(.horizontal, 6)
-    .frame(height: 32)
-    .background(Color.primary.opacity(isHovered ? 0.09 : 0.06), in: .rect(cornerRadius: 8))
+    .padding(.trailing, isHovered || tab?.indicators.isEmpty == false ? 4 : 12)
+    .frame(height: Self.height)
+    // Chromium's page info attaches where the site-controls button shows on
+    // hover, whether or not it shows now.
+    .overlay(alignment: .trailing) {
+      Color.clear
+        .frame(width: Self.buttonSize, height: Self.buttonSize)
+        .padding(.trailing, 4)
+        .anchorFrame(.siteControls)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+    .background(Color.primary.opacity(isHovered ? 0.07 : 0.05), in: .rect(cornerRadius: 10, style: .continuous))
+    .onHover { isHovered = $0 }
+  }
+}
+
+/// A button at the URL field's trailing end.
+struct URLFieldButton: View {
+  let systemImage: String
+  let help: String
+  let action: () -> Void
+
+  @State private var isHovered = false
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: systemImage)
+        .font(.system(size: 13, weight: .regular))
+        .frame(width: URLField.buttonSize, height: URLField.buttonSize)
+        .background(isHovered ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 7))
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .foregroundStyle(.secondary)
+    .help(help)
+    .accessibilityLabel(help)
     .onHover { isHovered = $0 }
   }
 }
@@ -476,13 +575,13 @@ struct TabList: View {
   var body: some View {
     List {
       NewTabRow(isHighlighted: model.commandBar?.mode == .newTab) { actions?.newTab() }
-        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 2, trailing: 0))
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: -1))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
         .moveDisabled(true)
       ForEach(model.tabs, id: \.tabID) { tab in
         TabRow(tab: tab, isActive: tab.tabID == model.activeTabID, isWindowKey: model.isWindowKey, actions: actions)
-          .listRowInsets(EdgeInsets(top: 1, leading: 0, bottom: 1, trailing: 0))
+          .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: -1))
           .listRowSeparator(.hidden)
           .listRowBackground(Color.clear)
       }
@@ -509,18 +608,22 @@ struct NewTabRow: View {
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 10) {
-        Image(systemName: "plus").frame(width: 18, height: 18)
-        Text("New Tab")
+      HStack(spacing: TabRow.titleGap) {
+        Image(systemName: "plus")
+          .font(.system(size: 15, weight: .regular))
+          .frame(width: TabRow.iconSize, height: TabRow.iconSize)
+        Text("New Tab").font(TabRow.titleFont)
         Spacer(minLength: 0)
       }
       .foregroundStyle(.secondary)
-      .padding(.horizontal, 10)
-      .frame(height: 36)
+      .padding(.horizontal, TabRow.horizontalPadding)
+      .frame(height: TabRow.pillHeight)
       .background(
         isHighlighted ? Color.accentColor.opacity(0.18) : (isHovered ? Color.primary.opacity(0.06) : .clear),
-        in: .rect(cornerRadius: 8)
+        in: .rect(cornerRadius: TabRow.cornerRadius, style: .continuous)
       )
+      .padding(.top, TabRow.pillInset)
+      .padding(.bottom, TabRow.pillInset + TabRow.spacing)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
@@ -539,8 +642,19 @@ struct TabRow: View {
 
   @State private var isHovered = false
 
+  // Arc's metrics: 40 pt rows on a 41 pt pitch, an 18 pt favicon 9 pt into
+  // the pill and the title 8 pt after it, and a 36 pt pill.
+  static let pillHeight: CGFloat = 36
+  static let pillInset: CGFloat = 2
+  static let spacing: CGFloat = 1
+  static let horizontalPadding: CGFloat = 9
+  static let iconSize: CGFloat = 18
+  static let titleGap: CGFloat = 8
+  static let cornerRadius: CGFloat = 10
+  static let titleFont = Font.system(size: 14)
+
   var body: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: Self.titleGap) {
       Group {
         if tab.isLoading && tab.favicon == nil {
           ProgressView().controlSize(.small)
@@ -550,8 +664,8 @@ struct TabRow: View {
           Image(systemName: "globe").foregroundStyle(.secondary)
         }
       }
-      .frame(width: 18, height: 18)
-      Text(tab.title).lineLimit(1)
+      .frame(width: Self.iconSize, height: Self.iconSize)
+      Text(tab.title).font(Self.titleFont).lineLimit(1)
       Spacer(minLength: 0)
       if tab.isAudible || tab.isMuted {
         Button {
@@ -575,17 +689,19 @@ struct TabRow: View {
         .accessibilityIdentifier("clair.tabClose")
       }
     }
-    .padding(.horizontal, 10)
-    .frame(height: 40)
+    .padding(.horizontal, Self.horizontalPadding)
+    .frame(height: Self.pillHeight)
     .background {
       if isActive {
-        RoundedRectangle(cornerRadius: 8)
+        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
           .fill(Color(nsColor: .controlBackgroundColor).opacity(isWindowKey ? 0.9 : 0.5))
           .shadow(color: .black.opacity(isWindowKey ? 0.12 : 0), radius: 2, y: 1)
       } else if isHovered {
-        RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06))
+        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous).fill(Color.primary.opacity(0.06))
       }
     }
+    .padding(.top, Self.pillInset)
+    .padding(.bottom, Self.pillInset + Self.spacing)
     .contentShape(Rectangle())
     .onTapGesture { actions?.activate(tab: tab.tabID) }
     .overlay(MiddleClickCatcher { actions?.close(tab: tab.tabID) })

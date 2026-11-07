@@ -7,7 +7,7 @@ Defines the native window's sidebar: the browser controls it carries in place of
 ## ADDED Requirements
 
 ### Requirement: Navigation controls
-The sidebar's top row SHALL hold, after the window controls, a button that hides the sidebar, then back, forward and reload. Back and forward SHALL be dimmed and inert when the active tab can't go that way. Reload SHALL become stop while the active tab loads.
+The sidebar's top row SHALL hold, after the window controls, a button that hides the sidebar, then back, forward and reload. Back and forward SHALL be dimmed and inert when the active tab can't go that way. Reload SHALL become stop while the active tab loads. When the sidebar is too narrow for that row, as in Arc, the row SHALL hold back, forward and a menu offering reload (or stop) and Hide Sidebar.
 
 #### Scenario: Going back
 - **WHEN** the user has followed a link in the active tab and clicks back
@@ -17,8 +17,12 @@ The sidebar's top row SHALL hold, after the window controls, a button that hides
 - **WHEN** the active tab starts loading a page
 - **THEN** reload shows as stop until loading ends, and clicking it stops the load
 
+#### Scenario: Narrow sidebar
+- **WHEN** the user narrows the sidebar below 214 points
+- **THEN** the top row shows back, forward and a "More" menu with Reload and Hide Sidebar
+
 ### Requirement: URL field
-Below the top row, the sidebar SHALL show the active tab's host, or its full URL for pages without a host such as `chrome://` pages and files, with "Search or Enter URL…" for a new tab page. Clicking the field SHALL open the command bar on the current URL.
+Below the top row, the sidebar SHALL show the active tab's host, or its full URL for pages without a host such as `chrome://` pages and files, with a search icon and "Search or Enter URL…" for a new tab page. Clicking the field SHALL open the command bar on the current URL. While the pointer is over the field, its trailing end SHALL show a copy button and the site-controls button.
 
 #### Scenario: Web page
 - **WHEN** the active tab shows `https://news.ycombinator.com/item?id=1`
@@ -33,14 +37,14 @@ Below the top row, the sidebar SHALL show the active tab's host, or its full URL
 - **THEN** the tab's full URL is on the pasteboard and a toast confirms it
 
 ### Requirement: Site controls and indicators
-The URL field SHALL have a site-controls button that opens Chromium's page info for the active tab, showing its connection security and permissions. While the active tab uses the camera, microphone, location or screen capture, or has had a permission blocked, the URL field SHALL show an indicator for each, which opens the matching controls.
+The URL field SHALL have a site-controls button, shown while the pointer is over the field, that opens Chromium's page info for the active tab, showing its connection security and permissions. While the active tab uses the camera, microphone, location or screen capture, or has had a permission blocked, the URL field SHALL show an indicator for each, which opens the matching controls.
 
 #### Scenario: Page using the camera
 - **WHEN** the active page is capturing the camera
 - **THEN** a camera indicator shows in the URL field, and clicking it shows the camera permission controls for the site
 
 #### Scenario: Opening site controls
-- **WHEN** the user clicks the site-controls button on an HTTPS page
+- **WHEN** the user rests the pointer on the URL field of an HTTPS page and clicks the site-controls button
 - **THEN** page info opens attached to the button and shows that the connection is secure
 
 ### Requirement: Extension actions
@@ -125,7 +129,11 @@ While the sidebar is hidden, resting the pointer at the window's leading edge SH
 - **THEN** the sidebar slides in over the page, the page keeps its size, and moving the pointer away from the overlay hides it again
 
 ### Requirement: Resizing the sidebar
-The user SHALL be able to resize the sidebar by dragging its trailing edge, within a minimum and a maximum width. New windows SHALL open with the most recently chosen width and hidden state.
+The user SHALL be able to resize the sidebar by dragging its trailing edge, between Arc's limits of 164 and 500 points. New windows SHALL open with the most recently chosen width and hidden state.
+
+#### Scenario: Narrowest sidebar
+- **WHEN** the user drags the sidebar's edge as far left as it goes
+- **THEN** the sidebar stops at 164 points wide
 
 #### Scenario: Wider sidebar
 - **WHEN** the user drags the sidebar's edge to make it wider and opens a new window

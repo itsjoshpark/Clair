@@ -186,8 +186,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   func showCommandBar(mode: CommandBarMode) {
     guard let browser else { return }
     if let open = model.commandBar {
-      if open.mode == mode { return }
+      // The same shortcut again closes it, as in Arc.
       open.cancel()
+      if open.mode == mode { return }
     }
     let text = mode == .currentTab ? URLDisplay.editingText(for: model.activeTab) : ""
     model.commandBar = CommandBarModel(mode: mode, text: text, browser: browser) { [weak self] opened in

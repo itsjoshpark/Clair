@@ -17,12 +17,20 @@ Cmd+T, File > New Tab and the sidebar's "New Tab" row SHALL open the command bar
 - **WHEN** the user presses Cmd+T and then Esc
 - **THEN** the command bar closes and no tab is created
 
+#### Scenario: Pressing Cmd+T again
+- **WHEN** the user presses Cmd+T twice
+- **THEN** the second press closes the command bar, as in Arc, and no tab is created
+
 ### Requirement: Editing the current URL
-Cmd+L and a click on the URL field SHALL open the command bar holding the active tab's full URL, all selected. Choosing a result SHALL navigate the active tab.
+Cmd+L, File > Open Location Bar and a click on the URL field SHALL open the command bar holding the active tab's full URL, all selected. Choosing a result SHALL navigate the active tab. Cmd+L while that command bar is open SHALL close it. The menu item SHALL read "Open Location Bar" rather than Chromium's "Open Location…".
 
 #### Scenario: Navigating the current tab
 - **WHEN** the user presses Cmd+L, types `example.org` and presses Return
 - **THEN** the active tab navigates to `https://example.org/`, and no new tab is created
+
+#### Scenario: Pressing Cmd+L again
+- **WHEN** the user presses Cmd+L twice
+- **THEN** the second press closes the command bar and the active tab is unchanged
 
 ### Requirement: Command bar appearance
 The command bar SHALL float over the window, horizontally centered on the whole window and about a third of the way down, above the sidebar and the page, without dimming the page. It SHALL have a search icon, the placeholder "Search or Enter URL…", and the results below the field.
