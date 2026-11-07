@@ -28,8 +28,10 @@ See proposal.md for why. Today:
 
 `ClairWindowFrame` overrides:
 - `-_minXTitlebarWidgetInset`: the controls' x from the window's leading edge.
-- `-_titlebarHeight`: the requested top plus 26 pt. AppKit doesn't centre the buttons vertically: task 1.3 measured them anchored 10 pt above the title bar's bottom edge on macOS 27 (requested tops of 10, 16 and 24 with a centring height landed at 10, 22 and 38), so the button's 16 pt plus that gap below it sets the height.
-- `-layout`: after `super`, applies the hidden state to the three buttons, so AppKit's layout can't show them again. It then measures where the close button landed and, if that's half a point or more from the requested place, adds the difference to the inset and the height and lays out once more. A macOS that anchors the buttons differently still lands them right, at the cost of one extra layout the first time.
+- `-_titlebarHeight`: the requested top plus 25 pt. AppKit doesn't centre the buttons vertically: task 1.3 measured them anchored a fixed distance above the title bar's bottom edge on macOS 27 (title bar heights of 36, 48 and 64 put their tops at 10, 22 and 38 as accessibility reads them), so the 16 pt buttons plus the 9 pt below them set the height.
+- `-layout`: after `super`, applies the hidden state to the three buttons, so AppKit's layout can't show them again.
+
+A first version measured where the close button landed after `super`'s layout and corrected itself. It was dropped: the title bar lays its buttons out after the frame's own `-layout` returns, so the measurement read their previous place and the corrections ran away. The runtime test (task 3.1) is what catches a macOS that measures differently.
 
 Accessibility reports the buttons a point up and left of their frames (measured in PR #92 and again in task 1.3), so `ClairUI` requests (13, 17) from the sidebar's corner for them to read back as Arc's 12/35/58 and 16.
 
