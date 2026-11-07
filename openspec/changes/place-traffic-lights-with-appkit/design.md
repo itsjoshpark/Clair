@@ -28,7 +28,7 @@ See proposal.md for why. Today:
 
 `ClairWindowFrame` overrides:
 - `-_minXTitlebarWidgetInset`: the controls' x from the window's leading edge.
-- `-_titlebarHeight`: the requested top plus 25 pt. AppKit doesn't centre the buttons vertically: task 1.3 measured them anchored a fixed distance above the title bar's bottom edge on macOS 27 (title bar heights of 36, 48 and 64 put their tops at 10, 22 and 38 as accessibility reads them), so the 16 pt buttons plus the 9 pt below them set the height.
+- `-_titlebarHeight`: the requested top plus 23 pt. AppKit doesn't centre the buttons vertically: task 1.3 measured them anchored a fixed distance above the title bar's bottom edge on macOS 27, so the height sets their top. With `ClairUI`'s requested top of 17 that is a 40 pt title bar, and the buttons read 16 through accessibility.
 - `-layout`: after `super`, applies the hidden state to the three buttons, so AppKit's layout can't show them again.
 
 A first version measured where the close button landed after `super`'s layout and corrected itself. It was dropped: the title bar lays its buttons out after the frame's own `-layout` returns, so the measurement read their previous place and the corrections ran away. The runtime test (task 3.1) is what catches a macOS that measures differently.
@@ -56,7 +56,7 @@ NS_SWIFT_NAME(ClairWindowControls)
 @end
 ```
 
-`ClairNativeWindow` stores both and, when either changes, marks the theme frame for layout and lays it out at once, so a display-link step moves the buttons in the same frame as the sidebar.
+`ClairNativeWindow` stores both and, when either changes, has the theme frame re-tile its title bar at once (`-_updateTitlebarContainerViewFrameIfNecessary` and `-_updateButtonPositions`, each only if the frame responds), so a display-link step moves the buttons in the same frame as the sidebar. Task 1.3 found that marking the frame for layout isn't enough: AppKit reads the height and inset again only when it re-tiles, so without these calls the buttons stayed put during the slide and later stuck at a mid-slide place. Negative insets work, so the buttons slide off the window's edge with the sidebar.
 
 - Why: the frame reads its own window, with nothing to look up, and `ClairUI` keeps owning the sidebar's motion. A protocol on the window keeps `ClairBrowser` about the browser.
 - Alternative: a method on `ClairBrowser` that forwards to the window. Rejected: one more hop for a property of the window.
@@ -74,8 +74,9 @@ The positions are checked as PR #92 checked them: accessibility frames of the bu
 
 ## Risks / Trade-offs
 
+- [Two of the private methods, `-_updateTitlebarContainerViewFrameIfNecessary` and `-_updateButtonPositions`, are ones Chromium doesn't use] → each is called only if the frame responds to it; without them the buttons still sit right after every title bar layout AppKit does on its own, and only the slide degrades.
 - [The private methods change or disappear in a future macOS] → `+frameViewClassForStyleMask:` falls back to `super`'s when `NSThemeFrame` is missing, and the overrides only change numbers AppKit already asks for. Chromium's windows break the same way, so the fix will be visible upstream.
-- [A 43 pt title bar takes clicks or drags meant for the sidebar's top row, or for the URL field, whose top is at y+46] → with a full-size content view and a transparent title bar, AppKit passes clicks in empty title bar areas to the content, as it does for Chromium's own taller title bar. Task 3.2 clicks the top-row buttons and the field's top edge to confirm it.
+- [A 40 pt title bar takes clicks or drags meant for the sidebar's top row, or for the URL field, whose top is at y+46] → with a full-size content view and a transparent title bar, AppKit passes clicks in empty title bar areas to the content, as it does for Chromium's own taller title bar. Task 3.2 clicks the top-row buttons and the field's top edge to confirm it.
 - [Laying out the title bar on every display-link step stutters] → it lays out three buttons. If recordings show stutter, hide the controls while the sidebar moves and show them at the end, which the spec allows as long as they never show at AppKit's spot.
 - [Accessibility frames and drawn positions differ by a point, as they did in PR #92] → the inset is tuned against Arc's accessibility frames, measured the same way, so both apps read 12/35/58 and 16.
 
