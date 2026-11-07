@@ -35,4 +35,3 @@ Suggested order: 1, 2 (one engine build), then 3 and 4 in `ClairUI`, which can s
 ## Workflow follow-up
 
 - Archive this change after `replace-browser-window`, since its deltas add to the `sidebar` and `browser-window` capabilities that change introduces.
-- Propose `arc-tooltips` for Arc-style tooltips (design.md, Non-Goals).

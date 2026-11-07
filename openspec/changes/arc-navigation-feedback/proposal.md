@@ -11,7 +11,7 @@ The owner's pass over the native window (`replace-browser-window`) left three ga
 - **A loading indicator in the card's top inset.** While the active tab loads, a thin glow runs along the top edge of the page card, following Chromium's load progress, and fades out when the load ends. Its look and timing follow a recording of Arc's.
 - **One contract addition, one engine build.** `ClairHost.h` gains load progress on the tab snapshot and a history-menu session; the overlay fixes which loading state it reports. All three ship from one engine.
 
-**Out of scope:** custom Arc-style tooltips (a separate change, see design.md's Non-Goals); a history page or history search; showing progress for background tabs; changing which entries Chromium keeps in a tab's history.
+**Out of scope:** tooltips, which `replace-browser-window` already draws in Arc's style; a history page or history search; showing progress for background tabs; changing which entries Chromium keeps in a tab's history.
 
 ## Capabilities
 

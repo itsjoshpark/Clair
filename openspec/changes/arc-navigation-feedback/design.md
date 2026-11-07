@@ -38,7 +38,7 @@ See proposal.md for why, and `specs/sidebar/spec.md` and `specs/browser-window/s
 - One engine build for all of it.
 
 **Non-Goals:**
-- **Custom Arc-style tooltips.** Arc's tooltips are a design system of their own (window, delay, fade, shortcut hints) used by every control in the sidebar, URL field and tab list, not a navigation feature, and they need nothing from the engine. Bundling them would make this engine-bound change wait on design work, or the reverse. `replace-browser-window`'s polish group adds system tooltips now; a later change, `arc-tooltips`, replaces them, starting from the static findings above and a probe recording of Arc's delay and fade.
+- **Tooltips.** `replace-browser-window`'s polish group (D18) already draws Arc-style tooltips with shortcut key caps, since AppKit's never show in Chromium's window. This change only gives the history menu's buttons their labels through that same tooltip.
 - A history page, history search or "Show Full History" (Clair has no history UI yet; Chromium's `chrome://history` stays reachable by URL).
 - Progress for background tabs, or in the tab rows.
 - Pruning skippable entries or otherwise changing what Chromium keeps in a tab's history.
@@ -104,7 +104,6 @@ The header additions (D3, D4) and the overlay changes (D1, D3, D4) land together
 - **[Risk] `BackForwardMenuModel` changes between Chromium versions** (in 156 it builds its items from sections: history, chapter stops, back-to-opener, "Show Full History"). → The overlay reads only history items through the `ui::MenuModel` interface, so a rebase breaks the build, not behavior, and the patch check catches it.
 - **[Risk] Updating an open `NSMenu`'s item images** may not redraw on every macOS version. → Fallback: the session waits briefly (up to about 100 ms) for missing favicons before `ClairUI` opens the menu, and otherwise shows a globe.
 - **[Risk] The glow over the card's top edge** could hide the page-top window-drag strip's area or draw over the card's corner mask. → It sits in the inset above the card and takes no mouse events (`hitTest` returns nil).
-- **[Trade-off] No tooltips here.** Users see system tooltips until `arc-tooltips` lands.
 
 ## Measurements
 
