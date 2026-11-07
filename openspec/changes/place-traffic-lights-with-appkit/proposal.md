@@ -25,5 +25,5 @@ None.
 
 - **Engine:** `overlay/chrome/browser/clair/window/clair_native_window.{h,mm}` and `native/ClairHost.h` change, so the engine key changes and `engine.yml` builds a new engine (incremental on the owner's Mac). The PR's patch check runs until that engine is published.
 - **Native layer:** `native/ClairUI/BrowserRootView.swift` (`TrafficLights`) and its tests; `FakeBrowser` in `ClairUITests` gains the new contract.
-- **Private API:** `+[NSWindow frameViewClassForStyleMask:]`, `NSThemeFrame`, `-_titlebarHeight` and `-_minXTitlebarWidgetInset`. Chromium already ships all four, so the risk is the one Chromium carries; a future macOS without them falls back to AppKit's default positions, as Chromium's windows do.
+- **Private API:** `+[NSWindow frameViewClassForStyleMask:]`, `NSThemeFrame`, `-_titlebarHeight` and `-_minXTitlebarWidgetInset`, which Chromium already ships, so the risk is the one Chromium carries; a future macOS without them falls back to AppKit's default positions, as Chromium's windows do. Moving the buttons as the sidebar slides also needs `-_updateTitlebarContainerViewFrameIfNecessary` and `-_updateButtonPositions`, which Chromium doesn't use; both are called only if present.
 - **Runtime suite:** a test that the buttons stay at their place after the page title changes.

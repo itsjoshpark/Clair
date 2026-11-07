@@ -370,6 +370,8 @@ WEAK_IMPORT_ATTRIBUTE
 @interface NSThemeFrame (ClairPrivateTitlebarAPI)
 - (CGFloat)_titlebarHeight;
 - (CGFloat)_minXTitlebarWidgetInset;
+- (void)_updateTitlebarContainerViewFrameIfNecessary;
+- (void)_updateButtonPositions;
 @end
 
 @interface NSWindow (ClairPrivateFrameAPI)
@@ -386,9 +388,10 @@ WEAK_IMPORT_ATTRIBUTE
 
 @implementation ClairWindowFrame
 
-// From the buttons' top to the title bar's bottom: the 16 pt buttons and the
-// 9 pt AppKit leaves below them, measured on macOS 27 (task 1.3).
-static constexpr CGFloat kButtonsTopToTitlebarBottom = 25;
+// From the requested top to the title bar's bottom edge, which AppKit anchors
+// the buttons to: measured on macOS 27 (task 1.3) as where the buttons'
+// accessibility frames land for ClairUI's requested place.
+static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
 
 - (ClairNativeWindow*)clairWindow {
   return base::apple::ObjCCast<ClairNativeWindow>(self.window);
@@ -501,10 +504,18 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 25;
   [self layOutTitlebarNow];
 }
 
-// Lays the title bar out at once, so the buttons move in the same display
-// frame as the sidebar that asked.
+// Moves the buttons at once, so they move in the same display frame as the
+// sidebar that asked. AppKit reads the height and inset again only when it
+// re-tiles the title bar, which a layout pass alone doesn't do (task 1.3).
 - (void)layOutTitlebarNow {
   NSView* frame = self.contentView.superview;
+  if ([frame respondsToSelector:@selector
+             (_updateTitlebarContainerViewFrameIfNecessary)]) {
+    [(NSThemeFrame*)frame _updateTitlebarContainerViewFrameIfNecessary];
+  }
+  if ([frame respondsToSelector:@selector(_updateButtonPositions)]) {
+    [(NSThemeFrame*)frame _updateButtonPositions];
+  }
   frame.needsLayout = YES;
   [frame layoutSubtreeIfNeeded];
 }
