@@ -11,7 +11,8 @@
 # <dir>/logs.
 #
 # The tests delete Clair's data directory, its preferences and its keychain item
-# for the current user, so this refuses to run anywhere but a hosted runner.
+# for the current user, so this refuses to run anywhere but a hosted runner
+# unless CLAIR_RUNTIME_DELETE_MY_DATA=1 says that losing them is fine.
 
 set -euo pipefail
 
@@ -31,8 +32,8 @@ usage() {
   exit 2
 }
 
-[[ "${RUNNER_ENVIRONMENT-}" == github-hosted ]] ||
-  die "the tests delete Clair's data and keychain item, so they run only on a hosted runner"
+[[ "${RUNNER_ENVIRONMENT-}" == github-hosted || "${CLAIR_RUNTIME_DELETE_MY_DATA-}" == 1 ]] ||
+  die "the tests delete Clair's data and keychain item for the current user. They run on a hosted runner, or locally with CLAIR_RUNTIME_DELETE_MY_DATA=1"
 
 prepare() {
   local engine="$1" engine_json="$2" dir="$3"

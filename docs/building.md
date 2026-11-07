@@ -82,6 +82,22 @@ It builds `ClairUI` (or takes `--clairui <framework>`), fetches Sparkle with `sc
 
 The DMG is built with [`dmgbuild`](https://github.com/dmgbuild/dmgbuild), which writes the Finder window's layout into the volume's `.DS_Store` itself, so packaging runs headless, with no Finder scripting. Its settings, the layout, the background and their sources are in `resources/dmg/` (see its `README.md`): a fixed window with Clair on the left, Applications on the right and an arrow between them, and the app's own `app.icns` as the volume icon. `package.sh` installs `dmgbuild` with `scripts/fetch-dmgbuild.sh`, from hash-pinned wheels in `resources/dmg/requirements.txt` into a virtual environment in `build/dmgbuild/`, which needs `python3` 3.10 or later on `PATH` (or `DMGBUILD_PYTHON`). `--dmgbuild <path>` names one already installed. `./package.test.sh` mounts the DMG it builds and checks the layout against `resources/dmg/layout.json`.
 
+## Running Clair locally
+
+`scripts/run-local.sh` is the edit-to-run loop for `ClairUI` (design D15 of `replace-browser-window`). It never fetches or builds Chromium:
+
+```sh
+./scripts/run-local.sh                                  # package and launch
+./scripts/run-local.sh -- --enable-logging=stderr https://example.com/
+./scripts/run-local.sh --profile build/run-local/keep   # keep a profile between runs
+```
+
+1. It downloads `chromium-engine-<key>` for the checkout's engine key with `gh`, checks it against its SHA-256, and caches it in `build/run-local/engines/` (the three most recently used keys stay). If the key has no published engine, which happens when the branch changes an engine input, it stops and prints the `engine.yml` command that builds it.
+2. It builds `ClairUI` in Debug, in a derived-data folder it keeps, so a one-line Swift change rebuilds in seconds, and packages ad hoc with `package.sh --no-dmg`.
+3. It launches `Clair.app` in the foreground with a throwaway `--user-data-dir` under `build/run-local/profiles/`, `--use-mock-keychain`, and Crashpad's dumps in that profile. Your own `~/Library/Application Support/Clair` and the "Clair Safe Storage" keychain item are never touched, and `--profile` refuses a folder inside Clair's own data folder. Arguments after `--` go to Clair. When Clair quits, the throwaway profile is deleted and the package is unregistered from Launch Services, so `open` keeps finding your installed Clair.
+
+`--no-launch` packages only and prints the app's path. Sparkle still keeps its preferences in the `dev.joshuapark.Clair` defaults domain, which the installed Clair shares; a local package's build number is higher than any release's, so it's never offered an update.
+
 ## Quality checks
 
 `.github/workflows/quality.yml` runs after every merge to `main`, and takes about 15 minutes. It downloads `chromium-engine-<key>`, packages the app ad hoc, runs `scripts/verify-app.sh --skip-signing` and then the runtime suite in `tests/runtime/`. If there's no engine for the commit's key, it fails with "no engine for <key>" and the command to build it.
@@ -96,7 +112,7 @@ Add `-f report_issue=true` to report the result to the `quality-failure` issue, 
 
 The suite covers the tests in design D12. `ClairRuntimeTests/` holds the XCUITest bundle, which drives the native UI through the accessibility APIs and reads page state over the Chrome DevTools Protocol. `tests/runtime/run.sh` prepares a package of the commit, a newer package to update to, the test appcasts signed with the test-only key (`docs/updates.md`), and a local web server. It retries a failed test once before the test counts.
 
-`run.sh` runs only on hosted runners, because the tests delete Clair's data directory, preferences and keychain item for the current user. To debug a failure, read the failing test's message in the job log. The failed run's `runtime-results` artifact has the result bundle, each launch's Clair log, the web server's log and Sparkle's log. To run part of the suite, pass xcodebuild's options through `run.sh test`, for example `-only-testing:ClairRuntimeTests/UpdateMenuTests`.
+`run.sh` runs on hosted runners by default, because the tests delete Clair's data directory, preferences and keychain item for the current user. It also runs on your Mac with `CLAIR_RUNTIME_DELETE_MY_DATA=1`, which says you're ready to lose your own Clair data. To debug a failure, read the failing test's message in the job log. The failed run's `runtime-results` artifact has the result bundle, each launch's Clair log, the web server's log and Sparkle's log. To run part of the suite, pass xcodebuild's options through `run.sh test`, for example `-only-testing:ClairRuntimeTests/UpdateMenuTests`.
 
 A few things in the suite look odd, for reasons that aren't obvious:
 
