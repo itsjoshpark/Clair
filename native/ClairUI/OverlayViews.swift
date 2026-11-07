@@ -139,6 +139,15 @@ struct SuggestionRow: View {
     return host == suggestion.contents ? nil : host
   }
 
+  /// The row as VoiceOver reads it: its text, its domain, and whether it
+  /// switches to an open tab.
+  var accessibilityText: String {
+    var parts = [suggestion.contents]
+    if let domain { parts.append(domain) }
+    if suggestion.hasTabMatch { parts.append("Switch to Tab") }
+    return parts.joined(separator: ", ")
+  }
+
   var body: some View {
     HStack(spacing: 10) {
       Group {
@@ -168,7 +177,8 @@ struct SuggestionRow: View {
     .frame(height: 40)
     .background(isSelected ? Color.accentColor : .clear, in: .rect(cornerRadius: 8))
     .contentShape(Rectangle())
-    .accessibilityElement(children: .combine)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(accessibilityText)
     .accessibilityIdentifier("clair.suggestion")
     .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
