@@ -175,6 +175,11 @@ class ClairExclusiveAccessContext : public ExclusiveAccessContext {
 
   bool page_fullscreen() const { return page_fullscreen_; }
 
+  // Esc arrived while the window was still animating into full screen, when
+  // AppKit ignores a request to leave it; full screen ends once the window
+  // is in. Returns whether the key was taken.
+  bool DeferExitWhileEntering(NSEvent* event);
+
  private:
   void SetPageFullscreen(bool fullscreen);
   void HideNotice(ExclusiveAccessBubbleHideReason reason);
@@ -184,6 +189,9 @@ class ClairExclusiveAccessContext : public ExclusiveAccessContext {
   // Whether entering page full screen also entered macOS full screen, so
   // leaving it should leave macOS full screen too.
   bool entered_window_fullscreen_ = false;
+  // Between asking the window for full screen and its getting there.
+  bool entering_window_fullscreen_ = false;
+  bool exit_when_entered_ = false;
   bool notice_visible_ = false;
   ExclusiveAccessBubbleHideCallback notice_hide_callback_;
   base::OneShotTimer notice_timer_;

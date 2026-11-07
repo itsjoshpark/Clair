@@ -503,6 +503,7 @@ void ClairExclusiveAccessContext::EnterFullscreen(
   NSWindow* window = window_->ns_window();
   if (!(window.styleMask & NSWindowStyleMaskFullScreen)) {
     entered_window_fullscreen_ = true;
+    entering_window_fullscreen_ = true;
     // The notice shows once the window is in full screen.
     [window toggleFullScreen:nil];
     return;
@@ -522,7 +523,26 @@ void ClairExclusiveAccessContext::ExitFullscreen() {
   entered_window_fullscreen_ = false;
 }
 
+bool ClairExclusiveAccessContext::DeferExitWhileEntering(NSEvent* event) {
+  if (!entering_window_fullscreen_ || event.keyCode != 53 /* kVK_Escape */) {
+    return false;
+  }
+  if (event.type == NSEventTypeKeyDown) {
+    exit_when_entered_ = true;
+  }
+  return true;
+}
+
 void ClairExclusiveAccessContext::WindowFullscreenChanged(bool entered) {
+  entering_window_fullscreen_ = false;
+  if (entered && exit_when_entered_) {
+    exit_when_entered_ = false;
+    if (auto* manager = ExclusiveAccessManager::From(window_->browser())) {
+      manager->ExitExclusiveAccess();
+      return;
+    }
+  }
+  exit_when_entered_ = false;
   // Chromium hears every transition, as from its own windows: leaving full
   // screen by the green button or the menu ends the page's full screen too.
   if (auto* manager = ExclusiveAccessManager::From(window_->browser())) {
@@ -808,6 +828,9 @@ bool ClairBrowserWindow::HandleExclusiveAccessKey(NSEvent* event) {
   if (!exclusive_access_context_.page_fullscreen() ||
       (event.type != NSEventTypeKeyDown && event.type != NSEventTypeKeyUp)) {
     return false;
+  }
+  if (exclusive_access_context_.DeferExitWhileEntering(event)) {
+    return true;
   }
   return ExclusiveAccessManager::From(browser_)->HandleUserKeyEvent(
       input::NativeWebKeyboardEvent(gfx::NativeEvent(event)));
