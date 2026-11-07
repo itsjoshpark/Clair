@@ -358,12 +358,81 @@ bool ExecuteCommand(ClairBrowserWindow* window,
 
 @end
 
+// AppKit's frame view for titled windows. Private, and weak so Clair still
+// launches on a macOS without it, with AppKit's own button places. Chromium
+// declares and subclasses it the same way (BrowserWindowFrame in
+// components/remote_cocoa/app_shim/browser_native_widget_window_mac.mm).
+WEAK_IMPORT_ATTRIBUTE
+@interface NSThemeFrame : NSView
+@end
+
+@interface NSThemeFrame (ClairPrivateTitlebarAPI)
+- (CGFloat)_titlebarHeight;
+- (CGFloat)_minXTitlebarWidgetInset;
+@end
+
+@interface NSWindow (ClairPrivateFrameAPI)
++ (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle;
+@end
+
+// Puts the window's buttons where its ClairWindowControls ask (design D1):
+// AppKit lays the buttons out from the leading inset and centres them
+// vertically in the title bar, so a title bar twice as tall as the buttons'
+// centre is deep places them at the requested top. In window full screen,
+// AppKit's title bar sits in the reveal strip, so it keeps its own values.
+@interface ClairWindowFrame : NSThemeFrame
+@end
+
+@implementation ClairWindowFrame
+
+- (ClairNativeWindow*)clairWindow {
+  return base::apple::ObjCCast<ClairNativeWindow>(self.window);
+}
+
+- (BOOL)usesAppKitPlaces {
+  ClairNativeWindow* window = self.clairWindow;
+  return !window || (window.styleMask & NSWindowStyleMaskFullScreen);
+}
+
+- (CGFloat)_titlebarHeight {
+  if (self.usesAppKitPlaces) {
+    return [super _titlebarHeight];
+  }
+  NSButton* close = [self.window standardWindowButton:NSWindowCloseButton];
+  const CGFloat button_height = close ? NSHeight(close.frame) : 0;
+  return 2 * (self.clairWindow.windowControlsOrigin.y + button_height / 2);
+}
+
+- (CGFloat)_minXTitlebarWidgetInset {
+  if (self.usesAppKitPlaces) {
+    return [super _minXTitlebarWidgetInset];
+  }
+  return self.clairWindow.windowControlsOrigin.x;
+}
+
+- (void)layout {
+  [super layout];
+  ClairNativeWindow* window = self.clairWindow;
+  if (!window) {
+    return;
+  }
+  // AppKit's layout may show the buttons again; the window's state wins.
+  for (NSWindowButton type :
+       {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
+    [window standardWindowButton:type].hidden = window.windowControlsHidden;
+  }
+}
+
+@end
+
 @implementation ClairNativeWindow {
   ClairBrowserWindow* _browserWindow;  // Weak; owns this window.
   CommandDispatcher* __strong _commandDispatcher;
   ClairCommandDispatcherDelegate* __strong _commandDispatcherDelegate;
   id<UserInterfaceItemCommandHandler> __strong _commandHandler;
   ClairNativeWindowDelegate* __strong _windowDelegate;
+  CGPoint _windowControlsOrigin;
+  BOOL _windowControlsHidden;
 }
 
 - (instancetype)initWithBrowserWindow:(ClairBrowserWindow*)browserWindow
@@ -377,6 +446,8 @@ bool ExecuteCommand(ClairBrowserWindow* window,
                                  backing:NSBackingStoreBuffered
                                    defer:YES])) {
     _browserWindow = browserWindow;
+    // Arc's place until ClairUI says otherwise.
+    _windowControlsOrigin = CGPointMake(12, 16);
     self.releasedWhenClosed = NO;
     self.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
     _commandDispatcher = [[CommandDispatcher alloc] initWithOwner:self];
@@ -390,8 +461,49 @@ bool ExecuteCommand(ClairBrowserWindow* window,
   return self;
 }
 
++ (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle {
+  if ((windowStyle & NSWindowStyleMaskTitled) && [ClairWindowFrame class]) {
+    return [ClairWindowFrame class];
+  }
+  return [super frameViewClassForStyleMask:windowStyle];
+}
+
 - (ClairBrowserWindow*)browserWindow {
   return _browserWindow;
+}
+
+// ClairWindowControls (design D2).
+
+- (CGPoint)windowControlsOrigin {
+  return _windowControlsOrigin;
+}
+
+- (BOOL)windowControlsHidden {
+  return _windowControlsHidden;
+}
+
+- (void)setWindowControlsOrigin:(CGPoint)origin {
+  if (CGPointEqualToPoint(origin, _windowControlsOrigin)) {
+    return;
+  }
+  _windowControlsOrigin = origin;
+  [self layOutTitlebarNow];
+}
+
+- (void)setWindowControlsHidden:(BOOL)hidden {
+  if (hidden == _windowControlsHidden) {
+    return;
+  }
+  _windowControlsHidden = hidden;
+  [self layOutTitlebarNow];
+}
+
+// Lays the title bar out at once, so the buttons move in the same display
+// frame as the sidebar that asked.
+- (void)layOutTitlebarNow {
+  NSView* frame = self.contentView.superview;
+  frame.needsLayout = YES;
+  [frame layoutSubtreeIfNeeded];
 }
 
 - (void)detachBrowserWindow {

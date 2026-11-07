@@ -476,7 +476,7 @@ class BridgeObserver : public TabStripModelObserver,
 
 // --- ClairBrowser: state ---
 
-- (NSWindow*)window {
+- (NSWindow<ClairWindowControls>*)window {
   return _browserWindow ? _browserWindow->ns_window() : nil;
 }
 

@@ -66,7 +66,8 @@
          @protocol(ClairBrowser), @protocol(ClairWindow), @protocol(ClairTab),
          @protocol(ClairAutocomplete), @protocol(ClairAutocompleteDelegate),
          @protocol(ClairSuggestion), @protocol(ClairDownload),
-         @protocol(ClairExtensionAction), @protocol(ClairInfobar)
+         @protocol(ClairExtensionAction), @protocol(ClairInfobar),
+         @protocol(ClairWindowControls)
        ]) {
     XCTAssertTrue(protocol_conformsToProtocol(protocol, @protocol(NSObject)));
   }

@@ -422,6 +422,24 @@ NS_SWIFT_NAME(ClairAutocomplete)
 - (void)stop;
 @end
 
+// Where the window's close, minimize and zoom buttons go. The window ClairBrowser
+// hands over adopts it, and AppKit's own title bar layout puts the buttons
+// there, so no later title bar layout moves them. ClairUI sets it as the
+// sidebar moves.
+NS_SWIFT_UI_ACTOR
+NS_SWIFT_NAME(ClairWindowControls)
+@protocol ClairWindowControls <NSObject>
+
+// The close button's top-leading corner, from the window's top-leading corner,
+// in points. The other buttons follow at AppKit's spacing.
+@property(nonatomic) CGPoint windowControlsOrigin;
+
+// Whether the buttons are hidden, as while the sidebar is hidden or a page is
+// in full screen.
+@property(nonatomic) BOOL windowControlsHidden;
+
+@end
+
 // One native browser window's browser: its tabs, pages and commands. Chromium
 // implements it, one per native window, and keeps owning the browser.
 NS_SWIFT_UI_ACTOR
@@ -429,8 +447,9 @@ NS_SWIFT_NAME(ClairBrowser)
 @protocol ClairBrowser <NSObject>
 
 // The window Chromium created for this browser, which ClairUI styles and fills.
-// It dispatches Chromium's commands and key equivalents.
-@property(nonatomic, readonly) NSWindow *window;
+// It dispatches Chromium's commands and key equivalents, and adopts
+// ClairWindowControls.
+@property(nonatomic, readonly) NSWindow<ClairWindowControls> *window;
 
 // The kind of profile the window's tabs use.
 @property(nonatomic, readonly) ClairProfileKind profileKind;
