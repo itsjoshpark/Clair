@@ -8,7 +8,6 @@
 
 #import "chrome/browser/clair/window/clair_native_window.h"
 
-#include <cmath>
 
 #include "base/apple/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -378,26 +377,18 @@ WEAK_IMPORT_ATTRIBUTE
 @end
 
 // Puts the window's buttons where its ClairWindowControls ask (design D1).
-// AppKit lays the buttons out from the leading inset, and a fixed distance
-// above the title bar's bottom edge (10 pt on macOS 27), so the title bar's
-// height sets their top. The frame starts from that and, after AppKit's
-// layout, corrects once by however far the close button landed from the
-// requested place, so a macOS that measures differently still lands right.
-// In window full screen, AppKit's title bar sits in the reveal strip, so it
-// keeps its own values.
+// AppKit lays the buttons out from the leading inset and a fixed distance above
+// the title bar's bottom edge, so the title bar's height sets their top. In
+// window full screen, AppKit's title bar sits in the reveal strip, so it keeps
+// its own values.
 @interface ClairWindowFrame : NSThemeFrame
 @end
 
-@implementation ClairWindowFrame {
-  // What AppKit's layout adds to the requested place, learnt from where the
-  // close button landed.
-  CGFloat _xCorrection;
-  CGFloat _heightCorrection;
-  BOOL _isCorrecting;
-}
+@implementation ClairWindowFrame
 
-// The close button's height plus AppKit's 10 pt gap below it on macOS 27.
-static constexpr CGFloat kButtonsBottomInset = 26;
+// From the buttons' top to the title bar's bottom: the 16 pt buttons and the
+// 9 pt AppKit leaves below them, measured on macOS 27 (task 1.3).
+static constexpr CGFloat kButtonsTopToTitlebarBottom = 25;
 
 - (ClairNativeWindow*)clairWindow {
   return base::apple::ObjCCast<ClairNativeWindow>(self.window);
@@ -412,15 +403,14 @@ static constexpr CGFloat kButtonsBottomInset = 26;
   if (self.usesAppKitPlaces) {
     return [super _titlebarHeight];
   }
-  return self.clairWindow.windowControlsOrigin.y + kButtonsBottomInset +
-         _heightCorrection;
+  return self.clairWindow.windowControlsOrigin.y + kButtonsTopToTitlebarBottom;
 }
 
 - (CGFloat)_minXTitlebarWidgetInset {
   if (self.usesAppKitPlaces) {
     return [super _minXTitlebarWidgetInset];
   }
-  return self.clairWindow.windowControlsOrigin.x + _xCorrection;
+  return self.clairWindow.windowControlsOrigin.x;
 }
 
 - (void)layout {
@@ -434,29 +424,6 @@ static constexpr CGFloat kButtonsBottomInset = 26;
        {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
     [window standardWindowButton:type].hidden = window.windowControlsHidden;
   }
-  if (self.usesAppKitPlaces || _isCorrecting) {
-    return;
-  }
-  NSButton* close = [window standardWindowButton:NSWindowCloseButton];
-  if (!close || !close.superview) {
-    return;
-  }
-  // Where the close button landed, from the window's top-leading corner.
-  const NSRect landed = [close convertRect:close.bounds toView:nil];
-  const CGPoint wanted = window.windowControlsOrigin;
-  const CGFloat x_error = wanted.x - NSMinX(landed);
-  const CGFloat y_error =
-      wanted.y - (NSHeight(self.bounds) - NSMaxY(landed));
-  if (std::abs(x_error) < 0.5 && std::abs(y_error) < 0.5) {
-    return;
-  }
-  // A taller title bar moves the buttons down by as much.
-  _xCorrection += x_error;
-  _heightCorrection += y_error;
-  _isCorrecting = YES;
-  self.needsLayout = YES;
-  [self layoutSubtreeIfNeeded];
-  _isCorrecting = NO;
 }
 
 @end
