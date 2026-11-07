@@ -12,60 +12,13 @@
 #include "ui/gfx/mac/coordinate_conversion.h"
 #include "ui/gfx/native_ui_types.h"
 #include "ui/views/widget/widget.h"
-#include "ui/views/widget/widget_observer.h"
 
 namespace constrained_window {
 
-namespace {
-
-constexpr char kAttacherKey[] = "ClairNativeHostAttacher";
-
-// Makes the dialog a child window of the host's window whenever it's shown.
-// Ordering a child window out removes it from its parent, and adding a hidden
-// window as a child would order it in, so this attaches on each show. Deletes
-// itself with the widget.
-class NativeHostAttacher : public views::WidgetObserver {
- public:
-  NativeHostAttacher(views::Widget* widget, NSWindow* parent)
-      : parent_(parent) {
-    widget->AddObserver(this);
-    widget->SetNativeWindowProperty(kAttacherKey, this);
-  }
-
-  void set_parent(NSWindow* parent) { parent_ = parent; }
-
-  void Attach(views::Widget* widget) {
-    NSWindow* dialog = widget->GetNativeWindow().GetNativeNSWindow();
-    NSWindow* parent = parent_;
-    if (!dialog || !parent || !dialog.visible ||
-        dialog.parentWindow == parent) {
-      return;
-    }
-    // A parentless Views dialog floats at the modal panel level, above other
-    // apps' windows; as a child it belongs to its browser window instead.
-    [dialog.parentWindow removeChildWindow:dialog];
-    dialog.level = parent.level;
-    [parent addChildWindow:dialog ordered:NSWindowAbove];
-  }
-
-  // views::WidgetObserver:
-  void OnWidgetVisibilityChanged(views::Widget* widget, bool visible) override {
-    if (visible) {
-      Attach(widget);
-    }
-  }
-
-  void OnWidgetDestroying(views::Widget* widget) override {
-    widget->RemoveObserver(this);
-    widget->SetNativeWindowProperty(kAttacherKey, nullptr);
-    delete this;
-  }
-
- private:
-  __weak NSWindow* parent_;
-};
-
-}  // namespace
+bool IsNativeHostView(gfx::NativeView parent_view) {
+  NSView* view = parent_view.GetNativeNSView();
+  return view.window && !views::Widget::GetWidgetForNativeView(parent_view);
+}
 
 std::optional<gfx::Rect> NativeHostDialogBounds(
     web_modal::ModalDialogHost* dialog_host,
@@ -99,16 +52,9 @@ bool PlaceDialogOverNativeHost(views::Widget* widget,
   if (!bounds) {
     return false;
   }
+  // Views keeps the dialog a child window of the browser window
+  // (ui/views/cocoa/clair_native_parent.mm).
   widget->SetBounds(*bounds);
-  NSWindow* parent = dialog_host->GetHostView().GetNativeNSView().window;
-  auto* attacher = static_cast<NativeHostAttacher*>(
-      widget->GetNativeWindowProperty(kAttacherKey));
-  if (attacher) {
-    attacher->set_parent(parent);
-  } else {
-    attacher = new NativeHostAttacher(widget, parent);
-  }
-  attacher->Attach(widget);
   return true;
 }
 

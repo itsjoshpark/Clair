@@ -31,14 +31,20 @@
 #   panel and toolbar), found by Crest (pauljoda/Crest) on Chromium 156 and in
 #   the reading-mode controller's CHECK_IS_TEST(). They skip that UI.
 # - constrained_window_views.cc: tab-modal dialogs (JavaScript dialogs, leave
-#   prompts, HTTP authentication) are positioned only over a Views host; a
-#   native window's card isn't one, so they'd float in the middle of the screen
-#   above every app. They're placed over the card as child windows instead (D9).
+#   prompts, HTTP authentication) are positioned only over a Views host, and
+#   browser-modal ones (the extension install prompt) become sheets only on a
+#   Views window; a native window is neither, so they'd float in the middle of
+#   the screen above every app. They're placed over the card as child windows
+#   instead (D9).
+# - native_widget_mac.mm: a Views widget whose parent view sits in a window
+#   no widget owns is a free top-level window; for a native window's
+#   permission prompts, page info and dialogs that meant hiding behind the
+#   browser window. They're kept as its child windows (D9).
 # - render_view_context_menu_mac_cocoa.mm: a page's context menu shows only
 #   inside a Views widget; in a native window it shows without one, less the
 #   items of D9's unavailable features (adapted from Crest).
-# - chrome/browser/ui/BUILD.gn, components/constrained_window/BUILD.gn: the
-#   overlay's sources.
+# - chrome/browser/ui/BUILD.gn, components/constrained_window/BUILD.gn,
+#   ui/views/BUILD.gn: the overlay's sources.
 
 --- a/chrome/browser/ui/views/frame/browser_window_factory.cc
 +++ b/chrome/browser/ui/views/frame/browser_window_factory.cc
@@ -474,6 +480,18 @@
      widget->SetSize(size);
      return;
    }
+@@ -349,6 +362,11 @@
+   // On Mac, window modal dialogs are displayed as sheets, so their position is
+   // managed by the parent window.
+   requires_positioning = false;
++  // Clair's native window isn't a Views widget and can't hold the sheet; the
++  // dialog is placed over its card like a tab-modal one.
++  if (IsNativeHostView(parent_view)) {
++    requires_positioning = true;
++  }
+ #endif
+ 
+   if (!requires_positioning)
 --- a/components/constrained_window/BUILD.gn
 +++ b/components/constrained_window/BUILD.gn
 @@ -43,6 +43,14 @@
@@ -537,3 +555,36 @@
  }
  
  void RenderViewContextMenuMacCocoa::CancelToolkitMenu() {
+--- a/ui/views/widget/native_widget_mac.mm
++++ b/ui/views/widget/native_widget_mac.mm
+@@ -48,6 +48,7 @@
+ #include "ui/native_theme/native_theme_mac.h"
+ #import "ui/views/cocoa/drag_drop_client_mac.h"
+ #import "ui/views/cocoa/native_widget_mac_ns_window_host.h"
++#include "ui/views/cocoa/clair_native_parent.h"
+ #include "ui/views/cocoa/text_input_host.h"
+ #include "ui/views/views_features.h"
+ #include "ui/views/widget/drop_helper.h"
+@@ -318,6 +319,11 @@
+                               ConvertBoundsToScreenIfNeeded(params.bounds));
+ 
+   OnWindowInitialized();
++
++  // A parent in Clair's native window, which no Views widget owns.
++  if (params.parent && !parent_host) {
++    ClairAttachToNativeParent(GetWidget(), params.parent);
++  }
+ 
+   // Only set the z-order here if it is non-default since setting it may affect
+   // how the window is treated by Expose.
+--- a/ui/views/BUILD.gn
++++ b/ui/views/BUILD.gn
+@@ -743,6 +743,8 @@
+     ]
+     sources += [
+       "accessibility/ax_virtual_view_mac.mm",
++      "cocoa/clair_native_parent.h",
++      "cocoa/clair_native_parent.mm",
+       "cocoa/drag_drop_client_mac.h",
+       "cocoa/drag_drop_client_mac.mm",
+       "cocoa/native_widget_mac_event_monitor.h",

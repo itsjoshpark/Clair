@@ -204,6 +204,8 @@ class ClairModalDialogHost : public web_modal::WebContentsModalDialogHost {
   void NotifyPositionRequiresUpdate() override;
 
  private:
+  gfx::Rect CardRect() const;
+
   const raw_ptr<ClairBrowserWindow> window_;
   base::ObserverList<web_modal::ModalDialogHostObserver> observers_;
 };

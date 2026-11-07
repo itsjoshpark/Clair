@@ -9,6 +9,7 @@
 
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/native_ui_types.h"
 
 namespace views {
 class Widget;
@@ -24,17 +25,21 @@ namespace constrained_window {
 // tab-modal dialogs in an NSView that no Views widget owns, so Chromium can't
 // position them and leaves them as free top-level windows in the middle of the
 // screen. These place such a dialog at the host's GetDialogPosition(), in
-// screen coordinates, and keep it a child window of the host's window, so it
-// sits over the page and moves with the window.
+// screen coordinates; ui/views/cocoa/clair_native_parent.mm keeps it a child
+// window of the host's window, so it sits over the page and moves with it.
+
+// Whether `parent_view` is in a window that no Views widget owns (Clair's
+// native window), where a browser-modal dialog can't be a sheet and is
+// positioned over the host instead.
+bool IsNativeHostView(gfx::NativeView parent_view);
 
 // The dialog's screen bounds, or nothing when the host view isn't in a window.
 std::optional<gfx::Rect> NativeHostDialogBounds(
     web_modal::ModalDialogHost* dialog_host,
     const gfx::Size& size);
 
-// Sets `widget`'s bounds as NativeHostDialogBounds() says and makes it a child
-// window of the host's window. Returns false, doing nothing, when the host view
-// isn't in a window.
+// Sets `widget`'s bounds as NativeHostDialogBounds() says. Returns false,
+// doing nothing, when the host view isn't in a window.
 bool PlaceDialogOverNativeHost(views::Widget* widget,
                                web_modal::ModalDialogHost* dialog_host,
                                const gfx::Size& size);

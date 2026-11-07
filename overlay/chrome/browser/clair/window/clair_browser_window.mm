@@ -624,21 +624,38 @@ ClairModalDialogHost::~ClairModalDialogHost() {
   }
 }
 
+// The host view is the window's content view, which Chromium also uses as
+// the parent of browser-modal dialogs (`platform_util::GetViewForWindow`), so
+// both kinds of dialog share one host. They're placed over the card.
 gfx::NativeView ClairModalDialogHost::GetHostView() const {
+  return gfx::NativeView(window_->ns_window().contentView);
+}
+
+// The card's frame in the content view, top-left origin.
+gfx::Rect ClairModalDialogHost::CardRect() const {
+  NSView* content = window_->ns_window().contentView;
+  if (!content) {
+    return gfx::Rect();
+  }
   id<ClairWindow> window = window_->clair_window();
-  NSView* view = window ? window.pageContainerView : window_->ns_window().contentView;
-  return gfx::NativeView(view);
+  NSView* card = window ? window.pageContainerView : nil;
+  NSRect rect = card && card.window == content.window
+                    ? [content convertRect:card.bounds fromView:card]
+                    : content.bounds;
+  if (!content.flipped) {
+    rect.origin.y = NSHeight(content.bounds) - NSMaxY(rect);
+  }
+  return gfx::Rect(NSMinX(rect), NSMinY(rect), NSWidth(rect), NSHeight(rect));
 }
 
 gfx::Point ClairModalDialogHost::GetDialogPosition(const gfx::Size& size) {
-  const gfx::Size host = GetMaximumDialogSize();
-  return gfx::Point(std::max(0, (host.width() - size.width()) / 2), 0);
+  const gfx::Rect card = CardRect();
+  return gfx::Point(card.x() + std::max(0, (card.width() - size.width()) / 2),
+                    card.y());
 }
 
 gfx::Size ClairModalDialogHost::GetMaximumDialogSize() {
-  NSView* view = GetHostView().GetNativeNSView();
-  return view ? gfx::Size(NSWidth(view.bounds), NSHeight(view.bounds))
-              : gfx::Size();
+  return CardRect().size();
 }
 
 void ClairModalDialogHost::AddObserver(
@@ -1104,7 +1121,12 @@ PinnedToolbarActions* ClairBrowserWindow::GetPinnedToolbarActions() {
 }
 
 void ClairBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
-  // Cmd+L: the command bar on the current URL (D10).
+  // Cmd+L: the command bar on the current URL (D10). Chromium also asks for
+  // the location bar on its own, as when a new tab page loads, which would
+  // open the command bar over every new window; that keeps the page focused.
+  if (!is_user_initiated) {
+    return;
+  }
   [clair_window_ showCommandBarWithMode:ClairCommandBarModeCurrentTab];
 }
 
