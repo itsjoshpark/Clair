@@ -122,7 +122,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     }
     // The full-screen notice.
     if let notice = model.exclusiveAccessNotice {
-      rootView.noticeHost = NSHostingView(
+      rootView.noticeHost = NSHostingView.edgeToEdge(
         rootView: CapsuleText(text: notice, font: .system(size: 13, weight: .medium), identifier: "clair.fullscreenNotice"))
     } else if rootView.noticeHost != nil {
       rootView.noticeHost = nil
