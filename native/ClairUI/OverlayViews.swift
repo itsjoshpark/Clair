@@ -29,12 +29,22 @@ struct CommandBarView: View {
   let model: CommandBarModel
   @FocusState private var isFieldFocused: Bool
 
-  static let width: CGFloat = 760
+  static let width: CGFloat = 764
+  /// Arc's metrics: a 64 pt field row, then 50 pt rows.
+  static let fieldHeight: CGFloat = 64
+  static let rowHeight: CGFloat = 50
+
+  /// The panel's top, about a third of the way down the window, as in Arc.
+  static func top(inWindowHeight height: CGFloat) -> CGFloat {
+    (height * 0.34).rounded()
+  }
 
   var body: some View {
     VStack(spacing: 0) {
-      HStack(spacing: 10) {
-        Image(systemName: "magnifyingglass").foregroundStyle(OverlayStyle.secondary)
+      HStack(spacing: 12) {
+        Image(systemName: "magnifyingglass")
+          .font(.system(size: 16, weight: .regular))
+          .frame(width: 18, height: 18)
         if let keywordName = model.keywordName {
           Text(keywordName)
             .font(.system(size: 13, weight: .semibold))
@@ -48,7 +58,7 @@ struct CommandBarView: View {
           text: Binding(get: { model.text }, set: { model.setText($0) })
         )
         .textFieldStyle(.plain)
-        .font(.system(size: 20))
+        .font(.system(size: 19, weight: .medium))
         .focused($isFieldFocused)
         .accessibilityIdentifier("clair.commandBarField")
         .onKeyPress(.upArrow) {
@@ -82,12 +92,12 @@ struct CommandBarView: View {
             .foregroundStyle(OverlayStyle.secondary)
         }
       }
-      .padding(.horizontal, 16)
-      .frame(height: 54)
+      .padding(.horizontal, 20)
+      .frame(height: Self.fieldHeight)
       if !model.suggestions.isEmpty {
-        Divider()
+        Divider().padding(.horizontal, 12)
         ScrollView {
-          VStack(spacing: 2) {
+          VStack(spacing: 0) {
             ForEach(Array(model.suggestions.enumerated()), id: \.element.suggestionID) { index, suggestion in
               SuggestionRow(suggestion: suggestion, isSelected: index == model.selection)
                 .onHover { if $0 { model.select(index) } }
@@ -97,9 +107,11 @@ struct CommandBarView: View {
                 }
             }
           }
-          .padding(6)
+          .padding(.horizontal, 10)
+          .padding(.top, 4)
+          .padding(.bottom, 8)
         }
-        .frame(maxHeight: 340)
+        .frame(maxHeight: 5 * Self.rowHeight + 12)
         .fixedSize(horizontal: false, vertical: true)
       }
     }
@@ -149,7 +161,7 @@ struct SuggestionRow: View {
   }
 
   var body: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: 12) {
       Group {
         if let icon = suggestion.icon {
           Image(nsImage: icon).resizable().interpolation(.high)
@@ -157,12 +169,15 @@ struct SuggestionRow: View {
           Image(systemName: symbol)
         }
       }
-      .frame(width: 18, height: 18)
+      .frame(width: 16, height: 16)
       .foregroundStyle(isSelected ? .white : OverlayStyle.secondary)
-      Text(suggestion.contents).lineLimit(1)
-      if let domain {
-        Text("— \(domain)").lineLimit(1).foregroundStyle(isSelected ? .white.opacity(0.8) : OverlayStyle.secondary)
-      }
+      // The domain follows the title after a dash, in the same line.
+      (Text(suggestion.contents).fontWeight(.medium)
+        + Text(domain.map { " — \($0)" } ?? "")
+        .foregroundStyle(isSelected ? .white.opacity(0.75) : OverlayStyle.secondary.opacity(0.8)))
+        .font(.system(size: 15))
+        .lineLimit(1)
+        .truncationMode(.middle)
       Spacer(minLength: 0)
       if suggestion.hasTabMatch {
         Text("Switch to Tab")
@@ -173,9 +188,10 @@ struct SuggestionRow: View {
       }
     }
     .foregroundStyle(isSelected ? .white : .primary)
-    .padding(.horizontal, 10)
-    .frame(height: 40)
+    .padding(.horizontal, 11)
+    .frame(height: CommandBarView.rowHeight - 4)
     .background(isSelected ? Color.accentColor : .clear, in: .rect(cornerRadius: 8))
+    .padding(.vertical, 2)
     .contentShape(Rectangle())
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(accessibilityText)

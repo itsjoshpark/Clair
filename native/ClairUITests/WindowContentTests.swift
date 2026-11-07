@@ -98,8 +98,77 @@ struct WindowLayoutTests {
   }
 
   @Test func widthStaysInRange() {
-    #expect(SidebarState(width: 50).width == 180)
-    #expect(SidebarState(width: 900).width == 400)
+    #expect(SidebarState(width: 50).width == 164)
+    #expect(SidebarState(width: 900).width == 500)
+  }
+
+  @Test func blendedLayoutIsHalfway() {
+    let layout = WindowLayout.blended(size: size, width: 228, shown: 0.5)
+    #expect(layout.sidebar.minX == -114)
+    #expect(layout.card == CGRect(x: 116.5, y: 7.5, width: 1076, height: 785))
+  }
+
+  @Test func revealedSidebarSlidesInFromTheEdge() {
+    let away = WindowLayout.revealedSidebar(size: size, width: 228, revealed: 0)
+    let shown = WindowLayout.revealedSidebar(size: size, width: 228, revealed: 1)
+    #expect(away.maxX < 0)
+    #expect(shown == CGRect(x: 5, y: 5, width: 228, height: 790))
+  }
+
+  @Test func compactTopRowBelowArcsThreshold() {
+    #expect(SidebarState(width: 213).hasCompactTopRow)
+    #expect(!SidebarState(width: 214).hasCompactTopRow)
+  }
+
+  @Test func hideSidebarButtonMakesRoomInANarrowRow() {
+    #expect(TopRow.hideSidebarX(width: 228) == 77)
+    #expect(TopRow.hideSidebarX(width: 214) == 74)
+  }
+}
+
+struct SpringValueTests {
+  @Test func settlesOnItsTarget() {
+    var value = SpringValue(0)
+    value.animate(to: 1, at: 0)
+    #expect(value.isMoving)
+    value.step(at: 0.05)
+    #expect(value.value > 0 && value.value < 1)
+    let moving = value.step(at: 5)
+    #expect(!moving)
+    #expect(value.value == 1)
+  }
+
+  @Test func turningAroundStartsFromWhereItIs() {
+    var value = SpringValue(0)
+    value.animate(to: 1, at: 0)
+    value.step(at: 0.05)
+    let midway = value.value
+    value.animate(to: 0, at: 0.05)
+    value.step(at: 0.05)
+    #expect(abs(value.value - midway) < 0.001)
+  }
+
+  @Test func jumpStops() {
+    var value = SpringValue(0)
+    value.animate(to: 1, at: 0)
+    value.jump(to: 0)
+    #expect(!value.isMoving)
+    #expect(value.value == 0)
+  }
+}
+
+@MainActor
+struct MainMenuTitlesTests {
+  @Test func renamesOpenLocation() {
+    let menu = NSMenu()
+    let file = NSMenuItem(title: "File", action: nil, keyEquivalent: "")
+    file.submenu = NSMenu()
+    let item = NSMenuItem(title: "Open Location…", action: nil, keyEquivalent: "l")
+    item.tag = MainMenuTitles.focusLocationTag
+    file.submenu?.addItem(item)
+    menu.addItem(file)
+    MainMenuTitles.apply(to: menu)
+    #expect(item.title == "Open Location Bar")
   }
 }
 

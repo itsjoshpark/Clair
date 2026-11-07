@@ -1,3 +1,3 @@
 kind: New
-body: 'Clair has its own window: tabs, the address and the browser controls are in a sidebar on the left, with the page in a card beside it. Cmd+T and Cmd+L open a command bar for searching, typing an address or switching to an open tab, new tabs go at the top of the list, and View > Hide Sidebar (Cmd+S) hides the sidebar, which shows again when you move the pointer to the window''s left edge'
+body: 'Clair has its own window: tabs, the address and the browser controls are in a sidebar on the left, with the page in a card beside it. Cmd+T and Cmd+L (File > Open Location Bar) open a command bar for searching, typing an address or switching to an open tab, and pressing them again closes it; new tabs go at the top of the list, and View > Hide Sidebar (Cmd+S) hides the sidebar, which shows again when you move the pointer to the window''s left edge'
 time: 2026-11-06T23:46:09.285112-05:00

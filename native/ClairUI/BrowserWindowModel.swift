@@ -98,7 +98,11 @@ struct Toast: Equatable, Identifiable {
 /// The sidebar's state in one window (design D12).
 struct SidebarState: Equatable {
   static let defaultWidth: CGFloat = 228
-  static let widthRange: ClosedRange<CGFloat> = 180...400
+  /// Arc's limits.
+  static let widthRange: ClosedRange<CGFloat> = 164...500
+  /// Below this width the top row is compact, as in Arc: back, forward and a
+  /// menu holding reload and Hide Sidebar.
+  static let compactTopRowWidth: CGFloat = 214
 
   var width: CGFloat
   var isHidden: Bool
@@ -113,6 +117,8 @@ struct SidebarState: Equatable {
   static func clamp(_ width: CGFloat) -> CGFloat {
     min(max(width, widthRange.lowerBound), widthRange.upperBound)
   }
+
+  var hasCompactTopRow: Bool { width < Self.compactTopRowWidth }
 
   /// Whether the sidebar takes its place beside the card, so its controls are
   /// where Chromium's bubbles attach.
