@@ -208,7 +208,9 @@ final class BrowserRootView: NSView {
     let floats = !model.isPageFullscreen && revealed.value > 0 && floating.minX > layout.sidebar.minX
     let sidebarFrame = floats ? floating : layout.sidebar
     sidebar.frame = sidebarFrame
-    sidebar.isHidden = model.isPageFullscreen || sidebarFrame.maxX <= 0
+    // A hidden sidebar only moves off the window; hiding the view would also
+    // take it out of the accessibility tree (issue #93).
+    sidebar.isHidden = model.isPageFullscreen
     revealedPanel.isHidden = !floats
     revealedPanel.frame = floating
     revealedPanel.layer?.shadowPath = CGPath(
