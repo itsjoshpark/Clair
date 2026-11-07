@@ -88,8 +88,22 @@ struct WindowLayoutTests {
 
   @Test func sidebarHidden() {
     let layout = WindowLayout(size: size, sidebar: SidebarState(width: 228, isHidden: true), isPageFullscreen: false)
-    #expect(layout.card == CGRect(x: 5, y: 5, width: 1190, height: 790))
+    #expect(layout.card == CGRect(x: 10, y: 10, width: 1180, height: 780))
     #expect(layout.sidebar.maxX <= 0)
+  }
+
+  @Test func hidingMovesOnlyTheCardsLeadingEdge() {
+    let shown = WindowLayout.blended(size: size, width: 228, shown: 1).card
+    let hidden = WindowLayout.blended(size: size, width: 228, shown: 0).card
+    #expect(hidden.minY == shown.minY)
+    #expect(hidden.maxY == shown.maxY)
+    #expect(hidden.maxX == shown.maxX)
+  }
+
+  @Test func dockingARevealedSidebarMovesOnlyTheCard() {
+    let layout = WindowLayout.blended(size: size, width: 228, sidebarShown: 1, cardShown: 0)
+    #expect(layout.sidebar == CGRect(x: 0, y: 0, width: 228, height: 800))
+    #expect(layout.card == CGRect(x: 10, y: 10, width: 1180, height: 780))
   }
 
   @Test func pageFullscreen() {
@@ -105,7 +119,7 @@ struct WindowLayoutTests {
   @Test func blendedLayoutIsHalfway() {
     let layout = WindowLayout.blended(size: size, width: 228, shown: 0.5)
     #expect(layout.sidebar.minX == -114)
-    #expect(layout.card == CGRect(x: 116.5, y: 7.5, width: 1076, height: 785))
+    #expect(layout.card == CGRect(x: 119, y: 10, width: 1071, height: 780))
   }
 
   @Test func revealedSidebarSlidesInFromTheEdge() {

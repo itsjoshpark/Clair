@@ -39,6 +39,10 @@ The command bar SHALL float over the window, horizontally centered on the whole 
 - **WHEN** the command bar opens in a window that is wider than the command bar
 - **THEN** it is centered on the window, not on the card, and the page behind it isn't dimmed
 
+#### Scenario: Results appearing
+- **WHEN** the user presses Cmd+L and starts typing
+- **THEN** the field stays where it opened, and the results grow the panel downwards
+
 #### Scenario: Window too narrow
 - **WHEN** the command bar opens in a window narrower than its usual width
 - **THEN** it shrinks to fit inside the window
