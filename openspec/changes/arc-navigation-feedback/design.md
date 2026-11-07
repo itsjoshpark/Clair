@@ -87,6 +87,8 @@ See proposal.md for why, and `specs/sidebar/spec.md` and `specs/browser-window/s
 - **`ClairUI`.** An AppKit `NSMenu`, popped up under the button with `popUp(positioning:at:in:)`, since SwiftUI's `contextMenu` can't open on a long press or update an open item's image. An `NSView` behind each back and forward `SidebarButton` (full and compact rows) handles `rightMouseDown` and a press held for Arc's duration (task 1.1; Chromium uses about 0.5 s), and leaves a short click to the button. While the menu is open, the delegate's updates set the matching items' images in place. Cmd-choosing maps to `NewBackgroundTab`. A `HistoryMenuBuilder` turns items into menu entries and choices into calls; it's unit-tested against `FakeBrowser`.
 - Alternative: build entries from `NavigationController` directly. Rejected: it reimplements Chromium's labels, favicon fetching, cap and new-tab handling, which `BackForwardMenuModel` already tests.
 
+- **Owner's decisions (2026-11-07):** the menu lists history entries only, without "Show Full History", chapter stops or other extra items, even where Arc has equivalents, so there's no custom UI to build for them. Cmd-choosing an entry opens it in a new background tab, as Chromium does, whatever Arc does.
+
 ### D4. Load progress and the loading indicator
 
 - **Contract.** `ClairTab` gains `@property(readonly) double loadProgress`, `GetLoadProgress()` in [0, 1], meaningful while `isLoading`.
