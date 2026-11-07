@@ -63,6 +63,17 @@ void ClairAttachToNativeParent(Widget* widget, gfx::NativeView parent) {
       ![window isKindOfClass:native_window_class]) {
     return;
   }
+  // A window-modal dialog is made titled so that it can be a sheet, with its
+  // content under the title bar (native_widget_mac.mm, StyleMaskForParams).
+  // Without a Views parent it can't be a sheet, and the title bar would cover
+  // the top of the dialog, so it's made transparent.
+  NSWindow* child = widget->GetNativeWindow().GetNativeNSWindow();
+  const NSWindowStyleMask sheet_mask =
+      NSWindowStyleMaskTitled | NSWindowStyleMaskFullSizeContentView;
+  if ((child.styleMask & sheet_mask) == sheet_mask) {
+    child.titlebarAppearsTransparent = YES;
+    child.titleVisibility = NSWindowTitleHidden;
+  }
   new NativeParentAttacher(widget, window);
 }
 
