@@ -26,6 +26,12 @@ See `proposal.md` for why, and `specs/` for the required behavior. This section 
 - Native replacements for Chromium bubbles that work when anchored (permission prompt, page info, extension install). They stay Chromium's.
 - Side panels and tab groups UI.
 - Changing what Chromium's menus contain beyond D10.
+- Empty windows, as Arc has them. A new Arc window shows no tab until one is chosen from the command bar, and Clair's always opens on a New Tab page tab. Arc probably also keeps the window open when its last tab closes, but that hasn't been checked. Matching it is a known limitation, deferred:
+  - A truly empty window means a `Browser` with no tabs. Chromium closes a window when its last tab goes, and much of its code (commands, the location bar, find, DevTools) assumes an active `WebContents`, so this would take deep changes to existing Chromium files, against Clair's rule of leaving them alone.
+  - The likely approach is a hidden placeholder tab. While the only tab is an untouched New Tab page, `ClairUI` leaves it out of the sidebar, shows a blank card and opens the command bar. A choice from the command bar then loads in that tab instead of a new one.
+  - The engine's part would be hooks to keep the window open with a placeholder when the last real tab closes, to close the placeholder when a link from another app opens a tab, and to leave placeholders out of session restore.
+  - The risk is keyboard tab switching (Cmd+1–9, Ctrl+Tab), which follows `TabStripModel` order while the sidebar wouldn't show the placeholder. That only applies while the placeholder is the window's only tab.
+  - Estimated at 2–3 days, including one engine build. Before specifying it, check with the XCUITest probe what Arc does when its last tab closes.
 
 ## Decisions
 
