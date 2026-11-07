@@ -32,6 +32,7 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/menus/simple_menu_model.h"
 #include "url/gurl.h"
 
 namespace {
@@ -83,6 +84,44 @@ BrowserWindow* CreateNativeBrowserWindow(BrowserWindowInterface* browser) {
   }
   // Browser is the only desktop BrowserWindowInterface.
   return new ClairBrowserWindow(static_cast<Browser*>(browser));
+}
+
+bool IsInNativeWindow(gfx::NativeView view) {
+  NSView* ns_view = view.GetNativeNSView();
+  return base::apple::ObjCCast<ClairNativeWindow>(ns_view.window) != nil;
+}
+
+void RemoveUnavailableContextMenuItems(ui::SimpleMenuModel* model) {
+  for (size_t i = model->GetItemCount(); i > 0; --i) {
+    switch (model->GetCommandIdAt(i - 1)) {
+      case IDC_CONTENT_CONTEXT_OPENLINKSPLITVIEW:
+      case IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE:
+      case IDC_CONTENT_CONTEXT_LISTEN_TO_THIS_PAGE:
+      case IDC_CONTENT_CONTEXT_GENERATE_QR_CODE:
+      case IDC_SEND_TAB_TO_SELF:
+      case IDC_CONTENT_CONTEXT_LENS_REGION_SEARCH:
+      case IDC_CONTENT_CONTEXT_SEARCHLENSFORIMAGE:
+      case IDC_CONTENT_CONTEXT_TRANSLATE:
+      case IDC_CONTENT_CONTEXT_PARTIAL_TRANSLATE:
+        model->RemoveItemAt(i - 1);
+        break;
+      default:
+        break;
+    }
+  }
+  for (size_t i = model->GetItemCount(); i > 0; --i) {
+    const size_t index = i - 1;
+    if (model->GetTypeAt(index) != ui::MenuModel::TYPE_SEPARATOR) {
+      continue;
+    }
+    const bool at_end = index == 0 || index + 1 == model->GetItemCount();
+    const bool doubled =
+        index + 1 < model->GetItemCount() &&
+        model->GetTypeAt(index + 1) == ui::MenuModel::TYPE_SEPARATOR;
+    if (at_end || doubled) {
+      model->RemoveItemAt(index);
+    }
+  }
 }
 
 bool IsNativeWindow(const BrowserWindowInterface* browser) {

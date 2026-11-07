@@ -30,7 +30,15 @@
 #   crash sites for a browser without a BrowserView (its footer controller, side
 #   panel and toolbar), found by Crest (pauljoda/Crest) on Chromium 156 and in
 #   the reading-mode controller's CHECK_IS_TEST(). They skip that UI.
-# - chrome/browser/ui/BUILD.gn: the overlay's sources.
+# - constrained_window_views.cc: tab-modal dialogs (JavaScript dialogs, leave
+#   prompts, HTTP authentication) are positioned only over a Views host; a
+#   native window's card isn't one, so they'd float in the middle of the screen
+#   above every app. They're placed over the card as child windows instead (D9).
+# - render_view_context_menu_mac_cocoa.mm: a page's context menu shows only
+#   inside a Views widget; in a native window it shows without one, less the
+#   items of D9's unavailable features (adapted from Crest).
+# - chrome/browser/ui/BUILD.gn, components/constrained_window/BUILD.gn: the
+#   overlay's sources.
 
 --- a/chrome/browser/ui/views/frame/browser_window_factory.cc
 +++ b/chrome/browser/ui/views/frame/browser_window_factory.cc
@@ -429,3 +437,103 @@
      deps += [
        ":browser_commands_mac",
        ":browser_commands_mac_impl",
+--- a/components/constrained_window/constrained_window_views.cc
++++ b/components/constrained_window/constrained_window_views.cc
+@@ -30,6 +30,10 @@
+ #include "ui/views/window/dialog_delegate.h"
+ #include "url/gurl.h"
+ 
++#if BUILDFLAG(IS_MAC)
++#include "components/constrained_window/clair_native_host_mac.h"
++#endif
++
+ #if BUILDFLAG(IS_OZONE)
+ #include "ui/ozone/public/ozone_platform.h"
+ #endif
+@@ -108,7 +112,11 @@
+   views::Widget* const host_widget =
+       views::Widget::GetWidgetForNativeView(dialog_host->GetHostView());
+   if (!host_widget) {
++#if BUILDFLAG(IS_MAC)
++    return NativeHostDialogBounds(dialog_host, size).value_or(gfx::Rect());
++#else
+     return gfx::Rect();
++#endif
+   }
+ 
+   gfx::Point position = dialog_host->GetDialogPosition(size);
+@@ -172,6 +180,11 @@
+   // modal dialogs are displayed as sheets, and their position is managed by a
+   // ConstrainedWindowSheetController instance.
+   if (!host_widget) {
++#if BUILDFLAG(IS_MAC)
++    if (PlaceDialogOverNativeHost(widget, dialog_host, size)) {
++      return;
++    }
++#endif
+     widget->SetSize(size);
+     return;
+   }
+--- a/components/constrained_window/BUILD.gn
++++ b/components/constrained_window/BUILD.gn
+@@ -43,6 +43,14 @@
+   if (use_ozone) {
+     deps += [ "//ui/ozone" ]
+   }
++
++  if (is_mac) {
++    sources += [
++      "clair_native_host_mac.h",
++      "clair_native_host_mac.mm",
++    ]
++    deps += [ "//ui/gfx" ]
++  }
+ }
+ 
+ source_set("unit_tests") {
+--- a/chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm
++++ b/chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm
+@@ -13,6 +13,7 @@
+ #import "base/message_loop/message_pump_apple.h"
+ #include "base/strings/sys_string_conversions.h"
+ #include "base/task/current_thread.h"
++#include "chrome/browser/clair/window/clair_window_hooks.h"  // nogncheck
+ #include "chrome/browser/headless/headless_mode_util.h"
+ #import "components/remote_cocoa/app_shim/menu_controller_cocoa_delegate_impl.h"
+ #include "content/public/browser/web_contents.h"
+@@ -78,12 +79,20 @@
+   views::Widget* widget = views::Widget::GetTopLevelWidgetForNativeView(
+       source_web_contents_->GetNativeView());
+ 
+-  if (!widget || headless::IsHeadlessMode()) {
++  if (headless::IsHeadlessMode()) {
+     return;
+   }
+-
+-  menu_controller_delegate_ = [[MenuControllerCocoaDelegateImpl alloc]
+-      initWithParams:MenuControllerParamsForWidget(widget)];
++  // Clair's native window has no Views widget; its pages' menus show without
++  // one, less the items of features it doesn't have.
++  if (!widget) {
++    if (!clair::IsInNativeWindow(gfx::NativeView(parent_view_))) {
++      return;
++    }
++    clair::RemoveUnavailableContextMenuItems(&menu_model_);
++  } else {
++    menu_controller_delegate_ = [[MenuControllerCocoaDelegateImpl alloc]
++        initWithParams:MenuControllerParamsForWidget(widget)];
++  }
+   menu_controller_ =
+       [[MenuControllerCocoa alloc] initWithModel:&menu_model_
+                                    isContextMenu:YES
+@@ -97,7 +106,9 @@
+ 
+   ui::ShowContextMenu(menu_controller_.menu, clickEvent, parent_view_,
+                       /*allow_nested_tasks=*/true,
+-                      views::ElementTrackerViews::GetContextForWidget(widget));
++                      widget
++                          ? views::ElementTrackerViews::GetContextForWidget(widget)
++                          : ui::ElementContext());
+ }
+ 
+ void RenderViewContextMenuMacCocoa::CancelToolkitMenu() {

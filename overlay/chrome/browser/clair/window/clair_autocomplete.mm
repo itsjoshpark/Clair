@@ -245,7 +245,7 @@ ClairSuggestionKind KindOf(const AutocompleteMatch& match) {
   [self queryText:text];
 }
 
-// D11: with an empty query, the window's tabs by last use, then the profile's
+// D11: with an empty query, the window's other tabs by last use, then the profile's
 // most visited sites. ungoogled-chromium's zero-suggest has no remote source,
 // so this list is built here.
 - (void)showEmptyQueryList {
@@ -258,8 +258,11 @@ ClairSuggestionKind KindOf(const AutocompleteMatch& match) {
   if (_browserWindow) {
     TabStripModel* strip = _browserWindow->browser()->tab_strip_model();
     std::vector<content::WebContents*> tabs;
+    // Switching to the tab already shown would do nothing.
     for (int i = 0; i < strip->count(); ++i) {
-      tabs.push_back(strip->GetWebContentsAt(i));
+      if (i != strip->active_index()) {
+        tabs.push_back(strip->GetWebContentsAt(i));
+      }
     }
     std::ranges::sort(tabs, [](content::WebContents* a, content::WebContents* b) {
       return a->GetLastActiveTimeTicks() > b->GetLastActiveTimeTicks();

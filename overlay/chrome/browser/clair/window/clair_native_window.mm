@@ -49,6 +49,12 @@ bool ClairIsRemovedCommand(int command) {
     case IDC_TOGGLE_VERTICAL_TABS:
     case IDC_TOGGLE_VERTICAL_TABS_COLLAPSE:
     case IDC_SHOW_HISTORY_SIDE_PANEL:
+    case IDC_NEW_SPLIT_TAB:
+    // Omnibox settings, with no omnibox to apply to, and Cast.
+    case IDC_SHOW_GOOGLE_LENS_SHORTCUT:
+    case IDC_SHOW_AI_MODE_OMNIBOX_BUTTON:
+    case IDC_SHOW_SEARCH_TOOLS:
+    case IDC_ROUTE_MEDIA:
     // Passwords and autofill are off (D17).
     case IDC_SHOW_PASSWORD_MANAGER:
     case IDC_PASSWORDS_AND_AUTOFILL_MENU:

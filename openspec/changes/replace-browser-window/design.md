@@ -138,14 +138,15 @@ Rules:
 | Docked DevTools | Native host in the card for Chromium's DevTools page (D5) |
 | Permission prompt, page info, extension install prompt | Chromium's Views bubble, anchored (D7) |
 | Extension popup | Native popover hosting Chromium's popup page (D7) |
-| JavaScript dialogs, HTTP auth, print preview, other tab-modal dialogs | Chromium's, through `ClairModalDialogHost` |
-| Context menus, file pickers, color picker, date pickers | Chromium's, unchanged (already native `NSMenu` and panels, or owned by the page) |
+| JavaScript dialogs, HTTP auth, print preview, other tab-modal dialogs | Chromium's, through `ClairModalDialogHost`, placed over the card as child windows by a hook (D13) |
+| Context menus | Chromium's `NSMenu`, shown through a hook (D13), without the items of unavailable features: split view, reading mode, QR code, send tab to self, Lens and translate |
+| File pickers, color picker, date pickers | Chromium's, unchanged (native panels, or owned by the page) |
 | Undocked DevTools, pop-up, app and Picture-in-Picture windows, profile picker, task manager | Chromium's own windows |
 | `chrome://` pages | Tabs, unchanged |
 | Zoom bubble | Toast (D8) |
 | Bookmark bubble, bookmark star, bookmarks bar, Bookmarks menu | Removed (D10): the `BrowserWindow` methods do nothing |
 | Password and autofill bubbles and popups | Turned off at the source (D17); the `BrowserWindow` methods also do nothing |
-| Side panels (reading list, reader mode, extension side panels), tab search, Chrome Labs, Lens, QR code, send tab to self, sharing hub, cast, app menu, profile menu, tab groups UI, customize Chrome, PWA install and intent picker, EyeDropper, caret browsing dialog, translate | Unavailable: the `BrowserWindow` method does nothing (returns null where it creates something, so the EyeDropper API rejects), logs once, and D10 hides the menu item |
+| Side panels (reading list, reader mode, extension side panels), tab search, Chrome Labs, Lens, QR code, send tab to self, sharing hub, cast, app menu, profile menu, tab groups UI, split view, customize Chrome, PWA install and intent picker, EyeDropper, caret browsing dialog, translate | Unavailable: the `BrowserWindow` method does nothing (returns null where it creates something, so the EyeDropper API rejects), logs once, and D10 hides the menu item |
 
 Task 3.4 checks each row against the engine. A row that fails (a crash or missing UI) is fixed with a hook into overlay code. Its handling may move between "anchored" and "native" without a spec change, since the specs describe what the user sees, not who draws it.
 
@@ -155,7 +156,8 @@ Chromium's main menu stays, with these changes, applied by the overlay once `Cla
 
 - **Hidden** (by command tag), with their key equivalents:
   - The whole Bookmarks menu, which takes Cmd+D, Shift+Cmd+B and Opt+Cmd+B with it.
-  - The items for D9's unavailable features: View > Always Show Bookmarks Bar, Always Show Toolbar in Full Screen, Always Show Full URLs, Customize Chrome, the tab search and tab group items, and Chrome Labs.
+  - The items for D9's unavailable features: View > Always Show Bookmarks Bar, Always Show Toolbar in Full Screen, Always Show Full URLs, Customize Chrome, the tab search, tab group and split view items, Cast, and Chrome Labs.
+  - View's omnibox settings (Always Show Image Search Shortcut, Always Show AI Mode, Show Search Shortcuts), with no omnibox to apply to.
   - Any password or autofill item.
 
   Cmd+D stays unassigned until the MVP gives it Pin/Unpin Tab.
@@ -179,7 +181,7 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
 
   Up to five rows show, as in Arc.
 - **Opening:** `Navigate` with the match's destination and transition. Cmd+T, Shift+Return and Cmd+Return use a new foreground tab, which D12's placement puts at the top of the sidebar. Cmd+L uses the current tab. A match with an open tab activates that tab and its window instead.
-- **Empty query:** the window's tabs by last active time, then `TopSites` for the profile, built in the overlay rather than through zero-suggest, which ungoogled-chromium leaves without a remote source.
+- **Empty query:** the window's tabs other than the active one, by last active time, then `TopSites` for the profile, built in the overlay rather than through zero-suggest, which ungoogled-chromium leaves without a remote source.
 - **Keywords:** Tab on a match with an associated keyword re-runs the query in keyword mode, as `OmniboxEditModel::AcceptKeyword` does, and the bar shows the engine's icon and name.
 - **Panel:** a SwiftUI view about 760 pt wide (shrinking to fit the window), centred on the window, its top about a third of the way down, with a large soft shadow and no dimming. The selected row uses the accent colour.
 
@@ -220,7 +222,9 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
 | `chrome/browser/resources/settings/page_visibility.ts` | hide the "Autofill and passwords" section (D17) |
 | `chrome/browser/ui/webui/new_tab_page/new_tab_page_handler.cc`, `chrome/browser/new_tab_page/feature_promo_helper/new_tab_page_feature_promo_helper.cc`, `chrome/browser/ui/extensions/extension_install_ui_desktop.cc` | skip the new tab page's footer and promo and the extension-installed toolbar hint, whose controllers only exist with a `BrowserView` (found by Crest on 156) |
 | `chrome/browser/ui/read_anything/read_anything_side_panel_controller.cc` | closing the active tab otherwise reaches `CHECK_IS_TEST()` for a browser without a side panel |
-| `chrome/browser/ui/BUILD.gn` | the overlay's sources |
+| `components/constrained_window/constrained_window_views.cc` | place tab-modal dialogs (JavaScript dialogs, leave prompts, HTTP authentication, print preview) over the card as child windows of the native window. Chromium positions them only over a Views host, and otherwise leaves them in the middle of the screen at the modal panel level, above every app (found in task 3.4). The placement lives in `overlay/components/constrained_window/clair_native_host_mac.mm` |
+| `chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm` | show a page's context menu without a Views widget, which Chromium otherwise requires, so no context menu opened (found in task 3.4); drop the items of unavailable features (adapted from Crest) |
+| `chrome/browser/ui/BUILD.gn`, `components/constrained_window/BUILD.gn` | the overlay's sources |
 
 The first engine build already includes the hunks for call sites that Crest's `native-host.patch` and Chromium's own `IsWebUIBrowserEnabled()` checks show crash for a browser without a `BrowserView` on 156. Task 3.4 adds a hunk only when a surface in D9 fails without it, with the reason in the patch header, as Crest's patches state theirs. Behavior stays in the overlay, as the modified `chromium-engine` requirement needs.
 

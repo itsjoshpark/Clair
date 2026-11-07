@@ -9,6 +9,7 @@
 
 #include "ui/base/page_transition_types.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/native_ui_types.h"
 
 // The calls patches/clair/native-window-hook.patch adds to Chromium's own
 // files (replace-browser-window design D13). Each does nothing for Chromium's
@@ -28,6 +29,10 @@ class WebContents;
 namespace download {
 class DownloadItem;
 }  // namespace download
+
+namespace ui {
+class SimpleMenuModel;
+}  // namespace ui
 
 namespace user_prefs {
 class PrefRegistrySyncable;
@@ -82,6 +87,15 @@ bool ShowNewDownload(download::DownloadItem* item);
 // browser_prefs.cc: Clair's defaults for passwords and autofill, which are off
 // (D17). Called after Chromium registers its profile prefs.
 void RegisterProfilePrefOverrides(user_prefs::PrefRegistrySyncable* registry);
+
+// render_view_context_menu_mac_cocoa.mm: whether `view` is in a native
+// window, where a page's context menu shows without a Views widget (D9).
+bool IsInNativeWindow(gfx::NativeView view);
+
+// render_view_context_menu_mac_cocoa.mm: removes the context menu items of
+// D9's unavailable features (split view, reading mode, QR code, send tab to
+// self, Lens, translate) and the separators that leaves doubled or at an end.
+void RemoveUnavailableContextMenuItems(ui::SimpleMenuModel* model);
 
 // Not a hook: called once ClairUI has started. Applies D10's menu changes:
 // no Bookmarks menu, the unavailable features' items hidden, View > Hide
