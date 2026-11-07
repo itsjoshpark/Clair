@@ -105,6 +105,7 @@ Rules:
 
 - Window full screen is macOS's. `ClairBrowserWindow` reports it through `IsFullscreen` and the bounds methods, and Chromium hears each transition, as Crest's `CrestExclusiveAccessContext` does.
 - Page full screen: `ClairExclusiveAccessContext::EnterFullscreen` asks `ClairUI` to show the page alone (no sidebar, insets or corners) and puts the window into macOS full screen if it isn't already. `ExitFullscreen` reverses only what it changed, so a window that was already full screen stays so. Chromium's exclusive-access bubble ("Press Esc to exit full screen") is a Views bubble; for this change it is replaced by a native capsule at the top of the screen that disappears after Chromium's usual time.
+- Esc: Chromium ends page full screen when Esc reaches the page (`BrowserWebContentsDelegate::PreHandleKeyboardEvent`). The native window also hands Esc to the `ExclusiveAccessManager` itself during page full screen, so it works whatever has the keyboard, as Chromium's `BrowserView` accelerator does. An Esc while the window is still animating into full screen, when AppKit ignores a request to leave, ends full screen once the window is in.
 
 ### D7. The toolbar in the sidebar, and where Chromium's bubbles attach
 
