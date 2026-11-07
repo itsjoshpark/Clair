@@ -28,8 +28,10 @@ See proposal.md for why. Today:
 
 `ClairWindowFrame` overrides:
 - `-_minXTitlebarWidgetInset`: the controls' x from the window's leading edge.
-- `-_titlebarHeight`: twice the distance from the window's top to the buttons' centre, so AppKit centres them at the requested y. With the sidebar shown that is 2 × (16 + 8) = 48 pt.
-- `-layout`: after `super`, applies the hidden state to the three buttons, so AppKit's layout can't show them again.
+- `-_titlebarHeight`: the requested top plus 26 pt. AppKit doesn't centre the buttons vertically: task 1.3 measured them anchored 10 pt above the title bar's bottom edge on macOS 27 (requested tops of 10, 16 and 24 with a centring height landed at 10, 22 and 38), so the button's 16 pt plus that gap below it sets the height.
+- `-layout`: after `super`, applies the hidden state to the three buttons, so AppKit's layout can't show them again. It then measures where the close button landed and, if that's half a point or more from the requested place, adds the difference to the inset and the height and lays out once more. A macOS that anchors the buttons differently still lands them right, at the cost of one extra layout the first time.
+
+Accessibility reports the buttons a point up and left of their frames (measured in PR #92 and again in task 1.3), so `ClairUI` requests (13, 17) from the sidebar's corner for them to read back as Arc's 12/35/58 and 16.
 
 In window full screen all three return or do `super`'s, as Chromium's frame does, since AppKit shows the title bar in the reveal strip there.
 
@@ -60,7 +62,7 @@ NS_SWIFT_NAME(ClairWindowControls)
 
 ### D3. `ClairUI` sets the place from the sidebar's frame
 
-`BrowserRootView.layout()` already knows the sidebar's frame on every step of the hide, show and reveal springs. It sets `windowControlsOrigin` to the sidebar's top-leading corner plus (12, 16), and `windowControlsHidden` when the page is in full screen or the sidebar is wholly off the window, only when either value changes. `TrafficLights`' frame setting, its conversion between coordinate spaces and its observers go away.
+`BrowserRootView.layout()` already knows the sidebar's frame on every step of the hide, show and reveal springs. It sets `windowControlsOrigin` to the sidebar's top-leading corner plus (13, 17) (D1), and `windowControlsHidden` when the page is in full screen or the sidebar is wholly off the window, only when either value changes. `TrafficLights`' frame setting, its conversion between coordinate spaces and its observers go away.
 
 The fake browser's window in `ClairUITests` adopts `ClairWindowControls` and records what it's given, so unit tests cover the values for the shown, half-hidden, hidden, revealed and full-screen states.
 
@@ -71,7 +73,7 @@ The positions are checked as PR #92 checked them: accessibility frames of the bu
 ## Risks / Trade-offs
 
 - [The private methods change or disappear in a future macOS] → `+frameViewClassForStyleMask:` falls back to `super`'s when `NSThemeFrame` is missing, and the overrides only change numbers AppKit already asks for. Chromium's windows break the same way, so the fix will be visible upstream.
-- [A 48 pt title bar takes clicks or drags meant for the sidebar's top row, or for the URL field, whose top is at y+46] → with a full-size content view and a transparent title bar, AppKit passes clicks in empty title bar areas to the content, as it does for Chromium's own taller title bar. Task 3.2 clicks the top-row buttons and the field's top edge to confirm it.
+- [A 43 pt title bar takes clicks or drags meant for the sidebar's top row, or for the URL field, whose top is at y+46] → with a full-size content view and a transparent title bar, AppKit passes clicks in empty title bar areas to the content, as it does for Chromium's own taller title bar. Task 3.2 clicks the top-row buttons and the field's top edge to confirm it.
 - [Laying out the title bar on every display-link step stutters] → it lays out three buttons. If recordings show stutter, hide the controls while the sidebar moves and show them at the end, which the spec allows as long as they never show at AppKit's spot.
 - [Accessibility frames and drawn positions differ by a point, as they did in PR #92] → the inset is tuned against Arc's accessibility frames, measured the same way, so both apps read 12/35/58 and 16.
 
