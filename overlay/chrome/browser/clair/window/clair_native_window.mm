@@ -385,6 +385,8 @@ WEAK_IMPORT_ATTRIBUTE
 // Whether the buttons are hidden while their place keeps changing, on a macOS
 // where they can't follow it (design D1's fallback).
 @property(nonatomic, readonly) BOOL windowControlsHiddenForMotion;
+// Whether the theme frame can re-tile its title bar on request (design D2).
+@property(nonatomic, readonly) BOOL canRetileTitlebar;
 @end
 
 // Puts the window's buttons where its ClairWindowControls ask (design D1).
