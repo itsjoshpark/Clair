@@ -1,0 +1,30 @@
+# Clair's page view never moves the window (drag-window-from-page-top design
+# D3). Chromium's RenderWidgetHostViewCocoa answers YES to
+# mouseDownCanMoveWindow so that -webkit-app-region works in frameless app
+# windows (PWAs, Chrome Apps), which Clair doesn't support. In Clair's native
+# window the page reaches the window's top edge, under AppKit's title bar, so
+# YES let AppKit move the window from a press on the page, such as a link drag.
+# ClairUI moves the window from the top of the page itself. Arc's Chromium
+# makes the same change.
+
+--- a/content/app_shim_remote_cocoa/render_widget_host_view_cocoa.mm
++++ b/content/app_shim_remote_cocoa/render_widget_host_view_cocoa.mm
+@@ -3137,12 +3137,13 @@
+   return YES;
+ }
+ 
+-// "-webkit-app-region: drag | no-drag" is implemented on Mac by excluding
+-// regions that are not draggable. (See ControlRegionView in
+-// native_app_window_cocoa.mm). This requires the render host view to be
+-// draggable by default.
++// Clair: a press on a page never moves the window. Chromium answered YES for
++// "-webkit-app-region: drag | no-drag" in app windows, which Clair doesn't
++// support; in Clair's window the page reaches the top edge, under AppKit's
++// title bar, so YES let a press on the page move the window. ClairUI moves the
++// window from the top of the page itself.
+ - (BOOL)mouseDownCanMoveWindow {
+-  return YES;
++  return NO;
+ }
+ 
+ @end
