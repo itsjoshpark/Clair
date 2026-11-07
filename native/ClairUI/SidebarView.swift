@@ -249,6 +249,9 @@ struct URLField: View {
           .frame(width: 24, height: 24)
           .padding(.leading, 6)
           .padding(.trailing, 3)
+          .frame(maxHeight: .infinity)
+          .contentShape(Rectangle())
+          .onTapGesture { actions?.editURL() }
       }
       Text(display ?? URLDisplay.placeholder)
         .font(.system(size: 13))
@@ -256,7 +259,7 @@ struct URLField: View {
         .truncationMode(.tail)
         .foregroundStyle(display == nil ? Color.secondary : Color.primary.opacity(0.85))
         .padding(.leading, display == nil ? 0 : 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture { actions?.editURL() }
         .accessibilityElement()
