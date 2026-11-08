@@ -376,9 +376,12 @@ final class HistoryMenuTests: NativeWindowTestCase {
     let enabled = await Harness.wait(for: 15) { back.isEnabled }
     try require(enabled, "Back isn't available after two navigations")
     back.rightClick()
-    let first = browser.ui.menuItems["Clair link page"]
+    // The back menu, not the menu bar's History menu, which lists the same pages.
+    let menu = browser.sidebar.descendants(matching: .menu).firstMatch
+    try require(menu.waitForExistence(timeout: 10), "Right-clicking back opened no menu")
+    let first = menu.menuItems["Clair link page"]
     try require(first.waitForExistence(timeout: 10), "The back menu doesn't list the first page")
-    let second = browser.ui.menuItems["Clair runtime test page"]
+    let second = menu.menuItems["Clair runtime test page"]
     XCTAssertTrue(second.exists, "The back menu doesn't list the second page")
     if second.exists {
       XCTAssertLessThan(second.frame.minY, first.frame.minY, "The back menu isn't nearest first")
