@@ -83,9 +83,10 @@ final class BrowserRootView: NSView {
   /// How long a revealed sidebar stays after the pointer leaves it, as in Arc.
   static let concealDelay: Duration = .milliseconds(100)
   /// The area left of the window that counts as the leading inset, as in
-  /// Arc: 50 pt, or 250 pt while the pointer comes from the window or is
-  /// already in the area, so overshooting the inset still reveals. Arc's
-  /// constants; measured live, 250 pt reveals and 260 pt doesn't.
+  /// Arc: 50 pt, or 250 pt while the pointer was last in the window or is
+  /// already in the area, so overshooting the inset still reveals. Measured
+  /// in Arc: 250 pt reveals and 260 pt doesn't; arriving from elsewhere, 45 pt
+  /// reveals and 100 pt doesn't.
   static let overshootWidth: CGFloat = 50
   static let wideOvershootWidth: CGFloat = 250
 
@@ -543,9 +544,9 @@ final class BrowserRootView: NSView {
       && point.y >= frame.minY && point.y <= frame.maxY
   }
 
-  /// Follows the pointer while the sidebar is hidden, as Arc does with a
-  /// local monitor: the active app's key window keeps getting mouse moves
-  /// outside it. A global monitor covers moves that go to other apps.
+  /// Follows the pointer while the sidebar is hidden: the active app's key
+  /// window keeps getting mouse moves outside it, which a local monitor sees,
+  /// and a global monitor covers moves that go to other apps.
   private func startOvershoot() {
     guard overshootMonitors.isEmpty else { return }
     let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
