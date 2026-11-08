@@ -169,11 +169,11 @@ Cmd+S, the sidebar button and View > Hide Sidebar SHALL hide the sidebar with a 
 - **THEN** Cmd+S hides the sidebar without opening a save panel, and Shift+Cmd+S opens the save panel for the page
 
 ### Requirement: Revealing the hidden sidebar
-While the sidebar is hidden, resting the pointer anywhere in the window's leading inset, with no move for about 80 ms as in Arc, SHALL slide the sidebar in as a floating overlay above the page, without resizing the page. Moving the pointer away SHALL slide it back out about 100 ms later. Showing the sidebar while it's revealed SHALL dock it where it is, with only the card moving to make room.
+While the sidebar is hidden, the pointer coming to rest in the key window's leading inset, with no move for about 80 ms, SHALL slide the sidebar in as a floating overlay above the page, without resizing the page, as in Arc. A pointer moving through without stopping SHALL NOT reveal it. Once the pointer leaves the overlay, the sidebar SHALL slide back out about 100 ms later. Showing the sidebar while it's revealed SHALL dock it where it is, with only the card moving to make room.
 
 #### Scenario: Hover reveal
-- **WHEN** the sidebar is hidden and the pointer rests at the window's leading edge
-- **THEN** the sidebar slides in over the page, the page keeps its size, and moving the pointer away from the overlay hides it again
+- **WHEN** the sidebar is hidden and the pointer comes to rest at the window's leading edge
+- **THEN** the sidebar slides in over the page, the page keeps its size, and moving the pointer off the overlay hides it again
 
 #### Scenario: Passing through
 - **WHEN** the sidebar is hidden and the pointer moves through the leading inset, or the area beside the window, without stopping
@@ -184,19 +184,19 @@ While the sidebar is hidden, resting the pointer anywhere in the window's leadin
 - **THEN** the sidebar stays where it is and becomes the docked sidebar, and the card narrows to make room
 
 ### Requirement: Overshooting the window's edge
-The area beside the key window's leading edge, level with the window, SHALL count as the leading inset, as in Arc: 50 points wide, or 250 points while the pointer comes from the window or is already in that area. So overshooting the inset still reveals the sidebar, and the revealed sidebar stays while the pointer is there.
+The area outside the key window's leading edge, as tall as the window, SHALL count as the leading inset, as in Arc. It SHALL be 50 points wide, and 250 points wide while the pointer was last in the window or is in that area, so a pointer that overshoots the inset still reveals the sidebar, and the revealed sidebar stays while the pointer is there.
 
 #### Scenario: Overshooting the inset
-- **WHEN** the sidebar is hidden and the pointer crosses the window's leading inset and stops 100 points beyond the window's edge, level with the window
+- **WHEN** the sidebar is hidden and the pointer leaves the window through its leading edge and comes to rest up to 250 points beyond it, level with the window
 - **THEN** the sidebar is revealed and stays revealed while the pointer rests there
 
 #### Scenario: Too far out
-- **WHEN** the pointer leaves the window through its leading edge and stops 300 points beyond it, or above or below the window
+- **WHEN** the pointer leaves the window through its leading edge and comes to rest 260 points or more beyond it, or higher or lower than the window
 - **THEN** the sidebar isn't revealed, or hides if it was
 
 #### Scenario: Arriving from elsewhere
 - **WHEN** the pointer reaches the area beside the window's leading edge without crossing the window
-- **THEN** the sidebar is revealed if the pointer stops within 50 points of the edge, and not if it stops 100 points away
+- **THEN** the sidebar is revealed if the pointer comes to rest within 50 points of the edge, and not if it comes to rest 100 points away
 
 ### Requirement: Moving the window from the sidebar
 Dragging the sidebar's empty areas, docked or revealed, SHALL move the window, as in Arc. Controls, tab rows and dragging tabs to reorder them SHALL work as before.
