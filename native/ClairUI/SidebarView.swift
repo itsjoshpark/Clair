@@ -84,7 +84,7 @@ struct SidebarView: View {
       URLField(model: model, actions: actions, showsButtons: isHovered && model.isWindowKey)
         .padding(.horizontal, 8)
         .padding(.top, 6)
-      if !model.extensionActions.isEmpty || !model.downloads.isEmpty {
+      if !model.extensionActions.isEmpty {
         ToolsRow(model: model, actions: actions)
           .padding(.horizontal, 8)
           .padding(.top, 6)
@@ -98,8 +98,9 @@ struct SidebarView: View {
       }
       TabList(model: model, actions: actions)
         .padding(.top, model.profileKind == .incognito ? 0 : 8)
+      // Arc's tab list ends where its footer starts.
+      SidebarFooter(model: model, actions: actions)
     }
-    .padding(.bottom, 8)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     // The sidebar's empty areas move the window, as in Arc (design D18).
     .background {
@@ -409,7 +410,6 @@ struct ToolsRow: View {
   weak var actions: (any SidebarActions)?
 
   @State private var showsExtensions = false
-  @State private var showsDownloads = false
 
   var body: some View {
     HStack(spacing: 2) {
@@ -428,6 +428,24 @@ struct ToolsRow: View {
           }
       }
       Spacer(minLength: 0)
+    }
+    .frame(height: IconButtonSize.regular)
+  }
+}
+
+/// The sidebar's footer, as in Arc: a 50 pt band under the tab list, with the
+/// downloads button where Arc has its library button, 8 pt in from the side
+/// and 9 pt from the bottom.
+struct SidebarFooter: View {
+  let model: BrowserWindowModel
+  weak var actions: (any SidebarActions)?
+
+  static let height: CGFloat = 50
+
+  @State private var showsDownloads = false
+
+  var body: some View {
+    HStack(spacing: 0) {
       if !model.downloads.isEmpty {
         DownloadsButton(progress: model.downloadProgress, hasUnseen: model.hasUnseenDownloads) {
           showsDownloads.toggle()
@@ -438,8 +456,10 @@ struct ToolsRow: View {
           DownloadsList(model: model, actions: actions)
         }
       }
+      Spacer(minLength: 0)
     }
-    .frame(height: IconButtonSize.regular)
+    .padding(.horizontal, 8)
+    .frame(height: Self.height)
   }
 }
 
