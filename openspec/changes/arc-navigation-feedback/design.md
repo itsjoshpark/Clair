@@ -55,7 +55,7 @@ See proposal.md for why, and `specs/sidebar/spec.md` and `specs/browser-window/s
 ### D2. The stop button's hold, in `ClairUI`
 
 - A small AppKit-free state machine, `ReloadStopMode`, takes the tab's `isLoading`, whether the pointer is on the button, and a clock, and answers what the button shows and whether it's enabled, following Views' `ReloadButton`: a change from stop to reload while hovered disables the button and completes when the pointer leaves or 1.35 s pass; a change from reload to stop within the double-click interval after a reload click, while hovered, is deferred the same way. A forced change (tab switch) applies at once.
-- The full row's reload button and the compact row's menu item (which only reads the state) use it. Unit tests cover the hover hold, the timeout, the double-click case and a tab switch.
+- The full row's reload button and the compact row's menu item (which only reads the state) use it. It has no automated tests, unit or runtime (owner's decision, 2026-11-07, to keep the quality checks short); task 5.1 checks it by hand.
 - Arc has no hold: its ✕ turns back into reload under the pointer as soon as the load ends (task 1.1). The owner kept Chromium's hold (2026-11-07), since it stops a late click on stop from reloading the page.
 
 ### D3. The history menu: Chromium's model behind a session

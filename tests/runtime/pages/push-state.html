@@ -1,9 +1,0 @@
-<!doctype html>
-<title>Clair push state page</title>
-<p>Calls history.pushState every 300 ms once the page has loaded.</p>
-<script>
-  window.addEventListener("load", () => {
-    let count = 0;
-    setInterval(() => { history.pushState({}, "", "?step=" + ++count); }, 300);
-  });
-</script>

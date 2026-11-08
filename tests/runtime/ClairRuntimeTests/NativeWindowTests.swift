@@ -364,62 +364,6 @@ final class NavigationTests: NativeWindowTestCase {
   }
 }
 
-/// Reload and stop follow the page's own loading (arc-navigation-feedback
-/// task 3.2): frames loading on their own and same-document navigations
-/// leave reload in place.
-@MainActor
-final class ReloadStopTests: NativeWindowTestCase {
-  static let reload = "Reload this page"
-  static let stop = "Stop loading this page"
-
-  private func waitUntilLoaded(_ tab: DevToolsSession) async -> Bool {
-    await Harness.wait(for: 30) { try await tab.evaluate("document.readyState") as? String == "complete" }
-  }
-
-  /// Watches the reload button for `seconds` and returns every label it showed.
-  private func labels(of button: XCUIElement, for seconds: TimeInterval) -> Set<String> {
-    var seen = Set<String>()
-    let end = Date(timeIntervalSinceNow: seconds)
-    while Date() < end {
-      seen.insert(button.label)
-      Thread.sleep(forTimeInterval: 0.1)
-    }
-    return seen
-  }
-
-  private func checkReloadStays(on page: String) async throws {
-    let (browser, tab) = try await startWithPage(page)
-    defer { tab.close() }
-    try require(await waitUntilLoaded(tab), "\(page) didn't finish loading")
-    let reload = browser.element("clair.reload")
-    try require(reload.waitForExistence(timeout: 10), "The sidebar has no reload button")
-    let seen = labels(of: reload, for: 5)
-    XCTAssertEqual(seen, [Self.reload], "On \(page), the reload button showed \(seen.sorted())")
-  }
-
-  func testBusyFramesKeepReload() async throws {
-    try await checkReloadStays(on: "busy-frames.html")
-  }
-
-  func testPushStateKeepsReload() async throws {
-    try await checkReloadStays(on: "push-state.html")
-  }
-
-  func testSlowPageShowsStopUntilLoaded() async throws {
-    let (browser, tab) = try await startWithPage()
-    defer { tab.close() }
-    let reload = browser.element("clair.reload")
-    try require(reload.waitForExistence(timeout: 10), "The sidebar has no reload button")
-    _ = try await tab.evaluate("location.href = '\(fixture.baseURL)/slow-page?seconds=6'; 1")
-    let stopped = await Harness.wait(for: 5) { reload.label == Self.stop }
-    XCTAssertTrue(stopped, "The reload button didn't show stop while the slow page loaded")
-    let stillStop = labels(of: reload, for: 2)
-    XCTAssertEqual(stillStop, [Self.stop], "Stop didn't hold while the slow page loaded: \(stillStop.sorted())")
-    let reloaded = await Harness.wait(for: 20) { reload.label == Self.reload }
-    XCTAssertTrue(reloaded, "The reload button didn't show reload once the slow page loaded")
-  }
-}
-
 /// The back button's history menu (arc-navigation-feedback task 4.2).
 @MainActor
 final class HistoryMenuTests: NativeWindowTestCase {
