@@ -32,6 +32,13 @@ Cmd+L, File > Open Location Bar and a click on the URL field SHALL open the comm
 - **WHEN** the user presses Cmd+L twice
 - **THEN** the second press closes the command bar and the active tab is unchanged
 
+### Requirement: Command bar in a new window
+A window that opens on a single new tab page SHALL open with the command bar showing, so typing goes straight into it, as in Arc. Esc SHALL close it and leave the new tab page.
+
+#### Scenario: New window
+- **WHEN** the user presses Cmd+N and types `example.org` and Return
+- **THEN** the new window's tab navigates to `https://example.org/`
+
 ### Requirement: Command bar appearance
 The command bar SHALL float over the window, horizontally centered on the whole window and about a third of the way down, above the sidebar and the page, without dimming the page. It SHALL have a search icon, the placeholder "Search or Enter URL…", and the results below the field.
 

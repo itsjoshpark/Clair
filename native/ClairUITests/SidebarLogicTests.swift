@@ -16,6 +16,15 @@ struct URLDisplayTests {
     #expect(URLDisplay.text(for: tab) == "news.ycombinator.com")
   }
 
+  @Test func hostLosesItsWWW() {
+    #expect(URLDisplay.withoutWWW("www.apple.com") == "apple.com")
+    #expect(URLDisplay.withoutWWW("WWW.Apple.com") == "Apple.com")
+    #expect(URLDisplay.withoutWWW("www2.apple.com") == "www2.apple.com")
+    #expect(URLDisplay.withoutWWW("www.com") == "www.com")
+    #expect(URLDisplay.text(url: URL(string: "https://www.apple.com/mac/"), urlText: "", displayHost: "www.apple.com")
+      == "apple.com")
+  }
+
   @Test func chromePageShowsItsFullURL() {
     let tab = FakeTab(id: 1, url: "chrome://settings/")
     #expect(URLDisplay.text(for: tab) == "chrome://settings/")

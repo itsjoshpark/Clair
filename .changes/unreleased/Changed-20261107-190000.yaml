@@ -1,0 +1,3 @@
+kind: Changed
+body: 'New windows open with the command bar ready for typing. Edit > Copy URL copies the page''s address with Shift+Cmd+C, as in Arc (Opt+Cmd+C still inspects an element), and the URL field''s right-click menu offers it too. Every button has a tooltip with its shortcut, and resting on a tab for a few seconds shows its full title. The URL field hides "www.", shows its buttons whenever the pointer is over the sidebar, and matches Arc''s look in Light and Dark Mode, as do the open tab in dark and incognito windows and the incognito badge. A hidden sidebar shows from anywhere along the window''s left edge and is less see-through, and the sidebar''s buttons sit in the right place in full screen'
+time: 2026-11-07T19:00:00.000000-05:00

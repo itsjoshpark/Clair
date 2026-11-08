@@ -56,8 +56,9 @@ final class BrowserWindowModel {
   var exclusiveAccessNotice: String?
   var isPageFullscreen = false
   var isWindowKey = true
-  /// The sidebar's tooltip (design D18).
-  let tooltips = TooltipCenter()
+  /// Whether the window is in macOS full screen, where the top row has no
+  /// window controls to make room for.
+  var isWindowFullscreen = false
   var windowControls = WindowControlsMetrics.macOS27
 
   init(profileKind: ProfileKind, sidebar: SidebarState) {
@@ -130,6 +131,9 @@ struct SidebarState: Equatable {
 struct WindowControlsMetrics: Equatable {
   /// macOS 27's, which match Arc's, until the buttons are first read.
   static let macOS27 = WindowControlsMetrics(centreY: 24, trailingX: 74)
+  /// In full screen, where there are no window controls: Arc keeps the top
+  /// row where it is and starts hide-sidebar 13 pt in.
+  static let fullScreen = WindowControlsMetrics(centreY: 24, trailingX: 13 - topRowGap)
 
   /// The close button's vertical centre.
   var centreY: CGFloat

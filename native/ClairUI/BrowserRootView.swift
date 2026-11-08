@@ -63,7 +63,8 @@ final class SelfSizingHostingView<Content: View>: NSHostingView<Content> {
 /// page directly.
 final class BrowserRootView: NSView {
   /// The strip at the leading edge that reveals a hidden sidebar.
-  static let revealStripWidth: CGFloat = 6
+  /// The whole inset at the leading edge reveals it (design D18).
+  static let revealStripWidth = WindowLayout.hiddenInset
   /// Arc reveals 100–117 ms after the pointer arrives; event delivery adds
   /// about 50 ms to this.
   static let revealDelay: Duration = .milliseconds(70)
@@ -77,6 +78,13 @@ final class BrowserRootView: NSView {
   /// The revealed sidebar's panel: a shadow around a lighter material.
   let revealedPanel = NSView()
   let revealedBackground = NSVisualEffectView()
+  /// Over the revealed sidebar's material, so it's less translucent than a
+  /// popover (design D18).
+  let revealedTint = DynamicFillView(color: SidebarTint.revealed)
+  /// Arc's near-black in Dark Mode over the window's and the backdrop's
+  /// material, which is grey there; clear in Light Mode (design D18).
+  let backgroundTint = DynamicFillView(color: SidebarTint.window)
+  let backdropTint = DynamicFillView(color: SidebarTint.window)
   let card = PageCardView()
   let sidebar: NSView
   let resizeHandle = SidebarResizeHandle()
@@ -88,7 +96,6 @@ final class BrowserRootView: NSView {
   var toastHost: NSView? { didSet { replace(oldValue, with: toastHost) } }
   var noticeHost: NSView? { didSet { replace(oldValue, with: noticeHost) } }
   var commandBarHost: NSView? { didSet { replace(oldValue, with: commandBarHost, scrim: true) } }
-  var tooltipHost: NSView? { didSet { replace(oldValue, with: tooltipHost) } }
   private let commandBarScrim = ClickCatcherView()
   /// Called when the scrim behind the command bar is clicked.
   var onScrimClick: (() -> Void)? {
@@ -137,10 +144,14 @@ final class BrowserRootView: NSView {
     revealedPanel.layer?.shadowRadius = 8
     revealedPanel.layer?.shadowOffset = CGSize(width: 0, height: -2)
     revealedPanel.addSubview(revealedBackground)
+    revealedBackground.addSubview(revealedTint)
     revealedPanel.isHidden = true
     addSubview(background)
+    // Above the materials, not inside them, where they'd blend it.
+    addSubview(backgroundTint)
     addSubview(card)
     addSubview(sidebarBackdrop)
+    addSubview(backdropTint)
     addSubview(revealedPanel)
     addSubview(sidebar)
     addSubview(resizeHandle)
@@ -184,7 +195,6 @@ final class BrowserRootView: NSView {
       _ = model.toast
       _ = model.exclusiveAccessNotice
       _ = model.commandBar
-      _ = model.tooltips.current
     } onChange: { [weak self] in
       Task { @MainActor in
         guard let self else { return }
@@ -259,6 +269,7 @@ final class BrowserRootView: NSView {
     // the springs already have changes nothing.
     updateSidebarTargets()
     background.frame = bounds
+    backgroundTint.frame = bounds
     let layout = currentLayout
     card.frame = layout.card
     // The floating sidebar while it's revealed or sliding away; the one in
@@ -275,10 +286,13 @@ final class BrowserRootView: NSView {
       && layout.card.minX < layout.sidebar.maxX
     sidebarBackdrop.isHidden = !cardUnderSidebar
     sidebarBackdrop.frame = layout.sidebar
+    backdropTint.frame = layout.sidebar
+    backdropTint.isHidden = sidebarBackdrop.isHidden
     revealedPanel.frame = floating
     revealedPanel.layer?.shadowPath = CGPath(
       roundedRect: revealedPanel.bounds, cornerWidth: 10, cornerHeight: 10, transform: nil)
     revealedBackground.frame = revealedPanel.bounds
+    revealedTint.frame = revealedBackground.bounds
     card.isBare = model.isPageFullscreen
     resizeHandle.isHidden = model.sidebar.isHidden || model.isPageFullscreen
     resizeHandle.frame = CGRect(x: layout.sidebar.maxX - 3, y: 0, width: 6, height: bounds.height)
@@ -287,7 +301,6 @@ final class BrowserRootView: NSView {
       readWindowControls(sidebar: sidebarFrame)
     }
     layoutOverlays(card: layout.card)
-    layoutTooltip(sidebar: sidebarFrame)
     updateRevealTracking()
   }
 
@@ -323,23 +336,6 @@ final class BrowserRootView: NSView {
     }
   }
 
-  /// Puts the tooltip below and after the pointer that showed it, inside the
-  /// window, above everything else.
-  private func layoutTooltip(sidebar: CGRect) {
-    guard let tooltipHost, let tooltip = model.tooltips.current else { return }
-    let size = tooltipHost.fittingSize
-    var origin = CGPoint(
-      x: sidebar.minX + tooltip.point.x + TooltipView.offset.width - 8,
-      y: sidebar.minY + tooltip.point.y + TooltipView.offset.height - 8)
-    // The view has 8 pt around the capsule for its shadow.
-    origin.x = max(-4, min(origin.x, bounds.width - size.width + 4))
-    origin.y = max(-4, min(origin.y, bounds.height - size.height + 4))
-    tooltipHost.frame = CGRect(origin: origin, size: size)
-    if tooltipHost !== subviews.last {
-      addSubview(tooltipHost)
-    }
-  }
-
   // MARK: Window controls (place-traffic-lights-with-appkit D3b)
 
   /// Reads where AppKit put the close and zoom buttons, as accessibility
@@ -347,7 +343,9 @@ final class BrowserRootView: NSView {
   /// synchronous, so they're already at the place just set; hidden ones are
   /// left alone until they show.
   private func readWindowControls(sidebar: CGRect) {
-    guard let window, !model.isPageFullscreen,
+    // In full screen the buttons live in the title bar's own window, so
+    // their frames say nothing about this one.
+    guard let window, !model.isPageFullscreen, !window.styleMask.contains(.fullScreen),
       let close = window.standardWindowButton(.closeButton),
       let zoom = window.standardWindowButton(.zoomButton),
       !close.isHidden, !zoom.isHidden
@@ -537,5 +535,60 @@ extension NSHostingView {
     let host = NSHostingView(rootView: rootView)
     host.safeAreaRegions = []
     return host
+  }
+}
+
+/// A view filled with a colour that follows the appearance, such as a
+/// translucent window background over a material.
+final class DynamicFillView: NSView {
+  private let color: NSColor
+
+  init(color: NSColor) {
+    self.color = color
+    super.init(frame: .zero)
+    wantsLayer = true
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not used")
+  }
+
+  override var wantsUpdateLayer: Bool { true }
+
+  override func updateLayer() {
+    effectiveAppearance.performAsCurrentDrawingAppearance {
+      layer?.backgroundColor = color.cgColor
+    }
+  }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    nil
+  }
+}
+
+/// The fills over the sidebar's materials (design D18).
+enum SidebarTint {
+  /// Arc's dark sidebar, which measures (16, 19, 25) in a window capture.
+  /// Opaque: any translucency lets the desktop behind the window lighten it.
+  /// The window draws a colour about a quarter lighter than it's given, so
+  /// these values measure as Arc's.
+  static let dark = NSColor(srgbRed: 13 / 255, green: 14 / 255, blue: 19 / 255, alpha: 1)
+
+  /// Over the window's material: nothing in Light Mode, Arc's near-black in
+  /// Dark Mode, including incognito windows.
+  static let window = NSColor(name: nil) { appearance in
+    appearance.isDark ? dark : .clear
+  }
+
+  /// Over the revealed sidebar's lighter material, so it's less see-through.
+  static let revealed = NSColor(name: nil) { appearance in
+    appearance.isDark ? dark : NSColor.windowBackgroundColor.withAlphaComponent(0.55)
+  }
+}
+
+extension NSAppearance {
+  var isDark: Bool {
+    bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]).map { [.darkAqua, .vibrantDark].contains($0) } ?? false
   }
 }

@@ -83,6 +83,10 @@ The native window SHALL support macOS full screen. When a page asks for full scr
 - **WHEN** the user chooses View > Enter Full Screen
 - **THEN** the window enters macOS full screen and keeps its sidebar state
 
+#### Scenario: Top row in full screen
+- **WHEN** the window is in macOS full screen with the sidebar shown
+- **THEN** the top row stays where it is in a window, and the hide-sidebar button moves to the sidebar's leading edge in place of the window controls
+
 #### Scenario: Page full screen
 - **WHEN** a page's video enters full screen
 - **THEN** the video fills the screen with no sidebar, card margin or rounded corners, and pressing Esc returns the window to its previous state
@@ -97,6 +101,13 @@ Cmd+F SHALL open a floating find field at the top-trailing corner of the card. I
 #### Scenario: Closing find
 - **WHEN** the user presses Esc in the find field
 - **THEN** the field closes, the highlights are cleared, and focus returns to the page
+
+### Requirement: Copy URL from the menu bar
+Edit SHALL offer Copy URL after Copy, on Shift+Cmd+C, as in Arc, copying the active tab's URL. Opt+Cmd+C SHALL still inspect an element.
+
+#### Scenario: Copying with the shortcut
+- **WHEN** a page is focused and the user presses Shift+Cmd+C
+- **THEN** the page's URL is on the pasteboard, and DevTools doesn't open
 
 ### Requirement: Link status
 Hovering a link SHALL show its URL in a small capsule at the bottom-leading corner of the card. The capsule SHALL fade in once the pointer has rested on links for about half a second, and fade out about half a second after the pointer leaves them; moving to another link while it shows SHALL update it at once.

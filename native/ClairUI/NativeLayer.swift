@@ -38,6 +38,7 @@ final class NativeLayer {
     about.install(in: NSApp.mainMenu)
     self.about = about
     MainMenuTitles.apply(to: NSApp.mainMenu)
+    MainMenuTitles.addCopyURL(to: NSApp.mainMenu)
 
     let updates = UpdateController(host: host, configuration: .current)
     updates.start()

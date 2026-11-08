@@ -68,12 +68,16 @@ struct SidebarView: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
+  /// The URL field's buttons show while the pointer is anywhere over the
+  /// sidebar of the key window (design D18).
+  @State private var isHovered = false
+
   var body: some View {
     // Arc's metrics: the top row at y+8, the URL field at y+46, the list
     // from y+90 with rows the sidebar's width less 8 pt each side.
     VStack(alignment: .leading, spacing: 0) {
       TopRow(model: model, actions: actions)
-      URLField(model: model, actions: actions)
+      URLField(model: model, actions: actions, showsButtons: isHovered && model.isWindowKey)
         .padding(.horizontal, 8)
         .padding(.top, 6)
       if !model.extensionActions.isEmpty || !model.downloads.isEmpty {
@@ -82,13 +86,14 @@ struct SidebarView: View {
           .padding(.top, 6)
       }
       if model.profileKind == .incognito {
-        Label("Incognito", systemImage: "eye.slash")
-          .font(.headline)
-          .padding(.horizontal, 14)
-          .padding(.top, 10)
+        // Arc's row: 37 pt from 8 pt below the URL field.
+        IncognitoBadge()
+          .padding(.leading, 14)
+          .frame(height: 37)
+          .padding(.top, 8)
       }
       TabList(model: model, actions: actions)
-        .padding(.top, 8)
+        .padding(.top, model.profileKind == .incognito ? 0 : 8)
     }
     .padding(.bottom, 8)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -99,12 +104,55 @@ struct SidebarView: View {
         .gesture(WindowDragGesture())
         .allowsWindowActivationEvents(true)
     }
+    .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
     .environment(\.isWindowKey, model.isWindowKey)
-    .environment(model.tooltips)
     .coordinateSpace(name: sidebarCoordinateSpace)
     .onPreferenceChange(AnchorFramesKey.self) { frames in
       MainActor.assumeIsolated { actions?.controlFramesChanged(frames) }
     }
+  }
+}
+
+/// Arc's incognito badge, where a normal window shows its Space, as measured:
+/// a barely lighter 22 pt capsule, a near-white crossed-out eye 17 pt wide
+/// and 6.5 pt in, and "Incognito" in dim grey from 27 pt in.
+struct IncognitoBadge: View {
+  var body: some View {
+    HStack(spacing: 3.5) {
+      Image(systemName: "eye.slash")
+        .font(.system(size: 11.5, weight: .medium))
+        .foregroundStyle(Color.primary.opacity(0.94))
+        .frame(width: 17)
+      Text("Incognito")
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(Color.primary.opacity(0.4))
+    }
+    .padding(.leading, 6.5)
+    .padding(.trailing, 6)
+    .frame(height: 22)
+    .background(Color.primary.opacity(0.03), in: .capsule)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Incognito")
+  }
+}
+
+/// The sidebar's fills, from Arc in Light and Dark Mode (design D18).
+enum SidebarFill {
+  /// The URL field: a flat fill, no border.
+  static func field(_ scheme: ColorScheme, hovered: Bool) -> Color {
+    scheme == .dark ? Color.white.opacity(hovered ? 0.24 : 0.18) : Color.black.opacity(hovered ? 0.09 : 0.045)
+  }
+
+  /// The active tab's pill, lighter and flat while the window isn't key.
+  static func activePill(_ scheme: ColorScheme, isWindowKey: Bool) -> Color {
+    scheme == .dark
+      ? Color.white.opacity(isWindowKey ? 0.24 : 0.16)
+      : Color(nsColor: .controlBackgroundColor).opacity(isWindowKey ? 0.9 : 0.7)
+  }
+
+  /// A hovered row or button.
+  static func hover(_ scheme: ColorScheme) -> Color {
+    scheme == .dark ? Color.white.opacity(0.09) : Color.primary.opacity(0.06)
   }
 }
 
@@ -132,7 +180,7 @@ struct SidebarButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 16, weight: .regular))
+        .font(.system(size: 16, weight: .medium))
         .frame(width: size, height: size)
         .background(Color.primary.opacity(isHovered && isEnabled ? 0.08 : 0), in: .rect(cornerRadius: 6))
         .animation(sidebarHoverFade, value: isHovered)
@@ -155,6 +203,8 @@ struct TopRow: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
+  @State private var isMoreHovered = false
+
   /// The trailing margin, and the gap between back, forward and reload.
   static let trailing: CGFloat = 6
   static let gap: CGFloat = 2
@@ -168,7 +218,7 @@ struct TopRow: View {
   var body: some View {
     let tab = model.activeTab
     let isLoading = tab?.isLoading == true
-    let controls = model.windowControls
+    let controls = model.isWindowFullscreen ? WindowControlsMetrics.fullScreen : model.windowControls
     let isCompact = controls.hasCompactTopRow(width: model.sidebar.width)
     let back = SidebarButton(
       systemImage: "arrow.left", help: "Go back", shortcut: ["⌘", "["], isEnabled: tab?.canGoBack ?? false,
@@ -196,8 +246,10 @@ struct TopRow: View {
           Button("Hide Sidebar") { actions?.toggleSidebar() }
         } label: {
           Image(systemName: "ellipsis")
-            .font(.system(size: 16, weight: .regular))
+            .font(.system(size: 16, weight: .medium))
             .frame(width: 28, height: 28)
+            .background(Color.primary.opacity(isMoreHovered ? 0.08 : 0), in: .rect(cornerRadius: 6))
+            .animation(sidebarHoverFade, value: isMoreHovered)
             .contentShape(Rectangle())
         }
         .menuStyle(.button)
@@ -205,8 +257,9 @@ struct TopRow: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .foregroundStyle(model.isWindowKey ? .secondary : .tertiary)
-        .help("More")
-        .accessibilityLabel("More")
+        .onHover { isMoreHovered = $0 }
+        .tooltip("More options")
+        .accessibilityLabel("More options")
         .accessibilityIdentifier("clair.topRowMenu")
       }
       .padding(.trailing, Self.trailing)
@@ -252,8 +305,12 @@ struct TopRow: View {
 struct URLField: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
+  /// Whether the copy and site-controls buttons show: while the pointer is
+  /// over the key window's sidebar.
+  var showsButtons = false
 
   @State private var isHovered = false
+  @Environment(\.colorScheme) private var colorScheme
 
   static let height: CGFloat = 36
   static let buttonSize: CGFloat = 30
@@ -307,19 +364,19 @@ struct URLField: View {
               .contentShape(Rectangle())
           }
           .buttonStyle(.plain)
-          .help(label)
+          .tooltip(label)
           .accessibilityLabel(label)
           .anchorFrame(.indicator(indicator.rawValue))
         }
       }
 
-      if isHovered, display != nil {
-        URLFieldButton(systemImage: "link", help: "Copy URL") { actions?.copyURL() }
+      if showsButtons, display != nil {
+        URLFieldButton(systemImage: "link", help: "Copy URL", shortcut: ["⇧", "⌘", "C"]) { actions?.copyURL() }
           .accessibilityIdentifier("clair.copyURL")
           .padding(.trailing, -2)
           .transition(.opacity)
       }
-      if isHovered, hasSiteControls {
+      if showsButtons, hasSiteControls {
         URLFieldButton(systemImage: "slider.horizontal.3", help: "Site Control Center") {
           actions?.showSiteControls(indicator: [])
         }
@@ -327,7 +384,7 @@ struct URLField: View {
         .transition(.opacity)
       }
     }
-    .padding(.trailing, isHovered || tab?.indicators.isEmpty == false ? 4 : 12)
+    .padding(.trailing, showsButtons || tab?.indicators.isEmpty == false ? 4 : 12)
     .frame(height: Self.height)
     // Chromium's page info attaches where the site-controls button shows on
     // hover, whether or not it shows now.
@@ -339,9 +396,14 @@ struct URLField: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
-    // Arc darkens the field by about 4% under the pointer (design D18).
-    .background(Color.primary.opacity(isHovered ? 0.1 : 0.05), in: .rect(cornerRadius: 10, style: .continuous))
+    // Arc's flat fill, darker under the pointer (design D18).
+    .background(SidebarFill.field(colorScheme, hovered: isHovered), in: .rect(cornerRadius: 10, style: .continuous))
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
+    .contextMenu {
+      if display != nil {
+        Button("Copy URL") { actions?.copyURL() }
+      }
+    }
   }
 }
 
@@ -349,6 +411,7 @@ struct URLField: View {
 struct URLFieldButton: View {
   let systemImage: String
   let help: String
+  var shortcut: [String] = []
   let action: () -> Void
 
   @State private var isHovered = false
@@ -357,7 +420,7 @@ struct URLFieldButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 13, weight: .regular))
+        .font(.system(size: 13, weight: .medium))
         .frame(width: URLField.buttonSize, height: URLField.buttonSize)
         .background(Color.primary.opacity(isHovered ? 0.08 : 0), in: .rect(cornerRadius: 7))
         .animation(sidebarHoverFade, value: isHovered)
@@ -365,7 +428,7 @@ struct URLFieldButton: View {
     }
     .buttonStyle(.plain)
     .foregroundStyle(isWindowKey ? .secondary : .tertiary)
-    .tooltip(help)
+    .tooltip(help, shortcut: shortcut)
     .accessibilityLabel(help)
     .onHover { isHovered = $0 }
   }
@@ -443,7 +506,7 @@ struct ExtensionButton: View {
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .help(action.name)
+    .tooltip(action.name)
     .accessibilityLabel(action.name)
     .accessibilityValue(action.badgeText)
     .accessibilityIdentifier("clair.extensionAction")
@@ -478,7 +541,7 @@ struct ExtensionsList: View {
             Image(systemName: action.isPinned ? "pin.fill" : "pin")
           }
           .buttonStyle(.plain)
-          .help(action.isPinned ? "Unpin" : "Pin")
+          .tooltip(action.isPinned ? "Unpin" : "Pin")
           .accessibilityLabel(action.isPinned ? "Unpin" : "Pin")
         }
         .padding(.vertical, 4)
@@ -514,7 +577,7 @@ struct DownloadsButton: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .help("Downloads")
+    .tooltip("Downloads")
     .accessibilityLabel("Downloads")
     .accessibilityValue(progress.map { "\(Int($0 * 100))%" } ?? (hasUnseen ? "New" : ""))
     .accessibilityIdentifier("clair.downloads")
@@ -580,13 +643,13 @@ struct DownloadRow: View {
         switch download.state {
         case .inProgress, .paused:
           Button { actions?.cancelDownload(download.downloadID) } label: { Image(systemName: "xmark.circle") }
-            .buttonStyle(.plain).help("Cancel")
+            .buttonStyle(.plain).tooltip("Cancel")
         case .interrupted where download.canResume:
           Button { actions?.resumeDownload(download.downloadID) } label: { Image(systemName: "arrow.clockwise") }
-            .buttonStyle(.plain).help("Retry")
+            .buttonStyle(.plain).tooltip("Retry")
         case .complete:
           Button { actions?.showDownloadInFinder(download.downloadID) } label: { Image(systemName: "magnifyingglass") }
-            .buttonStyle(.plain).help("Show in Finder")
+            .buttonStyle(.plain).tooltip("Show in Finder")
         default:
           EmptyView()
         }
@@ -650,6 +713,7 @@ struct NewTabRow: View {
   let action: () -> Void
 
   @State private var isHovered = false
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     Button(action: action) {
@@ -664,7 +728,7 @@ struct NewTabRow: View {
       .padding(.horizontal, TabRow.horizontalPadding)
       .frame(height: TabRow.pillHeight)
       .background(
-        isHighlighted ? Color.accentColor.opacity(0.18) : (isHovered ? Color.primary.opacity(0.06) : .clear),
+        isHighlighted ? Color.accentColor.opacity(0.18) : (isHovered ? SidebarFill.hover(colorScheme) : .clear),
         in: .rect(cornerRadius: TabRow.cornerRadius, style: .continuous)
       )
       .padding(.top, TabRow.pillInset)
@@ -687,6 +751,10 @@ struct TabRow: View {
   weak var actions: (any SidebarActions)?
 
   @State private var isHovered = false
+  @Environment(\.colorScheme) private var colorScheme
+
+  /// How long the pointer rests on a row before its full title shows.
+  static let titleTooltipDelay: Duration = .seconds(3)
 
   // Arc's metrics: 40 pt rows on a 41 pt pitch, an 18 pt favicon frame 9 pt
   // into the pill with the favicon drawn at 16 pt, the title 8 pt after it,
@@ -730,7 +798,7 @@ struct TabRow: View {
             .font(.system(size: 11))
         }
         .buttonStyle(.plain)
-        .help(tab.isMuted ? "Unmute Tab" : "Mute Tab")
+        .tooltip(tab.isMuted ? "Unmute tab" : "Mute tab")
         .accessibilityIdentifier("clair.tabSpeaker")
       }
       if isHovered {
@@ -744,10 +812,10 @@ struct TabRow: View {
       if isActive {
         // Lighter and flat while the window isn't key, as in Arc.
         RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-          .fill(Color(nsColor: .controlBackgroundColor).opacity(isWindowKey ? 0.9 : 0.7))
+          .fill(SidebarFill.activePill(colorScheme, isWindowKey: isWindowKey))
           .shadow(color: .black.opacity(isWindowKey ? 0.12 : 0), radius: 2, y: 1)
       } else if isHovered {
-        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous).fill(Color.primary.opacity(0.06))
+        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous).fill(SidebarFill.hover(colorScheme))
       }
     }
     .padding(.top, Self.pillInset)
@@ -758,6 +826,8 @@ struct TabRow: View {
     // a selection ring around the row (design D18).
     .overlay(RowClickCatcher(onMiddleClick: { actions?.close(tab: tab.tabID) }, menuItems: menuItems))
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
+    // The full title, once the pointer has rested on the row (design D18).
+    .tooltip(tab.title.isEmpty ? nil : tab.title, delay: Self.titleTooltipDelay)
     .accessibilityElement(children: .contain)
     .accessibilityLabel(tab.title)
     .accessibilityIdentifier("clair.tabRow")
@@ -783,7 +853,7 @@ struct TabCloseButton: View {
     }
     .buttonStyle(.plain)
     .foregroundStyle(.secondary)
-    .help("Close Tab")
+    .tooltip("Close tab", shortcut: ["⌘", "W"])
     .accessibilityIdentifier("clair.tabClose")
     .onHover { isHovered = $0 }
   }
