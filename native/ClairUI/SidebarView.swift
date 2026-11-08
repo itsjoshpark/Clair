@@ -97,8 +97,10 @@ struct SidebarView: View {
           .padding(.top, 8)
       }
       TabList(model: model, actions: actions)
-        .padding(.top, model.profileKind == .incognito ? 0 : 8)
-      // Arc's tab list ends where its footer starts.
+        .padding(.top, tabListTopPadding)
+      // The footer stays at the bottom however short the list is; the space
+      // between moves the window like the rest of the sidebar.
+      Spacer(minLength: 0)
       SidebarFooter(model: model, actions: actions)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -115,6 +117,14 @@ struct SidebarView: View {
     .onPreferenceChange(AnchorFramesKey.self) { frames in
       MainActor.assumeIsolated { actions?.controlFramesChanged(frames) }
     }
+  }
+
+  /// 8 pt under the URL field. Under the tools row, whose buttons have no
+  /// visible edge, 4 pt, so the "New Tab" pill sits 6 pt below the row as the
+  /// row sits 6 pt below the URL field.
+  private var tabListTopPadding: CGFloat {
+    if model.profileKind == .incognito { return 0 }
+    return model.extensionActions.isEmpty ? 8 : 4
   }
 }
 
@@ -433,14 +443,20 @@ struct ToolsRow: View {
   }
 }
 
-/// The sidebar's footer, as in Arc: a 50 pt band under the tab list, with the
-/// downloads button always where Arc has its library button, 8 pt in from the
-/// side and 9 pt from the bottom.
+/// The sidebar's footer, as in Arc: a 50 pt band at the bottom of the sidebar,
+/// with the downloads button always where Arc has its library button, 8 pt in
+/// from the side and 9 pt from the bottom.
 struct SidebarFooter: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
   static let height: CGFloat = 50
+  /// The footer's glyphs, as measured against Arc's library glyph (16.5 pt
+  /// tall) and plus (an SF Symbol at 17 pt medium): medium weight, sized so a
+  /// circled symbol is 16 pt across. The grey is the buttons' `.secondary`,
+  /// which matches Arc's.
+  static let glyphSize: CGFloat = 16
+  static let glyphWeight: Font.Weight = .medium
 
   @State private var showsDownloads = false
 
@@ -538,7 +554,8 @@ struct ExtensionsList: View {
 }
 
 /// The downloads button, 32 pt as in Arc's footer, with the running
-/// downloads' progress around the glyph and a dot for unseen downloads.
+/// downloads' progress drawn over the glyph's circle and a dot for unseen
+/// downloads.
 struct DownloadsButton: View {
   let progress: Double?
   let hasUnseen: Bool
@@ -546,16 +563,18 @@ struct DownloadsButton: View {
 
   var body: some View {
     IconButton(help: "Downloads", action: action) {
-      ZStack {
-        if let progress {
-          Circle().stroke(Color.primary.opacity(0.15), lineWidth: 2)
-          Circle().trim(from: 0, to: progress).stroke(Color.accentColor, lineWidth: 2).rotationEffect(.degrees(-90))
+      SymbolGlyph(systemImage: "arrow.down.circle", size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight)
+        .overlay {
+          if let progress {
+            // On the symbol's ring: 16 pt across with a 1.5 pt stroke.
+            Circle()
+              .trim(from: 0, to: progress)
+              .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+              .rotationEffect(.degrees(-90))
+              .frame(width: SidebarFooter.glyphSize - 1.5, height: SidebarFooter.glyphSize - 1.5)
+          }
         }
-        Image(systemName: "arrow.down")
-          .font(.system(size: 11, weight: .semibold))
-      }
-      .frame(width: 20, height: 20)
-      .frame(width: IconButtonSize.regular, height: IconButtonSize.regular)
+        .frame(width: IconButtonSize.regular, height: IconButtonSize.regular)
       .overlay(alignment: .topTrailing) {
         if hasUnseen {
           Circle().fill(Color.accentColor).frame(width: 7, height: 7).padding(2)
