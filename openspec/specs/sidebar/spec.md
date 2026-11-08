@@ -169,7 +169,7 @@ Cmd+S, the sidebar button and View > Hide Sidebar SHALL hide the sidebar with a 
 - **THEN** Cmd+S hides the sidebar without opening a save panel, and Shift+Cmd+S opens the save panel for the page
 
 ### Requirement: Revealing the hidden sidebar
-While the sidebar is hidden, resting the pointer anywhere in the window's leading inset for about 100 ms SHALL slide the sidebar in as a floating overlay above the page, without resizing the page. Moving the pointer away SHALL slide it back out. Showing the sidebar while it's revealed SHALL dock it where it is, with only the card moving to make room.
+While the sidebar is hidden, resting the pointer anywhere in the window's leading inset for about 100 ms SHALL slide the sidebar in as a floating overlay above the page, without resizing the page. Moving the pointer away SHALL slide it back out about 100 ms later. Showing the sidebar while it's revealed SHALL dock it where it is, with only the card moving to make room.
 
 #### Scenario: Hover reveal
 - **WHEN** the sidebar is hidden and the pointer rests at the window's leading edge
@@ -178,6 +178,21 @@ While the sidebar is hidden, resting the pointer anywhere in the window's leadin
 #### Scenario: Showing a revealed sidebar
 - **WHEN** the sidebar is revealed over the page and the user presses Cmd+S
 - **THEN** the sidebar stays where it is and becomes the docked sidebar, and the card narrows to make room
+
+### Requirement: Overshooting the window's edge
+After the pointer leaves the window through its leading edge, the area beside that edge, up to 250 points out and level with the window, SHALL count as the leading inset, as in Arc: overshooting the inset still reveals the sidebar, and the revealed sidebar stays while the pointer is there. The area SHALL count only after the pointer has left the window that way, and only for the key window.
+
+#### Scenario: Overshooting the inset
+- **WHEN** the sidebar is hidden and the pointer crosses the window's leading inset and stops 100 points beyond the window's edge, level with the window
+- **THEN** the sidebar is revealed and stays revealed while the pointer rests there
+
+#### Scenario: Too far out
+- **WHEN** the pointer leaves the window through its leading edge and stops 300 points beyond it, or above or below the window
+- **THEN** the sidebar isn't revealed, or hides if it was
+
+#### Scenario: Never in the window
+- **WHEN** the pointer reaches the area beside the window's leading edge without crossing the window
+- **THEN** the sidebar isn't revealed
 
 ### Requirement: Moving the window from the sidebar
 Dragging the sidebar's empty areas, docked or revealed, SHALL move the window, as in Arc. Controls, tab rows and dragging tabs to reorder them SHALL work as before.

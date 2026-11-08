@@ -1,0 +1,3 @@
+kind: Changed
+body: A hidden sidebar also slides in when the pointer overshoots the window's left edge, up to 250 points past it, as in Arc
+time: 2026-11-08T17:26:32.653959-05:00
