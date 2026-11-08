@@ -74,9 +74,12 @@ final class BrowserRootView: NSView {
   /// The strip at the leading edge that reveals a hidden sidebar.
   /// The whole inset at the leading edge reveals it (design D18).
   static let revealStripWidth = WindowLayout.hiddenInset
-  /// Arc reveals 100–117 ms after the pointer arrives; event delivery adds
-  /// about 50 ms to this.
-  static let revealDelay: Duration = .milliseconds(70)
+  /// How long the pointer rests in the leading inset, or beside the window,
+  /// before the sidebar reveals: Arc reveals once the pointer has stopped,
+  /// 80 ms without a move, so a pointer passing through, or still heading
+  /// further out, doesn't reveal it. Measured, Arc reveals 100–117 ms after
+  /// the pointer arrives.
+  static let revealRest: Duration = .milliseconds(80)
   /// How long a revealed sidebar stays after the pointer leaves it, as in Arc.
   static let concealDelay: Duration = .milliseconds(100)
   /// The area left of the window that counts as the leading inset, as in
@@ -465,7 +468,8 @@ final class BrowserRootView: NSView {
       stopOvershoot()
       return
     }
-    let area = NSTrackingArea(rect: rect, options: [.mouseEnteredAndExited, .activeInKeyWindow], owner: self)
+    let area = NSTrackingArea(
+      rect: rect, options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow], owner: self)
     addTrackingArea(area)
     revealTrackingArea = area
     startOvershoot()
@@ -501,6 +505,16 @@ final class BrowserRootView: NSView {
   override func mouseEntered(with event: NSEvent) {
     guard event.trackingArea === revealTrackingArea else { return }
     startReveal()
+  }
+
+  // A move in the area starts the rest over.
+  override func mouseMoved(with event: NSEvent) {
+    guard let trackingArea = event.trackingArea else {
+      super.mouseMoved(with: event)
+      return
+    }
+    guard trackingArea === revealTrackingArea else { return }
+    restartReveal()
   }
 
   override func mouseExited(with event: NSEvent) {
@@ -567,7 +581,7 @@ final class BrowserRootView: NSView {
     if isInOvershootZone(point) {
       overshootIsWide = true
       pointerIsBesideWindow = true
-      startReveal()
+      restartReveal()
       return
     }
     overshootIsWide = false
@@ -595,11 +609,26 @@ final class BrowserRootView: NSView {
     guard !model.sidebar.isRevealed else { return }
     revealTaskReveals = true
     revealTask = Task { [weak self] in
-      try? await Task.sleep(for: Self.revealDelay)
+      try? await Task.sleep(for: Self.revealRest)
       guard !Task.isCancelled, let self else { return }
       self.revealTask = nil
       self.model.sidebar.isRevealed = true
     }
+  }
+
+  /// The pointer moved where it reveals the sidebar: wait for it to rest
+  /// again. Only moves restart the wait, not layout, which rebuilds the
+  /// tracking area and asks `startReveal` again.
+  private func restartReveal() {
+    guard model.sidebar.isHidden, !model.sidebar.isRevealed else {
+      startReveal()
+      return
+    }
+    if revealTask != nil, revealTaskReveals {
+      revealTask?.cancel()
+      revealTask = nil
+    }
+    startReveal()
   }
 
   private func startConceal() {

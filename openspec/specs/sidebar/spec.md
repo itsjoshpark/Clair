@@ -169,11 +169,15 @@ Cmd+S, the sidebar button and View > Hide Sidebar SHALL hide the sidebar with a 
 - **THEN** Cmd+S hides the sidebar without opening a save panel, and Shift+Cmd+S opens the save panel for the page
 
 ### Requirement: Revealing the hidden sidebar
-While the sidebar is hidden, resting the pointer anywhere in the window's leading inset for about 100 ms SHALL slide the sidebar in as a floating overlay above the page, without resizing the page. Moving the pointer away SHALL slide it back out about 100 ms later. Showing the sidebar while it's revealed SHALL dock it where it is, with only the card moving to make room.
+While the sidebar is hidden, resting the pointer anywhere in the window's leading inset, with no move for about 80 ms as in Arc, SHALL slide the sidebar in as a floating overlay above the page, without resizing the page. Moving the pointer away SHALL slide it back out about 100 ms later. Showing the sidebar while it's revealed SHALL dock it where it is, with only the card moving to make room.
 
 #### Scenario: Hover reveal
 - **WHEN** the sidebar is hidden and the pointer rests at the window's leading edge
 - **THEN** the sidebar slides in over the page, the page keeps its size, and moving the pointer away from the overlay hides it again
+
+#### Scenario: Passing through
+- **WHEN** the sidebar is hidden and the pointer moves through the leading inset, or the area beside the window, without stopping
+- **THEN** the sidebar isn't revealed
 
 #### Scenario: Showing a revealed sidebar
 - **WHEN** the sidebar is revealed over the page and the user presses Cmd+S
