@@ -21,6 +21,9 @@ protocol SidebarActions: AnyObject {
   // The top row and the URL field.
   func goBack()
   func goForward()
+  /// Starts the back or forward history menu, or nil when the tab can't go
+  /// that way (arc-navigation-feedback design D3).
+  func historyMenu(_ direction: HistoryDirection) -> HistoryMenuBuilder?
   func reloadOrStop()
   func reloadButtonHovered(_ hovering: Bool)
   func toggleSidebar()
@@ -230,6 +233,9 @@ struct TopRow: View {
     ) {
       actions?.goBack()
     }
+    .overlay(
+      HistoryButtonCatcher(
+        isEnabled: tab?.canGoBack ?? false, makeMenu: { actions?.historyMenu(.back) }))
     .accessibilityIdentifier("clair.back")
     let forward = SidebarButton(
       systemImage: "arrow.right", help: "Go forward", shortcut: ["⌘", "]"], isEnabled: tab?.canGoForward ?? false,
@@ -237,6 +243,9 @@ struct TopRow: View {
     ) {
       actions?.goForward()
     }
+    .overlay(
+      HistoryButtonCatcher(
+        isEnabled: tab?.canGoForward ?? false, makeMenu: { actions?.historyMenu(.forward) }))
     .accessibilityIdentifier("clair.forward")
     // The row is centred on the window controls (design D3b).
     if isCompact {

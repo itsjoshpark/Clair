@@ -527,6 +527,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     browser?.goForward()
   }
 
+  func historyMenu(_ direction: HistoryDirection) -> HistoryMenuBuilder? {
+    browser.flatMap { HistoryMenuBuilder(browser: $0, direction: direction) }
+  }
+
   func reloadOrStop() {
     switch model.reloadStop.press() {
     case .stop: browser?.stop()
