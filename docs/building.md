@@ -100,7 +100,7 @@ The DMG is built with [`dmgbuild`](https://github.com/dmgbuild/dmgbuild), which 
 
 ## Quality checks
 
-`.github/workflows/quality.yml` runs after every merge to `main`. It runs the runtime suite in `tests/runtime/` as two parallel jobs on hosted runners: the update tests (`UpdateMenuTests` and `IdleInstallTests`), which wait on Sparkle and idle periods, and everything else. Each job downloads `chromium-engine-<key>` and packages the app ad hoc; the second also runs `scripts/verify-app.sh --skip-signing`. If there's no engine for the commit's key, it fails with "no engine for <key>" and the command to build it.
+`.github/workflows/quality.yml` runs after every merge to `main`. It runs the runtime suite in `tests/runtime/` as two parallel jobs on hosted runners: the update tests (`UpdateMenuTests` and `IdleInstallTests`), which wait on Sparkle and idle periods, and everything else. Each job downloads `chromium-engine-<key>` and packages the app ad hoc; the second also runs `scripts/verify-app.sh --skip-signing`. A push to `main` skips both jobs when a quality run on a commit with the same file tree has already passed (`scripts/find-quality-pass.sh`). That's the usual case after squash-merging an up-to-date branch whose quality run passed, so run it on the branch before merging and the merge costs nothing more. If there's no engine for the commit's key, it fails with "no engine for <key>" and the command to build it.
 
 To run it on a branch, once `quality.yml` is on `main`:
 

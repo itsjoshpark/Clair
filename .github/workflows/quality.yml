@@ -4,6 +4,10 @@
 # idle periods, and everything else. A failure on main opens or updates a
 # quality-failure issue, and a later pass closes it. No release ships without
 # these passing.
+#
+# A push to main skips the suite when a run on a commit with the same file tree
+# has already passed, such as the branch run before a squash merge of an
+# up-to-date branch. The run then counts as a pass.
 name: Quality
 
 on:
@@ -27,8 +31,44 @@ permissions:
   contents: read
 
 jobs:
+  lookup:
+    name: Look for a pass on the same tree
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      passed: ${{ steps.find.outputs.passed }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Find a passed run
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tree="$(git rev-parse 'HEAD^{tree}')"
+          status=0
+          url="$(./scripts/find-quality-pass.sh --tree "$tree")" || status=$?
+          case "$status" in
+            0) echo "::notice::Skipping the suite: $url passed on the same tree ($tree)"
+               echo "passed=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "No passed run on tree $tree"
+               echo "passed=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::warning::Couldn't look for a passed run, so the suite runs"
+               echo "passed=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
   quality:
     name: Quality checks (${{ matrix.name }})
+    needs: lookup
+    if: ${{ !cancelled() && needs.lookup.outputs.passed != 'true' }}
     runs-on: xcode-27
     timeout-minutes: 120
     strategy:
@@ -126,7 +166,7 @@ jobs:
   report:
     # Only this job can write issues.
     name: Report to the quality-failure issue
-    needs: quality
+    needs: [lookup, quality]
     if: ${{ always() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || inputs.report_issue) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -151,7 +191,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RESULT: ${{ needs.quality.result }}
+          # A skipped suite passed on the same tree.
+          RESULT: ${{ needs.lookup.outputs.passed == 'true' && 'success' || needs.quality.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           find "$RUNNER_TEMP/failures" -name failures.txt -exec cat {} + > "$RUNNER_TEMP/failures.txt" 2>/dev/null || true

@@ -106,15 +106,18 @@ jobs:
             echo "published=$published"
           } >> "$GITHUB_OUTPUT"
 
+      # A pass on any commit with the same file tree counts.
       - name: Look for the commit's quality checks
         id: quality
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          passes="$(gh run list --workflow quality.yml --commit "$GITHUB_SHA" --status success --limit 1 --json databaseId --jq length)"
           passed=false
-          (( passes == 0 )) || passed=true
+          if url="$(./scripts/find-quality-pass.sh --tree "$(git rev-parse 'HEAD^{tree}')")"; then
+            passed=true
+            echo "Quality checks passed on this tree: $url"
+          fi
           echo "Quality checks already passed for ${GITHUB_SHA:0:7}: $passed"
           echo "passed=$passed" >> "$GITHUB_OUTPUT"
 
@@ -140,6 +143,7 @@ jobs:
     # What quality.yml's jobs ask for. It reports to no issue from here.
     permissions:
       contents: read
+      actions: read
       issues: write
 
   package:
