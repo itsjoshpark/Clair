@@ -95,6 +95,10 @@ Every push to `main` SHALL run quality checks on a GitHub-hosted runner. They pa
 - **WHEN** the quality checks run
 - **THEN** the runtime suite covers at least: launch and page rendering, the Clair application menu items, the data directory and keychain item, the user agent's Chromium version, the About page versions, a manual update check against local test appcasts, and session restore after a relaunch
 
+#### Scenario: Native window coverage
+- **WHEN** the quality checks run
+- **THEN** the runtime suite also covers the native window's fundamentals: the window's structure, launch and session restore, the page shown in the card, tab selection, creation (at the top), closing and reordering in the sidebar, navigation controls, opening and switching tabs through the command bar, hiding and revealing the sidebar, a permission prompt with the sidebar shown and hidden, an extension action's popup, the downloads indicator, a toast, page full screen, and docked DevTools
+
 ### Requirement: Quality checks reuse a passed run
 A push to `main` SHALL skip the runtime suite and count as passed when a quality run has already passed on a commit with the same file tree. When the push changes only documentation (`openspec/`, `docs/`, `.changes/` and Markdown files at the repository root), a pass on its parent, found the same way, SHALL count too. A release SHALL look for a passed run the same way.
 

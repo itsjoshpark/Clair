@@ -18,7 +18,11 @@ Clair SHALL load its native framework, `ClairUI.framework`, from `Clair.app/Cont
 - **THEN** Clair logs the loader's error, shows an alert that it couldn't start its interface, and quits without opening a browser window
 
 ### Requirement: One contract between Chromium and the native layer
-The native layer SHALL reach Chromium only through the Objective-C protocols declared in `native/ClairHost.h`, and Chromium SHALL reach the native layer only through the entry point that header declares and the objects it returns. The contract SHALL cover at least the graceful relaunch that restores the session, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), the Chromium and ungoogled-chromium versions, opening a URL in a browser tab, and everything the native window needs: creating and closing windows, each window's tabs and their state, the active page's view and its docked DevTools, navigation, find, autocomplete, downloads, extension actions, infobars, toasts and where Chromium's bubbles attach.
+The native layer SHALL reach Chromium only through the Objective-C protocols declared in `native/ClairHost.h`, and Chromium SHALL reach the native layer only through the entry point that header declares and the objects it returns. The contract SHALL cover at least what the updater needs, opening a URL in a browser tab, and everything the native window needs.
+
+#### Scenario: Contract contents
+- **WHEN** `native/ClairHost.h` is read
+- **THEN** it covers the graceful relaunch that restores the session, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), the Chromium and ungoogled-chromium versions, opening a URL in a browser tab, and, for the native window: creating and closing windows, each window's tabs and their state, the active page's view and its docked DevTools, navigation, find, autocomplete, downloads, extension actions, infobars, toasts and where Chromium's bubbles attach
 
 #### Scenario: Relaunch from the native layer
 - **WHEN** the native layer asks the host to relaunch
