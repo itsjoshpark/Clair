@@ -728,6 +728,8 @@ struct TabList: View {
   var body: some View {
     List {
       NewTabRow(isHighlighted: model.commandBar?.mode == .newTab) { actions?.newTab() }
+        // From inside a row, where it can reach the list's scroll view.
+        .background(ScrollerControlSize(size: .small))
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: -1))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
@@ -756,6 +758,40 @@ struct TabList: View {
     // the rows don't fit.
     .frame(maxHeight: Self.contentHeight(tabCount: model.tabs.count))
     .accessibilityIdentifier("clair.tabList")
+  }
+}
+
+/// Sets the scrollers of the scroll view around it to a control size, for a
+/// thinner scroll bar: SwiftUI has no way to, but a `List` scrolls in an
+/// AppKit scroll view.
+struct ScrollerControlSize: NSViewRepresentable {
+  let size: NSControl.ControlSize
+
+  func makeNSView(context: Context) -> SizingView {
+    let view = SizingView()
+    view.size = size
+    return view
+  }
+
+  func updateNSView(_ view: SizingView, context: Context) {
+    view.size = size
+    view.apply()
+  }
+
+  final class SizingView: NSView {
+    var size: NSControl.ControlSize = .regular
+
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      apply()
+    }
+
+    // Clicks go to the row.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func apply() {
+      enclosingScrollView?.verticalScroller?.controlSize = size
+    }
   }
 }
 
