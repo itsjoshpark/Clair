@@ -6,9 +6,10 @@ import SwiftUI
 
 /// The sizes of the sidebar's icon buttons, as measured in Arc.
 enum IconButtonSize {
-  /// The top row's buttons and the downloads button.
+  /// The top row's buttons, pinned extensions, the extensions button and the
+  /// downloads button.
   static let regular: CGFloat = 32
-  /// The compact top row, the URL field's buttons and extension actions.
+  /// The compact top row and the URL field's buttons.
   static let small: CGFloat = 28
   /// The tab row's speaker and close buttons.
   static let tab: CGFloat = 26

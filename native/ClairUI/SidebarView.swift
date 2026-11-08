@@ -418,7 +418,7 @@ struct ToolsRow: View {
           .anchorFrame(.extensionAction(action.extensionID))
       }
       if !model.extensionActions.isEmpty {
-        IconButton(systemImage: "puzzlepiece.extension", help: "Extensions", size: IconButtonSize.small) {
+        IconButton(systemImage: "puzzlepiece.extension", help: "Extensions", size: IconButtonSize.regular) {
           showsExtensions.toggle()
         }
           .accessibilityIdentifier("clair.extensions")
@@ -460,9 +460,9 @@ struct ExtensionButton: View {
   let run: () -> Void
 
   var body: some View {
-    IconButton(help: action.name, size: IconButtonSize.small, action: run) {
+    IconButton(help: action.name, size: IconButtonSize.regular, action: run) {
       ExtensionIcon(action: action)
-        .frame(width: IconButtonSize.small, height: IconButtonSize.small)
+        .frame(width: IconButtonSize.regular, height: IconButtonSize.regular)
         .overlay(alignment: .bottomTrailing) {
           if !action.badgeText.isEmpty {
             Text(action.badgeText)
