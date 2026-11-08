@@ -180,7 +180,7 @@ While the sidebar is hidden, resting the pointer anywhere in the window's leadin
 - **THEN** the sidebar stays where it is and becomes the docked sidebar, and the card narrows to make room
 
 ### Requirement: Overshooting the window's edge
-After the pointer leaves the window through its leading edge, the area beside that edge, up to 250 points out and level with the window, SHALL count as the leading inset, as in Arc: overshooting the inset still reveals the sidebar, and the revealed sidebar stays while the pointer is there. The area SHALL count only after the pointer has left the window that way, and only for the key window.
+The area beside the key window's leading edge, level with the window, SHALL count as the leading inset, as in Arc: 50 points wide, or 250 points while the pointer comes from the window or is already in that area. So overshooting the inset still reveals the sidebar, and the revealed sidebar stays while the pointer is there.
 
 #### Scenario: Overshooting the inset
 - **WHEN** the sidebar is hidden and the pointer crosses the window's leading inset and stops 100 points beyond the window's edge, level with the window
@@ -190,9 +190,9 @@ After the pointer leaves the window through its leading edge, the area beside th
 - **WHEN** the pointer leaves the window through its leading edge and stops 300 points beyond it, or above or below the window
 - **THEN** the sidebar isn't revealed, or hides if it was
 
-#### Scenario: Never in the window
+#### Scenario: Arriving from elsewhere
 - **WHEN** the pointer reaches the area beside the window's leading edge without crossing the window
-- **THEN** the sidebar isn't revealed
+- **THEN** the sidebar is revealed if the pointer stops within 50 points of the edge, and not if it stops 100 points away
 
 ### Requirement: Moving the window from the sidebar
 Dragging the sidebar's empty areas, docked or revealed, SHALL move the window, as in Arc. Controls, tab rows and dragging tabs to reorder them SHALL work as before.
