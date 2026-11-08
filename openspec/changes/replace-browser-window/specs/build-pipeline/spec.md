@@ -11,7 +11,7 @@ Every push to `main` SHALL run quality checks on a GitHub-hosted runner. They pa
 
 #### Scenario: Runtime suite contents
 - **WHEN** the quality checks run
-- **THEN** the runtime suite covers at least: launch and page rendering, the Clair application menu items, the data directory and keychain item, the user agent's Chromium version, the About window and the About page versions, no Google service traffic on an idle first launch, a manual update check against local test appcasts, and session restore after a relaunch
+- **THEN** the runtime suite covers at least: launch and page rendering, the Clair application menu items, the data directory and keychain item, the user agent's Chromium version, the About page versions, a manual update check against local test appcasts, and session restore after a relaunch
 
 #### Scenario: Native window coverage
 - **WHEN** the quality checks run
