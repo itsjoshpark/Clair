@@ -204,7 +204,7 @@ The rest of `arc-reference/clair-menus.md` is the MVP's.
   - The active row is a translucent pill with a soft shadow that fades when the window isn't key.
   - Hover shows the close button, 26 pt square and 5 pt from the pill's trailing edge with a 10 pt glyph and its own hover background, as in Arc, and the speaker toggles mute.
   - The row's context menu is an `NSMenu` opened from AppKit rather than SwiftUI's `contextMenu`, which makes the list draw a selection ring around the right-clicked row (D18).
-  - Incognito windows use a dark appearance and an "Incognito" header with the `eye.slash` symbol, which also replaces Chromium's goggles as the incognito new tab's icon.
+  - Incognito windows use a dark appearance and an "Incognito" header with the `eye.slash` symbol, which also replaces Chromium's goggles as the incognito new tab's icon, near-white as in the header and in Arc.
 - **New tabs at the top.** `TabStripModel::AddWebContents` places a tab with no forced index at the end, or next to its opener for a link (`DetermineInsertionIndex`).
   - The hook: for a native window's tab strip, when no index is forced, `clair::NewTabIndex` returns 0.
   - Covered: Cmd+T, links opened in new tabs (foreground or background) and `chrome.tabs.create` without an index.
