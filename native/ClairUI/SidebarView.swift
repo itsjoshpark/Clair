@@ -75,6 +75,8 @@ struct SidebarView: View {
   /// The URL field's buttons show while the pointer is anywhere over the
   /// sidebar of the key window (design D18).
   @State private var isHovered = false
+  /// Whether the tab list is shorter than its rows, so it scrolls.
+  @State private var tabListOverflows = false
 
   var body: some View {
     // Arc's metrics: the top row at y+8, the URL field at y+46, the list
@@ -97,11 +99,23 @@ struct SidebarView: View {
           .padding(.top, 8)
       }
       TabList(model: model, actions: actions)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+          tabListOverflows = height + 0.5 < TabList.contentHeight(tabCount: model.tabs.count)
+        }
         .padding(.top, tabListTopPadding)
+        // Ahead of the spacer, which would otherwise take half the room.
+        .layoutPriority(1)
       // The footer stays at the bottom however short the list is; the space
       // between moves the window like the rest of the sidebar.
       Spacer(minLength: 0)
       SidebarFooter(model: model, actions: actions)
+        .overlay(alignment: .top) {
+          // Arc's line between a list that scrolls and the footer: 1 pt
+          // across the sidebar, about 4% darker than it.
+          if tabListOverflows {
+            Rectangle().fill(Color.primary.opacity(0.04)).frame(height: 1)
+          }
+        }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     // The sidebar's empty areas move the window, as in Arc (design D18).
@@ -704,6 +718,11 @@ struct TabList: View {
   /// Room beyond the rows, so a list that fits never scrolls.
   static let slack: CGFloat = 8
 
+  /// The height of the "New Tab" row and the tabs, which the list grows to.
+  static func contentHeight(tabCount: Int) -> CGFloat {
+    TabRow.pitch * CGFloat(tabCount + 1) + slack
+  }
+
   var body: some View {
     List {
       NewTabRow(isHighlighted: model.commandBar?.mode == .newTab) { actions?.newTab() }
@@ -733,7 +752,7 @@ struct TabList: View {
     // No taller than its rows, so the space below the last tab is the
     // sidebar's, which moves the window (design D18); the list scrolls once
     // the rows don't fit.
-    .frame(maxHeight: TabRow.pitch * CGFloat(model.tabs.count + 1) + Self.slack)
+    .frame(maxHeight: Self.contentHeight(tabCount: model.tabs.count))
     .accessibilityIdentifier("clair.tabList")
   }
 }
