@@ -114,9 +114,7 @@ run_tests() {
   sudo automationmodetool enable-automationmode-without-authentication
 
   local status=0
-  # xcodebuild passes on TEST_RUNNER_FOO to the tests as FOO. Each test gets
-  # 2 minutes, several times the slowest (IdleInstallTests sets its own), so a
-  # hung test costs little: XCTest then restarts the runner and goes on.
+  # xcodebuild passes on TEST_RUNNER_FOO to the tests as FOO.
   TEST_RUNNER_CLAIR_RUNTIME_DIR="$dir" xcodebuild test-without-building \
     -project "$project" -scheme ClairRuntimeTests \
     -destination "platform=macOS,arch=arm64" -derivedDataPath "$dir/DerivedData" \
