@@ -30,7 +30,10 @@ final class FittingHostingView<Content: View>: NSHostingView<Content> {
 /// content's size changes, so an overlay's frame follows its content within
 /// the same pass (design D18). Without it, content that grows is centred in
 /// the old frame until the next layout, and moves.
-final class SelfSizingHostingView<Content: View>: NSHostingView<Content> {
+class SelfSizingHostingView<Content: View>: NSHostingView<Content> {
+  /// A margin around the content, kept for its shadow, that takes no clicks.
+  var hitInset: CGFloat = 0
+
   required init(rootView: Content) {
     super.init(rootView: rootView)
     safeAreaRegions = []
@@ -39,6 +42,12 @@ final class SelfSizingHostingView<Content: View>: NSHostingView<Content> {
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("init(coder:) is not used")
+  }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    guard hitInset > 0 else { return super.hitTest(point) }
+    let local = convert(point, from: superview)
+    return bounds.insetBy(dx: hitInset, dy: hitInset).contains(local) ? super.hitTest(point) : nil
   }
 
   override func invalidateIntrinsicContentSize() {
@@ -137,13 +146,13 @@ final class BrowserRootView: NSView {
     revealedBackground.layer?.cornerCurve = .continuous
     revealedBackground.layer?.masksToBounds = true
     revealedBackground.layer?.borderWidth = 1
-    revealedBackground.layer?.borderColor = NSColor.white.withAlphaComponent(0.35).cgColor
     revealedPanel.wantsLayer = true
     revealedPanel.layer?.shadowColor = NSColor.black.cgColor
     revealedPanel.layer?.shadowOpacity = 0.22
     revealedPanel.layer?.shadowRadius = 8
     revealedPanel.layer?.shadowOffset = CGSize(width: 0, height: -2)
     revealedPanel.addSubview(revealedBackground)
+    updateRevealedBorder()
     revealedBackground.addSubview(revealedTint)
     revealedPanel.isHidden = true
     addSubview(background)
@@ -170,6 +179,27 @@ final class BrowserRootView: NSView {
 
   override var isFlipped: Bool { true }
 
+  /// The revealed sidebar's edge: a light hairline, darker in Dark Mode,
+  /// where a light one stands out.
+  private func updateRevealedBorder() {
+    let isDark = effectiveAppearance.isDark
+    revealedBackground.layer?.borderColor = NSColor.white.withAlphaComponent(isDark ? 0.12 : 0.35).cgColor
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    updateRevealedBorder()
+  }
+
+  /// Edit > Copy URL (Shift+Cmd+C), which reaches the window through the
+  /// responder chain (design D18).
+  var onCopyURL: (() -> Void)?
+  var canCopyURL: () -> Bool = { false }
+
+  @objc func copyCurrentURL(_ sender: Any?) {
+    onCopyURL?()
+  }
+
   private func replace(_ old: NSView?, with new: NSView?, scrim: Bool = false) {
     old?.removeFromSuperview()
     if let new {
@@ -194,6 +224,8 @@ final class BrowserRootView: NSView {
       _ = model.statusText
       _ = model.toast
       _ = model.exclusiveAccessNotice
+      _ = model.notice.notice
+      _ = model.isWindowFullscreen
       _ = model.commandBar
     } onChange: { [weak self] in
       Task { @MainActor in
@@ -269,6 +301,12 @@ final class BrowserRootView: NSView {
     // the springs already have changes nothing.
     updateSidebarTargets()
     background.frame = bounds
+    // In full screen there's no desktop behind the window to blend with, and
+    // macOS redraws the behind-window material darker for about a second
+    // whenever the sidebar redraws, as on hover (design D18). An opaque fill
+    // of the material's usual colour covers it there.
+    backgroundTint.color = model.isWindowFullscreen ? SidebarTint.fullScreen : SidebarTint.window
+    backdropTint.color = backgroundTint.color
     backgroundTint.frame = bounds
     let layout = currentLayout
     card.frame = layout.card
@@ -323,16 +361,25 @@ final class BrowserRootView: NSView {
       toastHost.frame = CGRect(x: card.midX - size.width / 2, y: card.maxY - size.height - 16, width: size.width, height: size.height)
     }
     if let noticeHost {
-      let size = fit(noticeHost, maxWidth: bounds.width - 40)
-      noticeHost.frame = CGRect(x: bounds.midX - size.width / 2, y: 24, width: size.width, height: size.height)
+      // 8 pt inside the card's top-trailing corner, as in Arc; the view has a
+      // margin around the popup for its shadow.
+      let size = noticeHost.fittingSize
+      let margin = NoticePopupView.margin
+      noticeHost.frame = CGRect(
+        x: card.maxX - 8 + margin - size.width, y: card.minY + 8 - margin, width: size.width, height: size.height)
+      if noticeHost !== subviews.last {
+        addSubview(noticeHost)
+      }
     }
     if let commandBarHost {
       commandBarScrim.frame = bounds
       let width = min(CommandBarView.width, bounds.width - 40)
       commandBarHost.frame.size.width = width
       let height = commandBarHost.fittingSize.height
+      // Whole points, so its hairline border stays one crisp pixel.
       commandBarHost.frame = CGRect(
-        x: bounds.midX - width / 2, y: CommandBarView.top(inWindowHeight: bounds.height), width: width, height: height)
+        x: (bounds.midX - width / 2).rounded(), y: CommandBarView.top(inWindowHeight: bounds.height),
+        width: width.rounded(), height: height)
     }
   }
 
@@ -541,7 +588,11 @@ extension NSHostingView {
 /// A view filled with a colour that follows the appearance, such as a
 /// translucent window background over a material.
 final class DynamicFillView: NSView {
-  private let color: NSColor
+  var color: NSColor {
+    didSet {
+      if color != oldValue { needsDisplay = true }
+    }
+  }
 
   init(color: NSColor) {
     self.color = color
@@ -581,6 +632,13 @@ enum SidebarTint {
     appearance.isDark ? dark : .clear
   }
 
+  /// Over the window's material in full screen: Arc's near-black in Dark
+  /// Mode, and in Light Mode the material's usual colour, (235, 236, 235) as
+  /// measured, made opaque.
+  static let fullScreen = NSColor(name: nil) { appearance in
+    appearance.isDark ? dark : NSColor(srgbRed: 233 / 255, green: 234 / 255, blue: 233 / 255, alpha: 1)
+  }
+
   /// Over the revealed sidebar's lighter material, so it's less see-through.
   static let revealed = NSColor(name: nil) { appearance in
     appearance.isDark ? dark : NSColor.windowBackgroundColor.withAlphaComponent(0.55)
@@ -590,5 +648,11 @@ enum SidebarTint {
 extension NSAppearance {
   var isDark: Bool {
     bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]).map { [.darkAqua, .vibrantDark].contains($0) } ?? false
+  }
+}
+
+extension BrowserRootView: NSMenuItemValidation {
+  func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+    menuItem.action == #selector(copyCurrentURL(_:)) ? canCopyURL() : true
   }
 }

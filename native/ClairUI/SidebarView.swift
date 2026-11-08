@@ -140,7 +140,7 @@ struct IncognitoBadge: View {
 enum SidebarFill {
   /// The URL field: a flat fill, no border.
   static func field(_ scheme: ColorScheme, hovered: Bool) -> Color {
-    scheme == .dark ? Color.white.opacity(hovered ? 0.24 : 0.18) : Color.black.opacity(hovered ? 0.09 : 0.045)
+    scheme == .dark ? Color.white.opacity(hovered ? 0.2 : 0.15) : Color.black.opacity(hovered ? 0.09 : 0.045)
   }
 
   /// The active tab's pill, lighter and flat while the window isn't key.
@@ -241,9 +241,15 @@ struct TopRow: View {
         back
         forward
         Menu {
-          Button(isLoading ? "Stop" : "Reload") { actions?.reloadOrStop() }
-            .disabled(tab == nil)
-          Button("Hide Sidebar") { actions?.toggleSidebar() }
+          Group {
+            if isLoading {
+              Button("Stop") { actions?.reloadOrStop() }.keyboardShortcut(.escape, modifiers: [])
+            } else {
+              Button("Reload") { actions?.reloadOrStop() }.keyboardShortcut("r", modifiers: .command)
+            }
+          }
+          .disabled(tab == nil)
+          Button("Hide Sidebar") { actions?.toggleSidebar() }.keyboardShortcut("s", modifiers: .command)
         } label: {
           Image(systemName: "ellipsis")
             .font(.system(size: 16, weight: .medium))
@@ -751,10 +757,11 @@ struct TabRow: View {
   weak var actions: (any SidebarActions)?
 
   @State private var isHovered = false
+  @State private var showsSpeaker = false
   @Environment(\.colorScheme) private var colorScheme
 
   /// How long the pointer rests on a row before its full title shows.
-  static let titleTooltipDelay: Duration = .seconds(3)
+  static let titleTooltipDelay: Duration = .seconds(2)
 
   // Arc's metrics: 40 pt rows on a 41 pt pitch, an 18 pt favicon frame 9 pt
   // into the pill with the favicon drawn at 16 pt, the title 8 pt after it,
@@ -767,6 +774,8 @@ struct TabRow: View {
   static let iconSize: CGFloat = 18
   static let faviconSize: CGFloat = 16
   static let closeSize: CGFloat = 26
+  static let speakerLeading: CGFloat = 4.5
+  static let speakerTrailing: CGFloat = 5.5
   static let closeTrailing: CGFloat = 5
   static let titleGap: CGFloat = 8
   static let cornerRadius: CGFloat = 10
@@ -774,33 +783,45 @@ struct TabRow: View {
 
   var body: some View {
     HStack(spacing: Self.titleGap) {
-      Group {
-        if tab.isLoading && tab.favicon == nil {
-          ProgressView().controlSize(.small)
-        } else if isIncognito && tab.isNewTabPage {
-          // In place of Chromium's incognito goggles, as in the header.
-          Image(systemName: "eye.slash").foregroundStyle(.secondary)
-        } else if let favicon = tab.favicon {
-          Image(nsImage: favicon).resizable().interpolation(.high)
-            .frame(width: Self.faviconSize, height: Self.faviconSize)
-        } else {
-          Image(systemName: "globe").foregroundStyle(.secondary)
+      // The favicon, the speaker and the title, with their own gaps: the
+      // speaker sits between the other two, as in Arc, and collapses to
+      // nothing while there's no sound.
+      HStack(spacing: 0) {
+        Group {
+          if tab.isLoading && tab.favicon == nil {
+            ProgressView().controlSize(.small)
+          } else if isIncognito && tab.isNewTabPage {
+            // Chromium gives the incognito new tab its goggles as a favicon. Show the
+            // crossed-out eye instead, near-white like the header's badge, as in Arc.
+            Image(systemName: "eye.slash").foregroundStyle(Color.primary.opacity(0.94))
+          } else if let favicon = tab.favicon {
+            Image(nsImage: favicon).resizable().interpolation(.high)
+              .frame(width: Self.faviconSize, height: Self.faviconSize)
+          } else {
+            Image(systemName: "globe").foregroundStyle(.secondary)
+          }
         }
+        .frame(width: Self.iconSize, height: Self.iconSize)
+        .accessibilityElement()
+        .accessibilityIdentifier("clair.tabFavicon")
+        // The speaker's glyph keeps the same visible gap from the favicon and
+        // from the title as the title has from the favicon without it (10 pt
+        // drawn to drawn): its 26 pt button pads the glyph by about 4 pt, and
+        // the drawn favicon sits 1 pt inside its frame. It stays in the row,
+        // collapsed, so it grows and fades in and out; the list's rows don't
+        // animate an inserted view.
+        TabSpeakerButton(isMuted: tab.isMuted) { muted in actions?.setMuted(muted, tab: tab.tabID) }
+          .scaleEffect(showsSpeaker ? 1 : 0.5)
+          .opacity(showsSpeaker ? 1 : 0)
+          .frame(width: showsSpeaker ? TabRow.closeSize : 0)
+          .padding(.leading, showsSpeaker ? Self.speakerLeading : 0)
+          .padding(.trailing, showsSpeaker ? Self.speakerTrailing : Self.titleGap)
+          .allowsHitTesting(showsSpeaker)
+          .accessibilityHidden(!showsSpeaker)
+        Text(tab.title).font(Self.titleFont).lineLimit(1)
+          .accessibilityIdentifier("clair.tabTitle")
       }
-      .frame(width: Self.iconSize, height: Self.iconSize)
-      Text(tab.title).font(Self.titleFont).lineLimit(1)
       Spacer(minLength: 0)
-      if tab.isAudible || tab.isMuted {
-        Button {
-          actions?.setMuted(!tab.isMuted, tab: tab.tabID)
-        } label: {
-          Image(systemName: tab.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-            .font(.system(size: 11))
-        }
-        .buttonStyle(.plain)
-        .tooltip(tab.isMuted ? "Unmute tab" : "Mute tab")
-        .accessibilityIdentifier("clair.tabSpeaker")
-      }
       if isHovered {
         TabCloseButton { actions?.close(tab: tab.tabID) }
           .padding(.trailing, Self.closeTrailing - Self.horizontalPadding)
@@ -828,10 +849,57 @@ struct TabRow: View {
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
     // The full title, once the pointer has rested on the row (design D18).
     .tooltip(tab.title.isEmpty ? nil : tab.title, delay: Self.titleTooltipDelay)
+    // The speaker comes and goes with the sound, the title making room. The
+    // list's rows ignore implicit animations, so the row animates its own
+    // state.
+    .onAppear { showsSpeaker = tab.isAudible || tab.isMuted }
+    .onChange(of: tab.isAudible || tab.isMuted) { _, shows in
+      withAnimation(.snappy(duration: 0.25)) { showsSpeaker = shows }
+    }
     .accessibilityElement(children: .contain)
     .accessibilityLabel(tab.title)
     .accessibilityIdentifier("clair.tabRow")
     .accessibilityAddTraits(isActive ? .isSelected : [])
+  }
+}
+
+/// The tab's speaker, as in Arc: the outline speaker with three waves, or
+/// crossed out while muted, 17.5 pt wide in mid-grey on a 26 pt button
+/// with a hover background. SF Symbols animates the change.
+struct TabSpeakerButton: View {
+  let isMuted: Bool
+  /// Asks for the tab to be muted (true) or unmuted.
+  let setMuted: (Bool) -> Void
+
+  @State private var isHovered = false
+  /// What Chromium last reported, kept here so the change animates: the
+  /// list's rows ignore implicit animations. The button only ever shows what
+  /// Chromium reports, so it can't fall out of step with the tab.
+  @State private var shownMuted: Bool?
+
+  var body: some View {
+    let muted = shownMuted ?? isMuted
+    Button {
+      setMuted(!isMuted)
+    } label: {
+      Image(systemName: muted ? "speaker.slash" : "speaker.wave.3")
+        .font(.system(size: 13.5, weight: .medium))
+        .contentTransition(.symbolEffect(.replace, options: .speed(1.5)))
+        .frame(width: TabRow.closeSize, height: TabRow.closeSize)
+        .background(Color.primary.opacity(isHovered ? 0.08 : 0), in: .rect(cornerRadius: 6))
+        .animation(sidebarHoverFade, value: isHovered)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    // Arc's grey, which measures about 125 on the light pill.
+    .foregroundStyle(Color.primary.opacity(0.68))
+    .onChange(of: isMuted) { _, reported in
+      withAnimation(.snappy(duration: 0.2)) { shownMuted = reported }
+    }
+    .tooltip(muted ? "Unmute this tab" : "Mute this tab")
+    .accessibilityLabel(muted ? "Unmute this tab" : "Mute this tab")
+    .accessibilityIdentifier("clair.tabSpeaker")
+    .onHover { isHovered = $0 }
   }
 }
 

@@ -77,7 +77,7 @@ The native window SHALL be restored with the size, position, minimized and full-
 - **THEN** both windows reopen at their previous sizes and positions with their tabs
 
 ### Requirement: Full screen
-The native window SHALL support macOS full screen. When a page asks for full screen, as a video does, the page SHALL fill the screen alone, without the sidebar or card insets, and Esc SHALL end it.
+The native window SHALL support macOS full screen. When a page asks for full screen, as a video does, the page SHALL fill the screen alone, without the sidebar or card insets, and Esc SHALL end it. The notice saying so SHALL use the same popup as Copy URL, with Esc drawn as a key.
 
 #### Scenario: Window full screen
 - **WHEN** the user chooses View > Enter Full Screen
@@ -107,7 +107,14 @@ Edit SHALL offer Copy URL after Copy, on Shift+Cmd+C, as in Arc, copying the act
 
 #### Scenario: Copying with the shortcut
 - **WHEN** a page is focused and the user presses Shift+Cmd+C
-- **THEN** the page's URL is on the pasteboard, and DevTools doesn't open
+- **THEN** the page's URL is on the pasteboard, Arc's "Copied Current URL" popup with a share button springs in at the card's top-trailing corner for about 5 seconds, and DevTools doesn't open
+
+### Requirement: Clearing history
+Clearing browsing data, history included, from Chromium's settings or history page SHALL work in a native window.
+
+#### Scenario: Deleting all history
+- **WHEN** the user deletes all browsing history from `chrome://settings/clearBrowserData`
+- **THEN** the history is deleted and Clair keeps running
 
 ### Requirement: Link status
 Hovering a link SHALL show its URL in a small capsule at the bottom-leading corner of the card. The capsule SHALL fade in once the pointer has rested on links for about half a second, and fade out about half a second after the pointer leaves them; moving to another link while it shows SHALL update it at once.

@@ -34,8 +34,16 @@ final class TooltipCenter {
   private(set) var current: Tooltip?
   /// The controls under the pointer, outermost first.
   private var hovered: [Entry] = []
+  /// Controls clicked since the pointer entered them: a click, including the
+  /// right click that opens a context menu, puts their tooltips away until
+  /// the pointer leaves and comes back.
+  private var clicked: Set<UUID> = []
+  private var clickMonitor: Any?
   private var pending: Task<Void, Never>?
-  private lazy var window = TooltipWindow()
+  /// Made on first show, and touched only while it shows: ordering even a
+  /// hidden panel out, in full screen, makes the window server redraw the
+  /// material behind the browser window for about a second (design D18).
+  private var window: TooltipWindow?
 
   /// The pointer is over control `id`.
   func pointerMoved(over id: UUID, tooltip: Tooltip, delay: Duration = TooltipCenter.delay) {
@@ -44,11 +52,12 @@ final class TooltipCenter {
       // Follow a changing label on the owner, as reload's turning into stop.
       if index == hovered.count - 1, current != nil, current != tooltip {
         current = tooltip
-        window.show(tooltip, at: nil)
+        window?.show(tooltip, at: nil)
       }
       return
     }
     hovered.append(Entry(id: id, tooltip: tooltip, delay: delay))
+    watchClicks()
     scheduleOwner()
   }
 
@@ -57,6 +66,7 @@ final class TooltipCenter {
     guard let index = hovered.firstIndex(where: { $0.id == id }) else { return }
     let wasOwner = index == hovered.count - 1
     hovered.remove(at: index)
+    clicked.remove(id)
     if wasOwner {
       scheduleOwner()
     }
@@ -67,15 +77,33 @@ final class TooltipCenter {
     hide()
   }
 
+  private func watchClicks() {
+    guard clickMonitor == nil else { return }
+    clickMonitor = NSEvent.addLocalMonitorForEvents(
+      matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+    ) { event in
+      MainActor.assumeIsolated {
+        let center = TooltipCenter.shared
+        center.clicked.formUnion(center.hovered.map(\.id))
+        center.hide()
+      }
+      return event
+    }
+  }
+
   /// Shows the innermost control's tooltip once its delay has passed.
   private func scheduleOwner() {
     hide()
-    guard let owner = hovered.last else { return }
+    guard let owner = hovered.last, !clicked.contains(owner.id) else { return }
     pending = Task { [weak self] in
       try? await Task.sleep(for: owner.delay)
-      guard !Task.isCancelled, let self, let entry = self.hovered.last, entry.id == owner.id else { return }
+      guard !Task.isCancelled, let self, let entry = self.hovered.last, entry.id == owner.id,
+        !self.clicked.contains(entry.id)
+      else { return }
       self.current = entry.tooltip
-      self.window.show(entry.tooltip, at: NSEvent.mouseLocation)
+      let window = self.window ?? TooltipWindow()
+      self.window = window
+      window.show(entry.tooltip, at: NSEvent.mouseLocation)
     }
   }
 
@@ -83,7 +111,7 @@ final class TooltipCenter {
     pending?.cancel()
     pending = nil
     current = nil
-    window.hide()
+    window?.hide()
   }
 }
 
@@ -172,6 +200,9 @@ private final class TooltipWindow: NSPanel {
     if parent == nil, let parent = Self.window(under: origin) {
       parent.addChildWindow(self, ordered: .above)
     }
+    // Light or dark as the window it shows over, as an incognito window is
+    // dark whatever the system's appearance.
+    appearance = parent?.effectiveAppearance
     if !isVisible {
       alphaValue = 0
       orderFront(nil)
@@ -184,6 +215,7 @@ private final class TooltipWindow: NSPanel {
 
   func hide() {
     origin = nil
+    guard isVisible || parent != nil else { return }
     parent?.removeChildWindow(self)
     orderOut(nil)
   }
@@ -199,16 +231,18 @@ private final class TooltipWindow: NSPanel {
 /// no Spaces yet, with the accent colour.
 struct TooltipView: View {
   let tooltip: Tooltip
+  @Environment(\.colorScheme) private var colorScheme
 
   /// Room around the capsule for its shadow.
-  static let margin: CGFloat = 8
+  static let margin: CGFloat = 14
+  static let height: CGFloat = 28
 
   var body: some View {
     let accent = Color.accentColor
     HStack(spacing: 6) {
       Text(tooltip.text)
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(Color.primary.mix(with: accent, by: 0.3))
+        .font(.system(size: 12, weight: .regular))
+        .foregroundStyle(colorScheme == .dark ? Color.white.mix(with: accent, by: 0.1) : Color.primary.mix(with: accent, by: 0.3))
         .lineLimit(1)
       if !tooltip.shortcut.isEmpty {
         HStack(spacing: 3) {
@@ -218,15 +252,16 @@ struct TooltipView: View {
         }
       }
     }
-    .padding(.leading, 14)
-    .padding(.trailing, tooltip.shortcut.isEmpty ? 14 : 10)
-    .frame(height: 28)
+    // The same on both sides, keys or not.
+    .padding(.horizontal, 10)
+    .frame(height: Self.height)
     // The shadow belongs to the capsule alone; on the whole view it would
     // blur the text and shade the key caps.
     .background {
       Capsule()
-        .fill(OverlayStyle.background.mix(with: accent, by: 0.07))
-        .shadow(color: .black.opacity(0.16), radius: 3, y: 1)
+        // In Dark Mode, Arc's deep tinted capsule.
+        .fill(colorScheme == .dark ? Color.black.mix(with: accent, by: 0.4) : OverlayStyle.background.mix(with: accent, by: 0.07))
+        .shadow(color: .black.opacity(0.22), radius: 7, y: 3)
     }
     .padding(Self.margin)
     .fixedSize()
@@ -234,19 +269,25 @@ struct TooltipView: View {
   }
 }
 
-/// One key of a shortcut, drawn as a flat key cap.
-private struct KeyCap: View {
+/// One key of a shortcut, drawn as a key cap with a deeper bottom edge. In
+/// Dark Mode the key stays light, with a deep glyph, as Arc's does.
+struct KeyCap: View {
   let key: String
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     let accent = Color.accentColor
     let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+    let isDark = colorScheme == .dark
     Text(key)
       .font(.system(size: 11, weight: .bold))
-      .foregroundStyle(accent.mix(with: .black, by: 0.15))
+      .foregroundStyle(accent.mix(with: .black, by: isDark ? 0.55 : 0.15))
       .padding(.horizontal, key.count > 1 ? 4 : 0)
       .frame(minWidth: 18, minHeight: 18)
-      .background(shape.fill(OverlayStyle.background.mix(with: accent, by: 0.16)))
-      .overlay(shape.strokeBorder(accent.opacity(0.45), lineWidth: 1))
+      .background(shape.fill(isDark ? Color.white.mix(with: accent, by: 0.14) : OverlayStyle.background.mix(with: accent, by: 0.16)))
+      .overlay(shape.strokeBorder(isDark ? accent.mix(with: .white, by: 0.35) : accent.opacity(0.45), lineWidth: 1))
+      // The key's depth: its bottom edge, below the face.
+      .background(shape.fill(accent.opacity(0.6)).offset(y: 1.5))
+      .padding(.bottom, 1.5)
   }
 }
