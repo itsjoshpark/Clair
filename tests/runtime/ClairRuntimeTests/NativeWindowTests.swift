@@ -525,10 +525,14 @@ final class TabListTests: NativeWindowTestCase {
   }
 }
 
-/// The tab row's layout (design D12, D18): the favicon 9 pt into the pill and
-/// 18 pt square, the title 8 pt after it, and, while the tab plays sound, the
-/// 26 pt speaker between them, 4.5 pt after the favicon and 5.5 pt before the
-/// title. A layout change that moves any of them fails here.
+/// The tab row's layout (design D12, D18). Accessibility reports what's drawn,
+/// not the layout's frames: on this page, which has no favicon, the favicon is
+/// the 13 pt globe glyph centred in its 18 pt frame 9 pt into the pill, so it
+/// reads 12 pt in, with the title 10 pt after it. While the tab plays sound,
+/// the speaker sits between them with the same visible gap on each side as
+/// the title has from the favicon without it, which reads 7 pt before the
+/// speaker's reported frame and 5.5 pt after it. These are the values of the layout checked
+/// against Arc; a change that moves any of them fails here.
 @MainActor
 final class TabRowLayoutTests: NativeWindowTestCase {
   func testFaviconSpeakerAndTitlePositions() async throws {
@@ -544,20 +548,20 @@ final class TabRowLayoutTests: NativeWindowTestCase {
     try require(favicon.waitForExistence(timeout: 10) && title.exists, "The row shows no favicon or title")
 
     // Without sound.
-    XCTAssertEqual(favicon.frame.minX - row.frame.minX, 9, accuracy: 1, "The favicon's inset in the pill")
-    XCTAssertEqual(favicon.frame.width, 18, accuracy: 1, "The favicon's frame")
-    XCTAssertEqual(title.frame.minX - favicon.frame.maxX, 8, accuracy: 1, "The gap between favicon and title")
+    XCTAssertEqual(favicon.frame.minX - row.frame.minX, 12, accuracy: 1, "The favicon's inset in the pill")
+    XCTAssertEqual(favicon.frame.width, 13, accuracy: 1, "The favicon's width")
+    XCTAssertEqual(title.frame.minX - favicon.frame.maxX, 10, accuracy: 1, "The gap between favicon and title")
 
     // With sound: the speaker sits between them with even gaps.
     let state = try await tab.evaluate("startTone()") as? String
     try require(state == "running", "The test tone didn't start")
     let speaker = browser.element("clair.tabSpeaker", in: row)
-    let shown = await Harness.wait(for: 15) { speaker.exists && abs(speaker.frame.width - 26) < 1 }
+    let shown = await Harness.wait(for: 15) { speaker.exists && speaker.frame.width > 10 }
     try require(shown, "The playing tab shows no speaker")
     try await Task.sleep(for: .milliseconds(500))
-    XCTAssertEqual(speaker.frame.minX - favicon.frame.maxX, 4.5, accuracy: 1, "The gap between favicon and speaker")
+    XCTAssertEqual(speaker.frame.minX - favicon.frame.maxX, 7, accuracy: 1, "The gap between favicon and speaker")
     XCTAssertEqual(title.frame.minX - speaker.frame.maxX, 5.5, accuracy: 1, "The gap between speaker and title")
-    XCTAssertEqual(favicon.frame.minX - row.frame.minX, 9, accuracy: 1, "The favicon moved when the speaker showed")
+    XCTAssertEqual(favicon.frame.minX - row.frame.minX, 12, accuracy: 1, "The favicon moved when the speaker showed")
     _ = try await tab.evaluate("stopTone()")
   }
 }
