@@ -39,6 +39,10 @@
 #   Views window; a native window is neither, so they'd float in the middle of
 #   the screen above every app. They're placed over the card as child windows
 #   instead (D9).
+# - tab_dialog_manager.cc: tab-scoped dialogs (HTTPS-first's "Ask before
+#   HTTP", FedCM's account chooser, autofill and WebUI dialogs) CHECK for the
+#   browser's Views widget; in a native window they're parented to its dialog
+#   host and placed over the card, as the JavaScript dialogs above (D9).
 # - native_widget_mac.mm: a Views widget whose parent view sits in a window
 #   no widget owns is a free top-level window; for a native window's
 #   permission prompts, page info and dialogs that meant hiding behind the
@@ -611,3 +615,106 @@
        "cocoa/drag_drop_client_mac.h",
        "cocoa/drag_drop_client_mac.mm",
        "cocoa/native_widget_mac_event_monitor.h",
+--- a/chrome/browser/ui/tabs/tab_dialog_manager.cc
++++ b/chrome/browser/ui/tabs/tab_dialog_manager.cc
+@@ -41,6 +41,10 @@
+ #include "ui/ozone/public/ozone_platform.h"
+ #endif
+ 
++#if BUILDFLAG(IS_MAC)
++#include "components/constrained_window/clair_native_host_mac.h"  // nogncheck
++#endif
++
+ namespace constrained_window {
+ extern const void* kConstrainedWindowWidgetIdentifier;
+ }  // namespace constrained_window
+@@ -96,9 +100,39 @@
+ #endif
+ }
+ 
++#if BUILDFLAG(IS_MAC)
++// Clair: the dialog host of a tab in Clair's native window, which no Views
++// widget owns, or nullptr for a tab in a Views browser window. Its dialogs are
++// placed over the card, as constrained_window places JavaScript dialogs.
++web_modal::WebContentsModalDialogHost* ClairNativeDialogHost(
++    TabInterface* tab_interface) {
++  BrowserWindowInterface* const window =
++      tab_interface->GetBrowserWindowInterface();
++  if (!window) {
++    return nullptr;
++  }
++  auto* const elements = BrowserElementsViews::From(window);
++  if (elements && elements->GetPrimaryWindowWidget()) {
++    return nullptr;
++  }
++  web_modal::WebContentsModalDialogHost* const host =
++      window->GetWebContentsModalDialogHostForTab(tab_interface);
++  return host && constrained_window::IsNativeHostView(host->GetHostView())
++             ? host
++             : nullptr;
++}
++#endif
++
+ gfx::Rect GetModalDialogBounds(views::Widget* widget,
+                                TabInterface* tab_interface,
+                                const gfx::Size& size) {
++#if BUILDFLAG(IS_MAC)
++  if (web_modal::WebContentsModalDialogHost* const native_host =
++          ClairNativeDialogHost(tab_interface)) {
++    return constrained_window::NativeHostDialogBounds(native_host, size)
++        .value_or(gfx::Rect(size));
++  }
++#endif
+   BrowserWindowInterface* const host_browser_window =
+       tab_interface->GetBrowserWindowInterface();
+   gfx::Point position =
+@@ -304,6 +338,17 @@
+     views::DialogDelegate* delegate) {
+   DCHECK_EQ(ui::mojom::ModalType::kChild, delegate->GetModalType());
+   views::Widget* host = GetHostWidget();
++#if BUILDFLAG(IS_MAC)
++  // Clair: NativeWidgetMac keeps a dialog parented to the native window's view
++  // a child window of it (ui/views/cocoa/clair_native_parent.mm).
++  if (!host) {
++    if (web_modal::WebContentsModalDialogHost* const native_host =
++            ClairNativeDialogHost(tab_interface_)) {
++      return base::WrapUnique(views::DialogDelegate::CreateDialogWidget(
++          delegate, gfx::NativeWindow(), native_host->GetHostView()));
++    }
++  }
++#endif
+   CHECK(host);
+ 
+   if (base::FeatureList::IsEnabled(features::kTabModalUsesDesktopWidget)) {
+@@ -358,8 +403,13 @@
+   // window) is painted as active. This prevents a background browser window
+   // from becoming foreground on showing the dialog.
+   views::Widget* const host_widget = GetHostWidget();
+-  if (host_widget && host_widget->ShouldPaintAsActive() &&
+-      !params_->should_show_inactive) {
++  bool host_is_active = host_widget && host_widget->ShouldPaintAsActive();
++#if BUILDFLAG(IS_MAC)
++  if (!host_widget && ClairNativeDialogHost(tab_interface_)) {
++    host_is_active = tab_interface_->GetBrowserWindowInterface()->IsActive();
++  }
++#endif
++  if (host_is_active && !params_->should_show_inactive) {
+     widget_->Show();
+   } else {
+     widget->ShowInactive();
+@@ -462,6 +512,15 @@
+   const gfx::Size size = widget_->GetRootView()->GetPreferredSize({});
+ 
+   if (!host_widget) {
++#if BUILDFLAG(IS_MAC)
++    if (ClairNativeDialogHost(tab_interface_)) {
++      widget_->SetBounds(params_->get_dialog_bounds
++                             ? params_->get_dialog_bounds.Run()
++                             : GetModalDialogBounds(widget_.get(),
++                                                    tab_interface_, size));
++      return;
++    }
++#endif
+     widget_->SetSize(size);
+     return;
+   }

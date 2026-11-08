@@ -161,6 +161,10 @@ Tab-modal dialogs SHALL show over the card of the tab they belong to, including 
 - **WHEN** a page calls `alert("hi")`
 - **THEN** the alert shows over that tab's card, and dismissing it returns control to the page
 
+#### Scenario: Tab-scoped dialog
+- **WHEN** HTTPS-first can't upgrade a site the user opens and falls back to HTTP, asking first
+- **THEN** its "Ask before HTTP" dialog shows over that tab's card, and Clair keeps running
+
 ### Requirement: No bookmarks in the interface
 Clair SHALL NOT show bookmarks in its interface: there SHALL be no Bookmarks menu, bookmarks bar, bookmark star or bookmark bubble, and their shortcuts (Cmd+D, Shift+Cmd+B, Opt+Cmd+B) SHALL do nothing. Bookmarks already in the profile SHALL be kept, and `chrome://bookmarks` SHALL still open when typed in the command bar.
 
