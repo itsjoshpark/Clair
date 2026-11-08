@@ -1,0 +1,3 @@
+kind: Fixed
+body: Clearing browsing history from the history or settings page no longer crashes Clair
+time: 2026-11-07T20:00:01.000000-05:00

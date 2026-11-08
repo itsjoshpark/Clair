@@ -28,6 +28,7 @@ enum OverlayStyle {
 struct CommandBarView: View {
   let model: CommandBarModel
   @FocusState private var isFieldFocused: Bool
+  @Environment(\.colorScheme) private var colorScheme
 
   static let width: CGFloat = 764
   /// Arc's metrics: a 64 pt field row, then 50 pt rows.
@@ -115,8 +116,21 @@ struct CommandBarView: View {
         .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .background(OverlayStyle.background, in: .rect(cornerRadius: 14))
-    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.08)))
+    // In Dark Mode, Arc's darker fill, about (30, 32, 32) as measured.
+    .background(
+      colorScheme == .dark ? Color(red: 0.085, green: 0.093, blue: 0.093) : OverlayStyle.background,
+      in: .rect(cornerRadius: 14))
+    // Arc's border, measured: in Light Mode a hairline of solid mid-grey; in
+    // Dark Mode a point of grey, its inner half lighter. Each value is set to
+    // measure as Arc's, as the window draws greys a little lighter.
+    .overlay {
+      if colorScheme == .dark {
+        RoundedRectangle(cornerRadius: 14).strokeBorder(Color(white: 0.235), lineWidth: 0.5)
+        RoundedRectangle(cornerRadius: 13.5).strokeBorder(Color(white: 0.3), lineWidth: 0.5).padding(0.5)
+      } else {
+        RoundedRectangle(cornerRadius: 14).strokeBorder(Color(white: 0.65), lineWidth: 0.5)
+      }
+    }
     .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
     // The field can take focus only once it's laid out in the window, a
     // moment after it's added; keep asking until it has.
@@ -128,6 +142,9 @@ struct CommandBarView: View {
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("clair.commandBar")
+    // Pinned to the top of its host, so a host not yet resized to new
+    // results never moves the field (design D18).
+    .frame(maxHeight: .infinity, alignment: .top)
   }
 }
 

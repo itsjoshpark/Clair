@@ -69,7 +69,48 @@ Suggested order: 1, 2, 3 (one engine build with the whole contract), then 4, 5 a
 
 ## 8. Spike measurements
 
-- [ ] 8.1 **(owner)** Fill in design.md's Measurements section (D16): compare the window with Arc side by side while Arc still runs, time a one-line `ClairUI` change through D15's loop and through a push and `quality.yml`, and record D9's final table with what moved and why. Verify that every item in D16 has a result, and that each "worse" result has a follow-up issue.
+- [x] 8.1 **(owner)** Fill in design.md's Measurements section (D16): compare the window with Arc side by side while Arc still runs, time a one-line `ClairUI` change through D15's loop and through a push and `quality.yml`, and record D9's final table with what moved and why. Verify that every item in D16 has a result, and that each "worse" result has a follow-up issue. Closed by the owner on 2026-11-07: the polish passes of groups 9 to 11 compared the window with Arc instead and fixed what was worse (design, Measurements).
+
+## 9. Polish from the owner's pass
+
+Fixes from the owner's side-by-side pass against Arc (D18), all in `ClairUI`. Arc's numbers below were measured with the XCUITest probe on 2026-11-07.
+
+- [x] 9.1 Sidebar motion (D12, D18): reveal the hidden sidebar after 100 ms (Arc: 100–117 ms) on a quicker spring for the floating sidebar (Arc slides in within about 100 ms, with a slight overshoot); keep the card inset 10 pt on every edge with the sidebar hidden (D4; Arc's is 10 pt); and make showing a revealed sidebar dock it in place, with only the card moving, instead of sliding it out and back in. Add unit tests for the hidden layout and for docking from a reveal, and update the runtime layout tests for the new inset. Verify that they pass, and check the reveal and docking against Arc by hand.
+- [x] 9.2 Move the window by dragging the sidebar's empty areas, as in Arc (D18): the top row's background, the gaps around the URL field and the space below the last tab, in the docked and the revealed sidebar. Verify by hand that those drag the window, and that clicks on the controls, tab rows and the URL field, and dragging tabs to reorder them, still work.
+- [x] 9.3 Tab rows (D12, D18): draw the favicon at 16 pt in its 18 pt frame (Arc's); make the close button 26 pt square, 5 pt from the pill's trailing edge, with a 10 pt glyph and a hover background (Arc's); and open the row's context menu from AppKit so the list draws no selection ring around a right-clicked row. Verify by hand against Arc, and that the context menu's items, middle-click and the runtime tests that close and reorder tabs still work.
+- [x] 9.4 Top row and URL field (D18): Arc-style tooltips drawn by the sidebar, since AppKit's never show in Chromium's window, with Arc's delay, wording and shortcut key caps ("Hide sidebar", "Lock sidebar" while revealed, "Go back", "Go forward", "Reload this page", "Stop loading this page", "Copy URL", "Site Control Center"); fade the URL field's buttons in and out and every hover background in the sidebar; a darker hover background on the URL field (Arc's is about 4% darker than its resting field); and no indicator for a blocked permission, which page info still shows. Verify by hand that each tooltip appears and that the fades run in Light and Dark Mode.
+- [x] 9.5 Inactive window (D4, D18): dim the top row's and the URL field's glyphs, and lighten the active tab's pill, while the window isn't key. Verify by hand against Arc in Light and Dark Mode.
+- [x] 9.6 Incognito (D12): use the `eye.slash` symbol in the "Incognito" header and as the incognito new tab's icon. Verify by hand, and that the incognito runtime test still finds the header.
+- [x] 9.7 Command bar (D11, D18): keep the field still while results appear or change; the panel grows downwards only. Verify by hand with Cmd+L and Cmd+T, typing until results appear and deleting back to an empty field.
+- [x] 9.8 Link status (D8, D18): show the capsule once the pointer has rested on links for about 0.5 s and hide it about 0.5 s after it leaves them, fading both ways; moving between links while it shows updates it at once. Add unit tests for the timing rules against a fake clock. Verify that they pass, and check by hand.
+- [x] 9.9 Run the full quality checks on the branch. Verify that every runtime test passes.
+
+## 10. Second polish pass
+
+More fixes from the owner's pass (D18), all in `ClairUI`. Arc's figures were measured with the probe on 2026-11-07.
+
+- [x] 10.1 New windows (D18): open the command bar when a window first shows a single new tab page, as Arc does, and close it if the page navigates without it. Verify by hand with Cmd+N and Shift+Cmd+N that typing goes straight into the field, and that the runtime tests still pass.
+- [x] 10.2 Colours and weights (D18): Arc's flat URL field fill in Light and Dark Mode, Arc's near-black sidebar and a lighter active tab in Dark Mode and incognito, Arc's incognito badge, and medium-weight glyphs in the top row and the URL field. Verify by hand against Arc in a normal and an incognito window.
+- [x] 10.3 Tooltips everywhere (D18): draw them in a tooltip window of their own, with the shadow on the capsule only and flat key caps; give every control that had a system tooltip Clair's, with the tab's close button reading "Close tab ⌘W", Copy URL "⇧⌘C", the compact row's menu "More options" with a hover state, and a tab's full title after 3 s on its row; the innermost control under the pointer owns the tooltip. Verify by hand, including in an extension or downloads popover and in full screen.
+- [x] 10.4 Copy URL (D18): Edit > Copy URL on Shift+Cmd+C after Copy, running Chromium's command; `copy-url-shortcut.patch` drops Shift+Cmd+C from Chromium's own table, where it inspects an element; and Copy URL in the URL field's context menu. Verify that the patch check applies the patch and `engine.yml` builds the engine for the branch's key, then by hand that the menu item, the shortcut and the context menu copy the URL, and that Opt+Cmd+C still inspects.
+- [x] 10.5 The URL field (D18): show its buttons while the pointer is over the key window's sidebar, and the host without a leading `www.`. Add unit tests for the `www.` rule. Verify that they pass, and check the buttons by hand.
+- [x] 10.6 Hidden sidebar (D18): reveal from anywhere in the 10 pt leading inset, with a less translucent revealed sidebar. Verify by hand.
+- [x] 10.7 Full screen (D18): keep the top row at Arc's y+8 with hide-sidebar 13 pt in. Verify by hand against Arc.
+- [x] 10.8 Investigate the sidebar changing colour for about 2 s when the pointer moves over the tabs in full screen. Verify by finding and fixing the cause, or, if it can't be reproduced, record what was tried in D18 and open an issue.
+- [x] 10.9 Run the full quality checks on the branch. Verify that every runtime test passes.
+
+## 11. Third polish pass
+
+More fixes from the owner's pass (D18). Arc's figures were measured with the probe on 2026-11-07.
+
+- [x] 11.1 "Copied Current URL" (D18): Arc's popup in the card's top-trailing corner, with its spring in and out, its timing and a share button, for Edit > Copy URL, Shift+Cmd+C, the URL field's copy button and its context menu; page full screen's notice in the same popup with Esc as a key cap. Verify by hand against Arc, and that the full-screen runtime test still finds the notice.
+- [x] 11.2 Tooltips (D18): key-cap depth, a softer and wider shadow, tighter sides with the keys sitting evenly at the end, a tab's title after 2 s, and no tooltip after a click or a right click until the pointer leaves the control. Verify by hand against Arc, including a tab's context menu.
+- [x] 11.3 Command bar border (D18): Arc's crisp mid-grey hairline. Verify by measuring the edge against Arc's.
+- [x] 11.4 Clearing history (D13, D18): the clear-browsing-data hook. Verify that the patch check applies it and `engine.yml` builds the engine for the branch's key, then by hand that deleting all history from `chrome://settings/clearBrowserData` and from `chrome://history` leaves Clair running.
+- [x] 11.5 The tab's speaker (D18): between the favicon and the title with even 10 pt gaps (a row without it keeps its gap), Arc's outline symbols in medium weight changing with a quicker SF Symbols replace effect, growing and fading in and out with the sound, Arc's size and grey, a hover background, and "Mute this tab" or "Unmute this tab". Add a runtime test of the row's layout from its accessibility frames: the favicon's inset and size, the favicon-to-title gap, and the speaker's gaps while the tab plays sound (D12, D18). Verify that it passes in `quality.yml`, and by hand with a tab playing sound, muted, unmuted and falling silent.
+- [x] 11.6 Full-screen sidebar colour (D18, issue #104): an opaque fill over the material in full screen in Light Mode. Verify by recording the sidebar while real mouse-moved events cross a tab row in full screen, that its colour holds, and that a window's sidebar is unchanged.
+- [x] 11.7 Dark Mode and incognito (D18): Arc's dark tooltip (a deep tinted capsule, light key caps with dark glyphs) and popup (a muted tinted gradient, white text, a translucent share key), each following the window it shows over; a darker URL field, command bar fill and revealed sidebar edge; regular-weight tooltip text; and the compact row's menu showing its shortcuts. Verify by measuring against Arc in an incognito window.
+- [x] 11.8 Run the full quality checks on the branch. Verify that every runtime test passes.
 
 ## Workflow follow-up
 

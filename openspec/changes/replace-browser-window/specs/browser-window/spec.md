@@ -15,7 +15,7 @@ Every normal browser window, including incognito and guest windows, SHALL be a n
 
 #### Scenario: Incognito window
 - **WHEN** a user opens a new incognito window
-- **THEN** it is the native window in a dark appearance, labelled as incognito in its sidebar, and its tabs use the incognito profile
+- **THEN** it is the native window in a dark appearance, labelled as incognito in its sidebar with a crossed-out eye, and its tabs use the incognito profile
 
 #### Scenario: A page opens a pop-up
 - **WHEN** a page calls `window.open` with window features that make Chromium open a pop-up window
@@ -41,7 +41,7 @@ The native window SHALL have no title bar. The sidebar SHALL sit at its leading 
 
 #### Scenario: Window not focused
 - **WHEN** another window becomes key
-- **THEN** the native window shows as inactive: the active tab's highlight fades and the window controls dim, as other macOS windows do
+- **THEN** the native window shows as inactive: the active tab's highlight lightens and loses its shadow, the sidebar's glyphs and the window controls dim, as other macOS windows do
 
 ### Requirement: Page shown in the card
 The card SHALL show the active tab's page, resized with the window and the sidebar, and SHALL switch to the newly active tab's page as soon as the active tab changes. Hidden tabs' pages SHALL be reported to the page as hidden.
@@ -77,11 +77,15 @@ The native window SHALL be restored with the size, position, minimized and full-
 - **THEN** both windows reopen at their previous sizes and positions with their tabs
 
 ### Requirement: Full screen
-The native window SHALL support macOS full screen. When a page asks for full screen, as a video does, the page SHALL fill the screen alone, without the sidebar or card insets, and Esc SHALL end it.
+The native window SHALL support macOS full screen. When a page asks for full screen, as a video does, the page SHALL fill the screen alone, without the sidebar or card insets, and Esc SHALL end it. The notice saying so SHALL use the same popup as Copy URL, with Esc drawn as a key.
 
 #### Scenario: Window full screen
 - **WHEN** the user chooses View > Enter Full Screen
 - **THEN** the window enters macOS full screen and keeps its sidebar state
+
+#### Scenario: Top row in full screen
+- **WHEN** the window is in macOS full screen with the sidebar shown
+- **THEN** the top row stays where it is in a window, and the hide-sidebar button moves to the sidebar's leading edge in place of the window controls
 
 #### Scenario: Page full screen
 - **WHEN** a page's video enters full screen
@@ -98,12 +102,26 @@ Cmd+F SHALL open a floating find field at the top-trailing corner of the card. I
 - **WHEN** the user presses Esc in the find field
 - **THEN** the field closes, the highlights are cleared, and focus returns to the page
 
+### Requirement: Copy URL from the menu bar
+Edit SHALL offer Copy URL after Copy, on Shift+Cmd+C, as in Arc, copying the active tab's URL. Opt+Cmd+C SHALL still inspect an element.
+
+#### Scenario: Copying with the shortcut
+- **WHEN** a page is focused and the user presses Shift+Cmd+C
+- **THEN** the page's URL is on the pasteboard, Arc's "Copied Current URL" popup with a share button springs in at the card's top-trailing corner for about 5 seconds, and DevTools doesn't open
+
+### Requirement: Clearing history
+Clearing browsing data, history included, from Chromium's settings or history page SHALL work in a native window.
+
+#### Scenario: Deleting all history
+- **WHEN** the user deletes all browsing history from `chrome://settings/clearBrowserData`
+- **THEN** the history is deleted and Clair keeps running
+
 ### Requirement: Link status
-Hovering a link SHALL show its URL in a small capsule at the bottom-leading corner of the card, which SHALL disappear when the pointer leaves the link.
+Hovering a link SHALL show its URL in a small capsule at the bottom-leading corner of the card. The capsule SHALL fade in once the pointer has rested on links for about half a second, and fade out about half a second after the pointer leaves them; moving to another link while it shows SHALL update it at once.
 
 #### Scenario: Hovering a link
 - **WHEN** the pointer rests on a link
-- **THEN** the link's URL shows in a capsule at the card's bottom-leading corner, and leaving the link hides it
+- **THEN** after about half a second the link's URL fades in, in a capsule at the card's bottom-leading corner, and about half a second after the pointer leaves the link it fades out
 
 ### Requirement: Infobars
 Infobars that Chromium attaches to a tab, such as the warning that the browser is being controlled by automated software or that an extension is debugging the browser, SHALL show as a bar at the top of that tab's card with their message, link and buttons, and SHALL act as Chromium's do.

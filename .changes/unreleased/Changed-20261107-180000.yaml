@@ -1,0 +1,3 @@
+kind: Changed
+body: 'The sidebar is closer to Arc: it slides in sooner and faster when you move the pointer to the left edge, Show Sidebar docks a revealed sidebar where it is, the page keeps its margins when the sidebar hides, and you can drag the window from the sidebar''s empty space. Its buttons have tooltips with their shortcuts, the URL field''s buttons and hover highlights fade, tabs have Arc''s favicon and close button sizes, and the window dims its controls when it isn''t in front. The link preview at the bottom of the page fades in and out, the command bar''s field stays put as results appear, and incognito windows use a crossed-out eye'
+time: 2026-11-07T18:00:00.000000-05:00

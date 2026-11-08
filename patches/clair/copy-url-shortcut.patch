@@ -1,0 +1,17 @@
+# Shift+Cmd+C copies the tab's URL in Clair, as in Arc (replace-browser-window
+# design D18). Chromium's own shortcut table maps it to Inspect Element and is
+# checked before the main menu's key equivalents, so the Edit > Copy URL item
+# ClairUI adds never got it. Opt+Cmd+C still inspects an element.
+
+--- a/chrome/browser/global_keyboard_shortcuts_mac.mm
++++ b/chrome/browser/global_keyboard_shortcuts_mac.mm
+@@ -145,7 +145,8 @@
+ 
+       {true,  true,  false, false, kVK_ANSI_M,            IDC_SHOW_AVATAR_MENU},
+       {true,  false, false, true,  kVK_ANSI_L,            IDC_SHOW_DOWNLOADS},
+-      {true,  true,  false, false, kVK_ANSI_C,            IDC_DEV_TOOLS_INSPECT},
++      // Clair: Shift+Cmd+C is Edit > Copy URL, as in Arc; Opt+Cmd+C still
++      // inspects an element.
+       {true,  false, false, true,  kVK_ANSI_C,            IDC_DEV_TOOLS_INSPECT},
+       {true,  false, false, true,  kVK_DownArrow,         IDC_FOCUS_NEXT_PANE},
+       {true,  false, false, true,  kVK_UpArrow,           IDC_FOCUS_PREVIOUS_PANE},

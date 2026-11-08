@@ -29,6 +29,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   /// Watches the rest of a press once the window server has its window drag.
   private var safetyNetMonitor: Any?
   private var safetyNet = WindowDragSafetyNet()
+  /// When the link status capsule shows and hides.
+  private var statusState = StatusCapsuleState()
+  private var statusTimer: Task<Void, Never>?
 
   init(
     browser: any ClairBrowser, preferences: SidebarPreferences = SidebarPreferences(),
@@ -45,6 +48,19 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     super.init()
     sidebarHost.rootView = SidebarView(model: model, actions: self)
     rootView.onScrimClick = { [weak self] in self?.model.commandBar?.cancel() }
+    rootView.onCopyURL = { [weak self] in self?.copyURL() }
+    rootView.canCopyURL = { [weak self] in
+      guard let tab = self?.model.activeTab else { return false }
+      return TabListLogic.link(of: tab) != nil && !tab.isNewTabPage
+    }
+    // The popup in the card's corner stays; it's empty while nothing shows.
+    let noticeHost = SelfSizingHostingView(rootView: NoticePopupView(state: model.notice))
+    noticeHost.hitInset = NoticePopupView.margin
+    rootView.noticeHost = noticeHost
+    noticeHost.rootView = NoticePopupView(state: model.notice) { [weak self, weak noticeHost] url in
+      guard self != nil, let noticeHost else { return }
+      NSSharingServicePicker(items: [url]).show(relativeTo: noticeHost.bounds, of: noticeHost, preferredEdge: .minY)
+    }
     rootView.resizeHandle.currentWidth = { [weak model] in model?.sidebar.width ?? SidebarState.defaultWidth }
     rootView.resizeHandle.onResize = { [weak self] width, done in
       guard let self else { return }
@@ -71,6 +87,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
           MainActor.assumeIsolated {
             guard let self else { return }
             self.model.isWindowKey = self.window.isKeyWindow
+            self.offerCommandBarIfNew()
           }
         })
     }
@@ -79,8 +96,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       observers.append(
         center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
           MainActor.assumeIsolated {
-            self?.rootView.needsLayout = true
-            self?.extensionPopup?.dismiss()
+            guard let self else { return }
+            self.model.isWindowFullscreen = self.isWindowFullscreen
+            self.rootView.needsLayout = true
+            self.extensionPopup?.dismiss()
           }
         })
     }
@@ -100,7 +119,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // The command bar.
     if let commandBar = model.commandBar {
       if (rootView.commandBarHost as? NSHostingView<CommandBarView>)?.rootView.model !== commandBar {
-        let host = NSHostingView.edgeToEdge(rootView: CommandBarView(model: commandBar))
+        // Lays the window out again as results come and go, so the panel
+        // keeps its top and grows downwards (design D18).
+        let host = SelfSizingHostingView(rootView: CommandBarView(model: commandBar))
         rootView.commandBarHost = host
         window.makeFirstResponder(host)
       }
@@ -118,24 +139,13 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       rootView.findHost = nil
     }
     // The link status.
-    if let status = model.statusText, model.commandBar == nil {
-      rootView.statusHost = NSHostingView.edgeToEdge(rootView: CapsuleText(text: status, identifier: "clair.status"))
-    } else if rootView.statusHost != nil {
-      rootView.statusHost = nil
-    }
+    reportStatus(model.commandBar == nil ? model.statusText : nil, commandBarOpen: model.commandBar != nil)
     // Toasts.
     if let toast = model.toast {
       rootView.toastHost = NSHostingView(
         rootView: CapsuleText(text: toast.message, font: .system(size: 13, weight: .medium), identifier: "clair.toast"))
     } else if rootView.toastHost != nil {
       rootView.toastHost = nil
-    }
-    // The full-screen notice.
-    if let notice = model.exclusiveAccessNotice {
-      rootView.noticeHost = NSHostingView.edgeToEdge(
-        rootView: CapsuleText(text: notice, font: .system(size: 13, weight: .medium), identifier: "clair.fullscreenNotice"))
-    } else if rootView.noticeHost != nil {
-      rootView.noticeHost = nil
     }
     // The active tab's infobars and crashed page.
     let tab = model.activeTab
@@ -150,6 +160,65 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       }
     } else if rootView.card.crashedView != nil {
       rootView.card.crashedView = nil
+    }
+  }
+
+  // MARK: The link status (design D18)
+
+  /// Hands Chromium's link status to the capsule's timing rules, once per
+  /// change; the command bar hides the capsule at once.
+  private func reportStatus(_ text: String?, commandBarOpen: Bool) {
+    guard text != statusState.reportedText || (commandBarOpen && statusState.shownText != nil) else { return }
+    if commandBarOpen {
+      statusState.reset()
+    } else {
+      statusState.report(text, at: ProcessInfo.processInfo.systemUptime)
+    }
+    applyStatus()
+  }
+
+  /// Shows what the capsule's state says, and waits for its next change.
+  private func applyStatus() {
+    statusTimer?.cancel()
+    statusTimer = nil
+    if let text = statusState.shownText {
+      let capsule = CapsuleText(text: text, identifier: "clair.status")
+      if let host = rootView.statusHost as? SelfSizingHostingView<CapsuleText> {
+        host.rootView = capsule
+        fade(host, to: 1)
+      } else {
+        let host = SelfSizingHostingView(rootView: capsule)
+        host.alphaValue = 0
+        rootView.statusHost = host
+        fade(host, to: 1)
+      }
+    } else if let host = rootView.statusHost {
+      fade(host, to: 0) { [weak self, weak host] in
+        guard let self, let host, self.statusState.shownText == nil, self.rootView.statusHost === host else { return }
+        self.rootView.statusHost = nil
+      }
+    }
+    if let deadline = statusState.deadline {
+      statusTimer = Task { [weak self] in
+        try? await Task.sleep(for: .seconds(max(0, deadline - ProcessInfo.processInfo.systemUptime)))
+        guard !Task.isCancelled, let self else { return }
+        if self.statusState.tick(at: max(deadline, ProcessInfo.processInfo.systemUptime)) {
+          self.applyStatus()
+        }
+      }
+    }
+  }
+
+  private func fade(_ view: NSView, to alpha: CGFloat, completion: (@MainActor () -> Void)? = nil) {
+    guard view.alphaValue != alpha else {
+      completion?()
+      return
+    }
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = 0.15
+      view.animator().alphaValue = alpha
+    } completionHandler: {
+      MainActor.assumeIsolated { completion?() }
     }
   }
 
@@ -222,6 +291,31 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   func tabDidChange(_ tab: any ClairTab) {
     model.updateTab(tab)
+    offerCommandBarIfNew()
+    // The command bar a new window opened with gives way to a page that
+    // loads without it, as a link from another app.
+    if let offered = offeredCommandBar, offered === model.commandBar, tab.tabID == model.activeTabID,
+      !tab.isNewTabPage, offered.text.isEmpty {
+      offered.cancel()
+    }
+  }
+
+  // MARK: The command bar in a new window (design D18)
+
+  /// Whether the window may still open the command bar for its first tab.
+  private var offersCommandBar = true
+  private weak var offeredCommandBar: CommandBarModel?
+
+  /// Opens the command bar once, when the window first shows a single new tab
+  /// page, so typing goes straight into it, as in Arc.
+  private func offerCommandBarIfNew() {
+    guard offersCommandBar, window.isKeyWindow, let tab = model.activeTab else { return }
+    // A new tab has no URL until its first navigation starts.
+    guard tab.isNewTabPage || !(tab.urlText.isEmpty && (tab.url?.absoluteString ?? "").isEmpty) else { return }
+    offersCommandBar = false
+    guard model.tabs.count == 1, tab.isNewTabPage, model.commandBar == nil else { return }
+    editURL()
+    offeredCommandBar = model.commandBar
   }
 
   func activeTabDidChange(_ tabID: TabID) {
@@ -233,6 +327,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.setActiveTab(tabID)
     rootView.card.show(page: browser?.pageView(for: tabID))
     devToolsDidChange()
+    offerCommandBarIfNew()
   }
 
   func devToolsDidChange() {
@@ -310,9 +405,18 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     }
   }
 
+  /// Chromium's "Press Esc to exit full screen", in the same popup as Copy
+  /// URL's (design D18), for as long as Chromium shows it.
   func showExclusiveAccessNotice(_ text: String?) {
     model.exclusiveAccessNotice = text
+    if let text {
+      model.notice.show(Notice(text: text, identifier: Self.fullscreenNoticeID), for: nil)
+    } else if model.notice.notice?.identifier == Self.fullscreenNoticeID {
+      model.notice.hide()
+    }
   }
+
+  static let fullscreenNoticeID = "clair.fullscreenNotice"
 
   func anchor(for kind: AnchorKind, indicator: TabIndicators, extensionID: String?) -> BubbleAnchor {
     rootView.layoutSubtreeIfNeeded()
@@ -428,9 +532,12 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func copyURL() {
-    guard let tab = model.activeTab, let link = TabListLogic.link(of: tab) else { return }
+    guard let tab = model.activeTab, !tab.isNewTabPage, let link = TabListLogic.link(of: tab) else { return }
     copyToPasteboard(link)
-    showToast("Copied URL")
+    // Arc's popup, with a share button for the page.
+    model.notice.show(
+      Notice(text: "Copied Current URL", shareURL: URL(string: link), identifier: "clair.copiedURL"),
+      for: NoticeState.copiedDuration)
   }
 
   private func copyToPasteboard(_ text: String) {

@@ -26,12 +26,21 @@ enum URLDisplay {
     switch url.scheme?.lowercased() {
     case "http", "https":
       if let host = displayHost, !host.isEmpty {
-        return host
+        return withoutWWW(host)
       }
       return urlText
     default:
       return urlText.isEmpty ? url.absoluteString : urlText
     }
+  }
+
+  /// The host without a leading "www.", as Arc shows it, unless nothing
+  /// would be left but a public suffix's worth ("www.com").
+  static func withoutWWW(_ host: String) -> String {
+    let prefix = "www."
+    guard host.lowercased().hasPrefix(prefix) else { return host }
+    let rest = host.dropFirst(prefix.count)
+    return rest.contains(".") ? String(rest) : host
   }
 
   /// What the command bar holds when Cmd+L opens it: the full URL, or empty
