@@ -69,7 +69,7 @@ Suggested order: 1, 2, 3 (one engine build with the whole contract), then 4, 5 a
 
 ## 8. Spike measurements
 
-- [ ] 8.1 **(owner)** Fill in design.md's Measurements section (D16): compare the window with Arc side by side while Arc still runs, time a one-line `ClairUI` change through D15's loop and through a push and `quality.yml`, and record D9's final table with what moved and why. Verify that every item in D16 has a result, and that each "worse" result has a follow-up issue.
+- [x] 8.1 **(owner)** Fill in design.md's Measurements section (D16): compare the window with Arc side by side while Arc still runs, time a one-line `ClairUI` change through D15's loop and through a push and `quality.yml`, and record D9's final table with what moved and why. Verify that every item in D16 has a result, and that each "worse" result has a follow-up issue. Closed by the owner on 2026-11-07: the polish passes of groups 9 to 11 compared the window with Arc instead and fixed what was worse (design, Measurements).
 
 ## 9. Polish from the owner's pass
 
