@@ -22,6 +22,8 @@ logo.svg - chrome/app/theme/chromium/product_logo.svg
 
 # Single-colour mark
 logo-mono.svg 22x22 chrome/app/theme/chromium/product_logo_22_mono.png
+# WebUI's dark-mode logo (cr-toolbar, cr-drawer, the extensions page)
+logo-mono-white.svg - ui/webui/resources/images/chrome_logo_dark.svg
 
 # Wordmark
 wordmark.svg 171x32 components/resources/default_100_percent/chromium/product_logo.png

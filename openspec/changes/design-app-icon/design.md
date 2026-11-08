@@ -92,6 +92,7 @@ The file list comes from Helium's `resources/helium_resources.txt`, checked file
 | `chrome/app/theme/default_200_percent/chromium/product_logo_{16,32}.png` | 32, 64 | `logo.svg` |
 | `chrome/app/theme/chromium/product_logo.svg` | vector | `logo.svg` |
 | `chrome/app/theme/chromium/product_logo_22_mono.png` | 22 | `logo-mono.svg` |
+| `ui/webui/resources/images/chrome_logo_dark.svg` | vector | `logo-mono-white.svg` |
 | `components/resources/default_{100,200}_percent/chromium/product_logo.png` | 171×32, 342×64 | `wordmark.svg` |
 | `components/resources/default_{100,200}_percent/chromium/product_logo_white.png` | 171×32, 342×64 | `wordmark-white.svg` |
 | nine `.icon` vector icons (D6) | their own canvases | `make_layers.py` |
@@ -99,6 +100,7 @@ The file list comes from Helium's `resources/helium_resources.txt`, checked file
 The source files are:
 - **`logo.svg`:** the full mark (ring layer and inlay) in a baked gold gradient on a transparent background, fitted to its square canvas.
 - **`logo-mono.svg`:** the ring layer only, in `#222222`, which is the near-black of Chromium's mono logo. The inlay is left out because it vanishes at 22 px.
+- **`logo-mono-white.svg`:** the same silhouette in white. WebUI pages (`cr-toolbar`, `cr-drawer`, the extensions page) show the color product logo in Light Mode but switch to Chrome's white logo, `chrome_logo_dark.svg`, in Dark Mode; it isn't in Helium's list and was found on `chrome://settings`'s drawer.
 
 `scripts/render-icon-images.sh` renders the PNGs with `rsvg-convert` from Homebrew, following `resources/icon/product-logos.txt`. The owner chose to render on the development machine and commit the PNGs, because they change only when the artwork does. The resource-replacement step copies them.
 
