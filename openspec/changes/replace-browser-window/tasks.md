@@ -100,6 +100,16 @@ More fixes from the owner's pass (D18), all in `ClairUI`. Arc's figures were mea
 - [x] 10.8 Investigate the sidebar changing colour for about 2 s when the pointer moves over the tabs in full screen. Verify by finding and fixing the cause, or, if it can't be reproduced, record what was tried in D18 and open an issue.
 - [x] 10.9 Run the full quality checks on the branch. Verify that every runtime test passes.
 
+## 11. Third polish pass
+
+More fixes from the owner's pass (D18). Arc's figures were measured with the probe on 2026-11-07.
+
+- [ ] 11.1 "Copied Current URL" (D18): Arc's popup in the card's top-trailing corner, with its spring in and out, its timing and a share button, for Edit > Copy URL, Shift+Cmd+C, the URL field's copy button and its context menu; page full screen's notice in the same popup with Esc as a key cap. Verify by hand against Arc, and that the full-screen runtime test still finds the notice.
+- [ ] 11.2 Tooltips (D18): key-cap depth, a softer and wider shadow, tighter sides with the keys sitting evenly at the end, a tab's title after 2 s, and no tooltip after a click or a right click until the pointer leaves the control. Verify by hand against Arc, including a tab's context menu.
+- [ ] 11.3 Command bar border (D18): Arc's crisp mid-grey hairline. Verify by measuring the edge against Arc's.
+- [ ] 11.4 Clearing history (D13, D18): the clear-browsing-data hook. Verify that the patch check applies it and `engine.yml` builds the engine for the branch's key, then by hand that deleting all history from `chrome://settings/clearBrowserData` and from `chrome://history` leaves Clair running.
+- [ ] 11.5 Run the full quality checks on the branch. Verify that every runtime test passes.
+
 ## Workflow follow-up
 
 - Run a `release.yml` dry run and the updated release checklist on its DMG before the first release that ships the native window.

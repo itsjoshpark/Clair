@@ -754,7 +754,7 @@ struct TabRow: View {
   @Environment(\.colorScheme) private var colorScheme
 
   /// How long the pointer rests on a row before its full title shows.
-  static let titleTooltipDelay: Duration = .seconds(3)
+  static let titleTooltipDelay: Duration = .seconds(2)
 
   // Arc's metrics: 40 pt rows on a 41 pt pitch, an 18 pt favicon frame 9 pt
   // into the pill with the favicon drawn at 16 pt, the title 8 pt after it,

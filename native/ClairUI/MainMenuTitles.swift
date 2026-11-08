@@ -12,9 +12,9 @@ enum MainMenuTitles {
   /// "Location" alone is vague to most people.
   static let focusLocationTitle = "Open Location Bar"
 
-  /// Chromium's IDC_COPY_URL, which copies the tab's URL and shows Chromium's
-  /// "Link copied" toast.
-  static let copyURLTag = 34071
+  /// Edit > Copy URL's action, which the native window's root view answers
+  /// through the responder chain, showing Arc's "Copied Current URL".
+  static let copyURLAction = #selector(BrowserRootView.copyCurrentURL(_:))
 
   /// Adds Edit > Copy URL (Shift+Cmd+C) after Copy, as in Arc (design D18),
   /// and returns it. `copy-url-shortcut.patch` frees Shift+Cmd+C from
@@ -25,12 +25,11 @@ enum MainMenuTitles {
     for item in menu.items {
       guard let submenu = item.submenu else { continue }
       if let copy = submenu.items.firstIndex(where: { $0.action == #selector(NSText.copy(_:)) }) {
-        if let existing = submenu.items.first(where: { $0.tag == copyURLTag }) {
+        if let existing = submenu.items.first(where: { $0.action == copyURLAction }) {
           return existing
         }
-        let copyURL = NSMenuItem(title: "Copy URL", action: Selector(("commandDispatch:")), keyEquivalent: "c")
+        let copyURL = NSMenuItem(title: "Copy URL", action: copyURLAction, keyEquivalent: "c")
         copyURL.keyEquivalentModifierMask = [.command, .shift]
-        copyURL.tag = copyURLTag
         submenu.insertItem(copyURL, at: copy + 1)
         return copyURL
       }

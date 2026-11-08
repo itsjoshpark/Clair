@@ -30,6 +30,9 @@
 #   crash sites for a browser without a BrowserView (its footer controller, side
 #   panel and toolbar), found by Crest (pauljoda/Crest) on Chromium 156 and in
 #   the reading-mode controller's CHECK_IS_TEST(). They skip that UI.
+# - settings_clear_browsing_data_handler.cc: clearing history CHECKs for the
+#   BrowserView's element to send a promo event; a native window has none, so
+#   it skips the event, as Chromium's other users of that element do (D18).
 # - constrained_window_views.cc: tab-modal dialogs (JavaScript dialogs, leave
 #   prompts, HTTP authentication) are positioned only over a Views host, and
 #   browser-modal ones (the extension install prompt) become sheets only on a
@@ -443,6 +446,26 @@
      deps += [
        ":browser_commands_mac",
        ":browser_commands_mac_impl",
+--- a/chrome/browser/ui/webui/settings/settings_clear_browsing_data_handler.cc
++++ b/chrome/browser/ui/webui/settings/settings_clear_browsing_data_handler.cc
+@@ -301,10 +301,13 @@
+     ui::TrackedElement* const browser_element =
+         ui::ElementTracker::GetElementTracker()->GetUniqueElement(
+             kBrowserViewElementId, context);
+-    CHECK(browser_element);
+-    ui::ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(
+-        browser_element,
+-        browsing_data_important_sites_util::kClearBrowsingDataHistoryEventId);
++    // Clair: a native window has no BrowserView element. Skip the event, as
++    // Chromium's other users of kBrowserViewElementId do.
++    if (browser_element) {
++      ui::ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(
++          browser_element,
++          browsing_data_important_sites_util::kClearBrowsingDataHistoryEventId);
++    }
+   }
+ 
+   ResolveJavascriptCallback(base::Value(webui_callback_id), result);
 --- a/components/constrained_window/constrained_window_views.cc
 +++ b/components/constrained_window/constrained_window_views.cc
 @@ -30,6 +30,10 @@

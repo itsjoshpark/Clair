@@ -54,6 +54,8 @@ final class BrowserWindowModel {
   var statusText: String?
   var toast: Toast?
   var exclusiveAccessNotice: String?
+  /// The popup in the card's top-trailing corner (design D18).
+  let notice = NoticeState()
   var isPageFullscreen = false
   var isWindowKey = true
   /// Whether the window is in macOS full screen, where the top row has no

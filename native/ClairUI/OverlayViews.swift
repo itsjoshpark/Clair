@@ -28,6 +28,7 @@ enum OverlayStyle {
 struct CommandBarView: View {
   let model: CommandBarModel
   @FocusState private var isFieldFocused: Bool
+  @Environment(\.colorScheme) private var colorScheme
 
   static let width: CGFloat = 764
   /// Arc's metrics: a 64 pt field row, then 50 pt rows.
@@ -116,7 +117,10 @@ struct CommandBarView: View {
       }
     }
     .background(OverlayStyle.background, in: .rect(cornerRadius: 14))
-    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.08)))
+    // Arc's border: a hairline of solid mid-grey, seen on light and dark pages.
+    .overlay(
+      RoundedRectangle(cornerRadius: 14)
+        .strokeBorder(Color(white: colorScheme == .dark ? 0.3 : 0.65), lineWidth: 0.5))
     .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
     // The field can take focus only once it's laid out in the window, a
     // moment after it's added; keep asking until it has.

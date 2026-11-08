@@ -48,6 +48,19 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     super.init()
     sidebarHost.rootView = SidebarView(model: model, actions: self)
     rootView.onScrimClick = { [weak self] in self?.model.commandBar?.cancel() }
+    rootView.onCopyURL = { [weak self] in self?.copyURL() }
+    rootView.canCopyURL = { [weak self] in
+      guard let tab = self?.model.activeTab else { return false }
+      return TabListLogic.link(of: tab) != nil && !tab.isNewTabPage
+    }
+    // The popup in the card's corner stays; it's empty while nothing shows.
+    let noticeHost = SelfSizingHostingView(rootView: NoticePopupView(state: model.notice))
+    noticeHost.hitInset = NoticePopupView.margin
+    rootView.noticeHost = noticeHost
+    noticeHost.rootView = NoticePopupView(state: model.notice) { [weak self, weak noticeHost] url in
+      guard self != nil, let noticeHost else { return }
+      NSSharingServicePicker(items: [url]).show(relativeTo: noticeHost.bounds, of: noticeHost, preferredEdge: .minY)
+    }
     rootView.resizeHandle.currentWidth = { [weak model] in model?.sidebar.width ?? SidebarState.defaultWidth }
     rootView.resizeHandle.onResize = { [weak self] width, done in
       guard let self else { return }
@@ -133,13 +146,6 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
         rootView: CapsuleText(text: toast.message, font: .system(size: 13, weight: .medium), identifier: "clair.toast"))
     } else if rootView.toastHost != nil {
       rootView.toastHost = nil
-    }
-    // The full-screen notice.
-    if let notice = model.exclusiveAccessNotice {
-      rootView.noticeHost = NSHostingView.edgeToEdge(
-        rootView: CapsuleText(text: notice, font: .system(size: 13, weight: .medium), identifier: "clair.fullscreenNotice"))
-    } else if rootView.noticeHost != nil {
-      rootView.noticeHost = nil
     }
     // The active tab's infobars and crashed page.
     let tab = model.activeTab
@@ -399,9 +405,18 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     }
   }
 
+  /// Chromium's "Press Esc to exit full screen", in the same popup as Copy
+  /// URL's (design D18), for as long as Chromium shows it.
   func showExclusiveAccessNotice(_ text: String?) {
     model.exclusiveAccessNotice = text
+    if let text {
+      model.notice.show(Notice(text: text, identifier: Self.fullscreenNoticeID), for: nil)
+    } else if model.notice.notice?.identifier == Self.fullscreenNoticeID {
+      model.notice.hide()
+    }
   }
+
+  static let fullscreenNoticeID = "clair.fullscreenNotice"
 
   func anchor(for kind: AnchorKind, indicator: TabIndicators, extensionID: String?) -> BubbleAnchor {
     rootView.layoutSubtreeIfNeeded()
@@ -517,9 +532,12 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func copyURL() {
-    guard let tab = model.activeTab, let link = TabListLogic.link(of: tab) else { return }
+    guard let tab = model.activeTab, !tab.isNewTabPage, let link = TabListLogic.link(of: tab) else { return }
     copyToPasteboard(link)
-    showToast("Copied URL")
+    // Arc's popup, with a share button for the page.
+    model.notice.show(
+      Notice(text: "Copied Current URL", shareURL: URL(string: link), identifier: "clair.copiedURL"),
+      for: NoticeState.copiedDuration)
   }
 
   private func copyToPasteboard(_ text: String) {

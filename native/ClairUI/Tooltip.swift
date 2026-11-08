@@ -34,6 +34,11 @@ final class TooltipCenter {
   private(set) var current: Tooltip?
   /// The controls under the pointer, outermost first.
   private var hovered: [Entry] = []
+  /// Controls clicked since the pointer entered them: a click, including the
+  /// right click that opens a context menu, puts their tooltips away until
+  /// the pointer leaves and comes back.
+  private var clicked: Set<UUID> = []
+  private var clickMonitor: Any?
   private var pending: Task<Void, Never>?
   private lazy var window = TooltipWindow()
 
@@ -49,6 +54,7 @@ final class TooltipCenter {
       return
     }
     hovered.append(Entry(id: id, tooltip: tooltip, delay: delay))
+    watchClicks()
     scheduleOwner()
   }
 
@@ -57,6 +63,7 @@ final class TooltipCenter {
     guard let index = hovered.firstIndex(where: { $0.id == id }) else { return }
     let wasOwner = index == hovered.count - 1
     hovered.remove(at: index)
+    clicked.remove(id)
     if wasOwner {
       scheduleOwner()
     }
@@ -67,13 +74,29 @@ final class TooltipCenter {
     hide()
   }
 
+  private func watchClicks() {
+    guard clickMonitor == nil else { return }
+    clickMonitor = NSEvent.addLocalMonitorForEvents(
+      matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+    ) { event in
+      MainActor.assumeIsolated {
+        let center = TooltipCenter.shared
+        center.clicked.formUnion(center.hovered.map(\.id))
+        center.hide()
+      }
+      return event
+    }
+  }
+
   /// Shows the innermost control's tooltip once its delay has passed.
   private func scheduleOwner() {
     hide()
-    guard let owner = hovered.last else { return }
+    guard let owner = hovered.last, !clicked.contains(owner.id) else { return }
     pending = Task { [weak self] in
       try? await Task.sleep(for: owner.delay)
-      guard !Task.isCancelled, let self, let entry = self.hovered.last, entry.id == owner.id else { return }
+      guard !Task.isCancelled, let self, let entry = self.hovered.last, entry.id == owner.id,
+        !self.clicked.contains(entry.id)
+      else { return }
       self.current = entry.tooltip
       self.window.show(entry.tooltip, at: NSEvent.mouseLocation)
     }
@@ -201,7 +224,10 @@ struct TooltipView: View {
   let tooltip: Tooltip
 
   /// Room around the capsule for its shadow.
-  static let margin: CGFloat = 8
+  static let margin: CGFloat = 14
+  /// The key caps' height, with their deeper bottom edge.
+  static let keyHeight: CGFloat = 19.5
+  static let height: CGFloat = 28
 
   var body: some View {
     let accent = Color.accentColor
@@ -218,15 +244,17 @@ struct TooltipView: View {
         }
       }
     }
-    .padding(.leading, 14)
-    .padding(.trailing, tooltip.shortcut.isEmpty ? 14 : 10)
-    .frame(height: 28)
+    // With keys, the last key sits as far from the end as from the top and
+    // bottom, so the capsule's round end hugs it.
+    .padding(.leading, 10)
+    .padding(.trailing, tooltip.shortcut.isEmpty ? 10 : (Self.height - Self.keyHeight) / 2)
+    .frame(height: Self.height)
     // The shadow belongs to the capsule alone; on the whole view it would
     // blur the text and shade the key caps.
     .background {
       Capsule()
         .fill(OverlayStyle.background.mix(with: accent, by: 0.07))
-        .shadow(color: .black.opacity(0.16), radius: 3, y: 1)
+        .shadow(color: .black.opacity(0.22), radius: 7, y: 3)
     }
     .padding(Self.margin)
     .fixedSize()
@@ -234,8 +262,8 @@ struct TooltipView: View {
   }
 }
 
-/// One key of a shortcut, drawn as a flat key cap.
-private struct KeyCap: View {
+/// One key of a shortcut, drawn as a key cap with a deeper bottom edge.
+struct KeyCap: View {
   let key: String
 
   var body: some View {
@@ -248,5 +276,8 @@ private struct KeyCap: View {
       .frame(minWidth: 18, minHeight: 18)
       .background(shape.fill(OverlayStyle.background.mix(with: accent, by: 0.16)))
       .overlay(shape.strokeBorder(accent.opacity(0.45), lineWidth: 1))
+      // The key's depth: its bottom edge, below the face.
+      .background(shape.fill(accent.opacity(0.6)).offset(y: 1.5))
+      .padding(.bottom, 1.5)
   }
 }
