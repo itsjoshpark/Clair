@@ -525,6 +525,43 @@ final class TabListTests: NativeWindowTestCase {
   }
 }
 
+/// The tab row's layout (design D12, D18): the favicon 9 pt into the pill and
+/// 18 pt square, the title 8 pt after it, and, while the tab plays sound, the
+/// 26 pt speaker between them, 4.5 pt after the favicon and 5.5 pt before the
+/// title. A layout change that moves any of them fails here.
+@MainActor
+final class TabRowLayoutTests: NativeWindowTestCase {
+  func testFaviconSpeakerAndTitlePositions() async throws {
+    let (browser, tab) = try await startWithPage("audio.html")
+    defer { tab.close() }
+    let found = await browser.waitForTabs { $0.contains("Clair runtime audio page") }
+    try require(found, "The sidebar doesn't list the audio page: \(browser.tabTitles)")
+    guard let row = browser.tabRows.first(where: { $0.label == "Clair runtime audio page" }) else {
+      return XCTFail("No row for the audio page")
+    }
+    let favicon = browser.element("clair.tabFavicon", in: row)
+    let title = browser.element("clair.tabTitle", in: row)
+    try require(favicon.waitForExistence(timeout: 10) && title.exists, "The row shows no favicon or title")
+
+    // Without sound.
+    XCTAssertEqual(favicon.frame.minX - row.frame.minX, 9, accuracy: 1, "The favicon's inset in the pill")
+    XCTAssertEqual(favicon.frame.width, 18, accuracy: 1, "The favicon's frame")
+    XCTAssertEqual(title.frame.minX - favicon.frame.maxX, 8, accuracy: 1, "The gap between favicon and title")
+
+    // With sound: the speaker sits between them with even gaps.
+    let state = try await tab.evaluate("startTone()") as? String
+    try require(state == "running", "The test tone didn't start")
+    let speaker = browser.element("clair.tabSpeaker", in: row)
+    let shown = await Harness.wait(for: 15) { speaker.exists && abs(speaker.frame.width - 26) < 1 }
+    try require(shown, "The playing tab shows no speaker")
+    try await Task.sleep(for: .milliseconds(500))
+    XCTAssertEqual(speaker.frame.minX - favicon.frame.maxX, 4.5, accuracy: 1, "The gap between favicon and speaker")
+    XCTAssertEqual(title.frame.minX - speaker.frame.maxX, 5.5, accuracy: 1, "The gap between speaker and title")
+    XCTAssertEqual(favicon.frame.minX - row.frame.minX, 9, accuracy: 1, "The favicon moved when the speaker showed")
+    _ = try await tab.evaluate("stopTone()")
+  }
+}
+
 /// Hiding, revealing and Save Page As (task 5.6).
 @MainActor
 final class SidebarHidingTests: NativeWindowTestCase {

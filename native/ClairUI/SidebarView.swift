@@ -795,6 +795,8 @@ struct TabRow: View {
           }
         }
         .frame(width: Self.iconSize, height: Self.iconSize)
+        .accessibilityElement()
+        .accessibilityIdentifier("clair.tabFavicon")
         // The speaker's glyph keeps the same visible gap from the favicon and
         // from the title as the title has from the favicon without it (10 pt
         // drawn to drawn): its 26 pt button pads the glyph by about 4 pt, and
@@ -810,6 +812,7 @@ struct TabRow: View {
           .allowsHitTesting(showsSpeaker)
           .accessibilityHidden(!showsSpeaker)
         Text(tab.title).font(Self.titleFont).lineLimit(1)
+          .accessibilityIdentifier("clair.tabTitle")
       }
       Spacer(minLength: 0)
       if isHovered {
