@@ -16,6 +16,7 @@ final class FakeTab: NSObject, ClairTab {
   let isNewTabPage: Bool
   let favicon: NSImage? = nil
   let isLoading: Bool
+  let loadProgress: Double
   let canGoBack: Bool
   let canGoForward: Bool
   let isAudible: Bool
@@ -25,8 +26,8 @@ final class FakeTab: NSObject, ClairTab {
   let infobars: [any ClairInfobar]
 
   init(
-    id: TabID, title: String = "", url: String? = nil, isLoading: Bool = false, canGoBack: Bool = false,
-    canGoForward: Bool = false, isAudible: Bool = false, isMuted: Bool = false, isCrashed: Bool = false,
+    id: TabID, title: String = "", url: String? = nil, isLoading: Bool = false, loadProgress: Double = 0,
+    canGoBack: Bool = false, canGoForward: Bool = false, isAudible: Bool = false, isMuted: Bool = false, isCrashed: Bool = false,
     indicators: TabIndicators = [], infobars: [any ClairInfobar] = []
   ) {
     tabID = id
@@ -36,6 +37,7 @@ final class FakeTab: NSObject, ClairTab {
     displayHost = self.url?.host()
     isNewTabPage = url == "chrome://newtab/"
     self.isLoading = isLoading
+    self.loadProgress = loadProgress
     self.canGoBack = canGoBack
     self.canGoForward = canGoForward
     self.isAudible = isAudible
@@ -47,12 +49,14 @@ final class FakeTab: NSObject, ClairTab {
 
   /// A copy with some fields changed, as Chromium posts after a change.
   func with(
-    title: String? = nil, url: String? = nil, isLoading: Bool? = nil, isAudible: Bool? = nil, isMuted: Bool? = nil,
-    canGoBack: Bool? = nil, canGoForward: Bool? = nil, isCrashed: Bool? = nil, indicators: TabIndicators? = nil
+    title: String? = nil, url: String? = nil, isLoading: Bool? = nil, loadProgress: Double? = nil,
+    isAudible: Bool? = nil, isMuted: Bool? = nil, canGoBack: Bool? = nil, canGoForward: Bool? = nil,
+    isCrashed: Bool? = nil, indicators: TabIndicators? = nil
   ) -> FakeTab {
     FakeTab(
       id: tabID, title: title ?? self.title, url: url ?? (self.url?.absoluteString),
-      isLoading: isLoading ?? self.isLoading, canGoBack: canGoBack ?? self.canGoBack,
+      isLoading: isLoading ?? self.isLoading, loadProgress: loadProgress ?? self.loadProgress,
+      canGoBack: canGoBack ?? self.canGoBack,
       canGoForward: canGoForward ?? self.canGoForward, isAudible: isAudible ?? self.isAudible,
       isMuted: isMuted ?? self.isMuted, isCrashed: isCrashed ?? self.isCrashed,
       indicators: indicators ?? self.indicators, infobars: infobars)
@@ -211,6 +215,68 @@ final class FakeAutocomplete: NSObject, ClairAutocomplete {
   }
 }
 
+/// A stand-in for a history menu item.
+final class FakeHistoryItem: NSObject, ClairHistoryItem {
+  let itemID: Int
+  let kind: HistoryItemKind
+  let title: String
+  let url: URL?
+  let icon: NSImage?
+
+  init(id: Int, title: String, url: String? = nil, icon: NSImage? = nil, kind: HistoryItemKind = .page) {
+    itemID = id
+    self.kind = kind
+    self.title = title
+    self.url = url.flatMap(URL.init(string:))
+    self.icon = icon
+  }
+
+  /// "Show Full History", as Chromium lists it last.
+  static func showFullHistory(id: Int) -> FakeHistoryItem {
+    FakeHistoryItem(id: id, title: "Show Full History", kind: .showFullHistory)
+  }
+
+  func with(icon: NSImage?) -> FakeHistoryItem {
+    FakeHistoryItem(id: itemID, title: title, url: url?.absoluteString, icon: icon, kind: kind)
+  }
+}
+
+/// A stand-in for Chromium's history menu session. Tests post late favicons
+/// with `setIcon(_:forItem:)`.
+final class FakeHistoryMenu: NSObject, ClairHistoryMenu {
+  let direction: HistoryDirection
+  weak var delegate: (any ClairHistoryMenuDelegate)?
+  private(set) var items: [any ClairHistoryItem]
+  private(set) var opened: [(itemID: Int, disposition: OpenDisposition)] = []
+  private(set) var isClosed = false
+
+  init(direction: HistoryDirection, items: [FakeHistoryItem], delegate: any ClairHistoryMenuDelegate) {
+    self.direction = direction
+    self.items = items
+    self.delegate = delegate
+  }
+
+  func open(item itemID: Int, disposition: OpenDisposition) {
+    guard !isClosed else { return }
+    opened.append((itemID, disposition))
+    isClosed = true
+  }
+
+  func close() {
+    isClosed = true
+  }
+
+  /// A favicon arrived for an item, as Chromium's favicon service reports.
+  func setIcon(_ icon: NSImage, forItem itemID: Int) {
+    guard !isClosed else { return }
+    items = items.map { item in
+      guard item.itemID == itemID, let fake = item as? FakeHistoryItem else { return item }
+      return fake.with(icon: icon)
+    }
+    delegate?.historyMenu(self, itemsDidChange: items)
+  }
+}
+
 /// A stand-in for `ClairNativeWindow`: records where ClairUI puts the window
 /// controls.
 final class FakeWindow: NSWindow, ClairWindowControls {
@@ -239,6 +305,10 @@ final class FakeBrowser: NSObject, ClairBrowser {
   /// Every command ClairUI sent, in order, such as "activate 2".
   private(set) var commands: [String] = []
   private(set) var autocompleteSessions: [FakeAutocomplete] = []
+  private(set) var historyMenus: [FakeHistoryMenu] = []
+  /// What a history menu lists in each direction; empty means the active tab
+  /// can't go that way, and no session starts.
+  var historyItems: [HistoryDirection: [FakeHistoryItem]] = [:]
   private(set) var isClosed = false
 
   init(profileKind: ProfileKind = .regular) {
@@ -375,6 +445,19 @@ final class FakeBrowser: NSObject, ClairBrowser {
     autocompleteSessions.append(session)
     return session
   }
+
+  func startHistoryMenu(direction: HistoryDirection, delegate: any ClairHistoryMenuDelegate)
+    -> (any ClairHistoryMenu)?
+  {
+    record("historyMenu \(direction.rawValue)")
+    guard let items = historyItems[direction], !items.isEmpty else { return nil }
+    let menu = FakeHistoryMenu(direction: direction, items: items, delegate: delegate)
+    historyMenus.append(menu)
+    return menu
+  }
+
+  /// The latest history menu session.
+  var historyMenu: FakeHistoryMenu? { historyMenus.last }
 
   func focusPage() { record("focusPage") }
   func find(_ text: String, forward: Bool) { record("find \(text) \(forward ? "forward" : "backward")") }

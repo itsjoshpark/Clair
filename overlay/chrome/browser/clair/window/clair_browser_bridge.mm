@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -39,6 +40,7 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 #include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
+#include "chrome/browser/ui/toolbar/back_forward_menu_model.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
@@ -51,11 +53,15 @@
 #include "components/tabs/public/tab_interface.h"
 #include "components/url_formatter/url_formatter.h"
 #include "content/public/browser/navigation_controller.h"
+#include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/url_constants.h"
 #include "net/base/apple/url_conversions.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/models/menu_model_delegate.h"
 #include "ui/base/window_open_disposition.h"
+#include "ui/events/event_constants.h"
 #include "ui/gfx/image/image.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
@@ -175,6 +181,7 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
 @synthesize isNewTabPage = _isNewTabPage;
 @synthesize favicon = _favicon;
 @synthesize isLoading = _isLoading;
+@synthesize loadProgress = _loadProgress;
 @synthesize canGoBack = _canGoBack;
 @synthesize canGoForward = _canGoForward;
 @synthesize isAudible = _isAudible;
@@ -206,7 +213,10 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
       gfx::Image image = favicons->GetFavicon();
       _favicon = image.IsEmpty() ? nil : image.ToNSImage();
     }
-    _isLoading = contents->IsLoading();
+    // Chromium's toolbar and tab strip state (design D1): a frame loading on
+    // its own or a same-document navigation doesn't show stop.
+    _isLoading = contents->IsLoading() && contents->ShouldShowLoadingUI();
+    _loadProgress = contents->GetLoadProgress();
     _canGoBack = contents->GetController().CanGoBack();
     _canGoForward = contents->GetController().CanGoForward();
     auto* audible = RecentlyAudibleHelper::FromWebContents(contents);
@@ -237,7 +247,24 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
 
 namespace {
 
-// Watches the tab strip and each tab's infobars for the bridge.
+// Tells the bridge when a tab's load progress changes (design D4), so it rides
+// the tab's coalesced push.
+class ProgressObserver : public content::WebContentsObserver {
+ public:
+  ProgressObserver(ClairChromiumBrowser* bridge, content::WebContents* contents)
+      : content::WebContentsObserver(contents), bridge_(bridge) {}
+
+  // content::WebContentsObserver:
+  void LoadProgressChanged(double progress) override {
+    [bridge_ tabChanged:web_contents()];
+  }
+
+ private:
+  ClairChromiumBrowser* __weak bridge_;
+};
+
+// Watches the tab strip, and each tab's infobars and load progress, for the
+// bridge.
 class BridgeObserver : public TabStripModelObserver,
                        public infobars::InfoBarManager::Observer {
  public:
@@ -251,6 +278,7 @@ class BridgeObserver : public TabStripModelObserver,
 
   ~BridgeObserver() override {
     infobar_observations_.RemoveAllObservations();
+    progress_observers_.clear();
     if (model_) {
       model_->RemoveObserver(this);
     }
@@ -336,6 +364,10 @@ class BridgeObserver : public TabStripModelObserver,
     if (manager && !infobar_observations_.IsObservingSource(manager)) {
       infobar_observations_.AddObservation(manager);
     }
+    if (FindProgressObserver(contents) == progress_observers_.end()) {
+      progress_observers_.push_back(
+          std::make_unique<ProgressObserver>(bridge_, contents));
+    }
   }
 
   void Unwatch(content::WebContents* contents) {
@@ -343,6 +375,19 @@ class BridgeObserver : public TabStripModelObserver,
     if (manager && infobar_observations_.IsObservingSource(manager)) {
       infobar_observations_.RemoveObservation(manager);
     }
+    if (auto it = FindProgressObserver(contents);
+        it != progress_observers_.end()) {
+      progress_observers_.erase(it);
+    }
+  }
+
+  std::vector<std::unique_ptr<ProgressObserver>>::iterator FindProgressObserver(
+      content::WebContents* contents) {
+    return std::ranges::find_if(
+        progress_observers_,
+        [contents](const std::unique_ptr<ProgressObserver>& observer) {
+          return observer->web_contents() == contents;
+        });
   }
 
   void Changed(infobars::InfoBar* infobar) {
@@ -357,9 +402,254 @@ class BridgeObserver : public TabStripModelObserver,
   base::ScopedMultiSourceObservation<infobars::InfoBarManager,
                                      infobars::InfoBarManager::Observer>
       infobar_observations_{this};
+  std::vector<std::unique_ptr<ProgressObserver>> progress_observers_;
 };
 
 }  // namespace
+
+// --- History menu (design D3) -----------------------------------------------
+
+@interface ClairChromiumHistoryItem : NSObject <ClairHistoryItem>
+- (instancetype)initWithID:(NSInteger)itemID
+                      kind:(ClairHistoryItemKind)kind
+                     title:(NSString*)title
+                       url:(NSURL*)url
+                      icon:(NSImage*)icon;
+@end
+
+@implementation ClairChromiumHistoryItem
+@synthesize itemID = _itemID;
+@synthesize kind = _kind;
+@synthesize title = _title;
+@synthesize url = _url;
+@synthesize icon = _icon;
+
+- (instancetype)initWithID:(NSInteger)itemID
+                      kind:(ClairHistoryItemKind)kind
+                     title:(NSString*)title
+                       url:(NSURL*)url
+                      icon:(NSImage*)icon {
+  if ((self = [super init])) {
+    _itemID = itemID;
+    _kind = kind;
+    _title = [title copy];
+    _url = [url copy];
+    _icon = icon;
+  }
+  return self;
+}
+@end
+
+@interface ClairChromiumHistoryMenu : NSObject <ClairHistoryMenu>
+- (instancetype)initWithBrowser:(Browser*)browser
+                      direction:(ClairHistoryDirection)direction
+                       delegate:(id<ClairHistoryMenuDelegate>)delegate;
+// Whether the menu lists any page; a session without one isn't handed out.
+@property(nonatomic, readonly) BOOL hasPages;
+// Chromium's model changed: a favicon arrived or the tab navigated.
+- (void)modelChanged;
+// Another tab became active: the session ends with an empty list.
+- (void)activeTabChanged;
+@end
+
+namespace {
+
+// Forwards BackForwardMenuModel's changes to its session.
+class HistoryMenuModelDelegate : public ui::MenuModelDelegate {
+ public:
+  explicit HistoryMenuModelDelegate(ClairChromiumHistoryMenu* session)
+      : session_(session) {}
+
+  // ui::MenuModelDelegate:
+  void OnIconChanged(int command_id) override { [session_ modelChanged]; }
+  void OnMenuStructureChanged() override { [session_ modelChanged]; }
+
+ private:
+  ClairChromiumHistoryMenu* __weak session_;
+};
+
+int EventFlagsFor(ClairOpenDisposition disposition) {
+  // What ui::DispositionFromEventFlags() turns back into `disposition` on
+  // macOS, where Cmd is the new-tab modifier.
+  switch (disposition) {
+    case ClairOpenDispositionCurrentTab:
+      return ui::EF_NONE;
+    case ClairOpenDispositionNewForegroundTab:
+      return ui::EF_COMMAND_DOWN | ui::EF_SHIFT_DOWN;
+    case ClairOpenDispositionNewBackgroundTab:
+      return ui::EF_COMMAND_DOWN;
+    case ClairOpenDispositionNewWindow:
+      return ui::EF_SHIFT_DOWN;
+  }
+  return ui::EF_NONE;
+}
+
+}  // namespace
+
+@implementation ClairChromiumHistoryMenu {
+  raw_ptr<Browser> _browser;
+  ClairHistoryDirection _direction;
+  base::WeakPtr<content::WebContents> _contents;
+  std::unique_ptr<HistoryMenuModelDelegate> _modelDelegate;
+  std::unique_ptr<BackForwardMenuModel> _model;
+  id<ClairHistoryMenuDelegate> __weak _delegate;
+  BOOL _changePosted;
+}
+
+- (instancetype)initWithBrowser:(Browser*)browser
+                      direction:(ClairHistoryDirection)direction
+                       delegate:(id<ClairHistoryMenuDelegate>)delegate {
+  if ((self = [super init])) {
+    _browser = browser;
+    _direction = direction;
+    _delegate = delegate;
+    content::WebContents* active =
+        browser->tab_strip_model()->GetActiveWebContents();
+    if (active) {
+      _contents = active->GetWeakPtr();
+      _modelDelegate = std::make_unique<HistoryMenuModelDelegate>(self);
+      _model = std::make_unique<BackForwardMenuModel>(
+          browser, direction == ClairHistoryDirectionForward
+                       ? BackForwardMenuModel::ModelType::kForward
+                       : BackForwardMenuModel::ModelType::kBackward);
+      // The model fetches missing favicons only while it has a delegate, and
+      // ActivatedAt() expects MenuWillShow() first, as a shown menu calls it.
+      _model->SetMenuModelDelegate(_modelDelegate.get());
+      _model->MenuWillShow();
+    }
+  }
+  return self;
+}
+
+- (void)dealloc {
+  [self close];
+}
+
+// The tab the menu was opened for, while it's still the active tab.
+- (content::WebContents*)liveContents {
+  if (!_model || !_browser || !_contents) {
+    return nullptr;
+  }
+  content::WebContents* active =
+      _browser->tab_strip_model()->GetActiveWebContents();
+  return active == _contents.get() ? active : nullptr;
+}
+
+- (BOOL)hasPages {
+  return [self liveContents] &&
+         _model->GetSectionItemCount(
+             BackForwardMenuModel::MenuSection::kHistory) > 0;
+}
+
+- (NSArray<id<ClairHistoryItem>>*)items {
+  content::WebContents* contents = [self liveContents];
+  if (!contents) {
+    return @[];
+  }
+  using Section = BackForwardMenuModel::MenuSection;
+  NSMutableArray<id<ClairHistoryItem>>* items = [NSMutableArray array];
+  content::NavigationController& controller = contents->GetController();
+  const int current = controller.GetCurrentEntryIndex();
+  const bool forward = _direction == ClairHistoryDirectionForward;
+  if (std::optional<size_t> start =
+          _model->GetStartingIndexOfSection(Section::kHistory)) {
+    const size_t count = _model->GetSectionItemCount(Section::kHistory);
+    for (size_t i = 0; i < count; ++i) {
+      // The model's history section lists the entries next to the current
+      // one, nearest first (BackForwardMenuModel::MenuIndexToNavEntryIndex).
+      const int offset = static_cast<int>(i) + 1;
+      content::NavigationEntry* entry = controller.GetEntryAtIndex(
+          forward ? current + offset : current - offset);
+      if (!entry) {
+        continue;
+      }
+      const size_t index = *start + i;
+      // Asking for the icon starts a favicon fetch for an entry without one;
+      // it arrives through OnIconChanged().
+      ui::ImageModel icon = _model->GetIconAt(index);
+      NSImage* image = icon.IsImage() && !icon.GetImage().IsEmpty()
+                           ? icon.GetImage().ToNSImage()
+                           : nil;
+      const GURL& url = entry->GetVirtualURL();
+      [items addObject:[[ClairChromiumHistoryItem alloc]
+                           initWithID:static_cast<NSInteger>(index)
+                                 kind:ClairHistoryItemKindPage
+                                title:base::SysUTF16ToNSString(
+                                          entry->GetTitleForDisplay())
+                                  url:url.is_valid() ? net::NSURLWithGURL(url)
+                                                     : nil
+                                 icon:image]];
+    }
+  }
+  // Chapter stops and the back-to-opener entry are left out (design D3).
+  if (std::optional<size_t> index =
+          _model->GetStartingIndexOfSection(Section::kShowFullHistory)) {
+    [items addObject:[[ClairChromiumHistoryItem alloc]
+                         initWithID:static_cast<NSInteger>(*index)
+                               kind:ClairHistoryItemKindShowFullHistory
+                              title:base::SysUTF16ToNSString(
+                                        _model->GetLabelAt(*index))
+                                url:nil
+                               icon:nil]];
+  }
+  return items;
+}
+
+- (void)modelChanged {
+  if (_changePosted || !_model) {
+    return;
+  }
+  _changePosted = YES;
+  ClairChromiumHistoryMenu* __weak weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    ClairChromiumHistoryMenu* strongSelf = weakSelf;
+    if (!strongSelf) {
+      return;
+    }
+    strongSelf->_changePosted = NO;
+    if (strongSelf->_model) {
+      [strongSelf->_delegate historyMenu:strongSelf
+                          itemsDidChange:strongSelf.items];
+    }
+  });
+}
+
+- (void)activeTabChanged {
+  if (!_model) {
+    return;
+  }
+  id<ClairHistoryMenuDelegate> delegate = _delegate;
+  [self close];
+  [delegate historyMenu:self itemsDidChange:@[]];
+}
+
+- (void)openItem:(NSInteger)itemID disposition:(ClairOpenDisposition)disposition {
+  if (![self liveContents] || itemID < 0 ||
+      static_cast<size_t>(itemID) >= _model->GetItemCount()) {
+    return;
+  }
+  using Section = BackForwardMenuModel::MenuSection;
+  const size_t index = static_cast<size_t>(itemID);
+  const std::optional<Section> section = _model->GetSectionForIndex(index);
+  if (section == Section::kHistory || section == Section::kShowFullHistory) {
+    // Chromium's own navigation and new-tab code (design D3).
+    _model->ActivatedAt(index, EventFlagsFor(disposition));
+  }
+  [self close];
+}
+
+- (void)close {
+  if (!_model) {
+    return;
+  }
+  _model->MenuWillClose();
+  _model->SetMenuModelDelegate(nullptr);
+  _model.reset();
+  _modelDelegate.reset();
+  _browser = nullptr;
+}
+
+@end
 
 // --- The bridge --------------------------------------------------------------
 
@@ -371,6 +661,7 @@ class BridgeObserver : public TabStripModelObserver,
   BOOL _tabListChanged;
   BOOL _activeTabChanged;
   std::set<int32_t> _changedTabs;
+  ClairChromiumHistoryMenu* __weak _historyMenu;
 }
 
 - (instancetype)initWithBrowserWindow:(ClairBrowserWindow*)browserWindow {
@@ -387,6 +678,7 @@ class BridgeObserver : public TabStripModelObserver,
 }
 
 - (void)detach {
+  [_historyMenu close];
   _observer.reset();
   _browserWindow = nullptr;
   _window = nil;
@@ -443,6 +735,7 @@ class BridgeObserver : public TabStripModelObserver,
 }
 
 - (void)activeTabChanged {
+  [_historyMenu activeTabChanged];
   _activeTabChanged = YES;
   [self flush];
 }
@@ -668,6 +961,28 @@ class BridgeObserver : public TabStripModelObserver,
   return [[ClairChromiumAutocomplete alloc] initWithBrowserWindow:_browserWindow
                                                              mode:mode
                                                          delegate:delegate];
+}
+
+- (id<ClairHistoryMenu>)startHistoryMenuWithDirection:
+                            (ClairHistoryDirection)direction
+                                             delegate:
+                                                 (id<ClairHistoryMenuDelegate>)
+                                                     delegate {
+  [_historyMenu close];
+  Browser* browser = self.browser;
+  if (!browser) {
+    return nil;
+  }
+  ClairChromiumHistoryMenu* menu =
+      [[ClairChromiumHistoryMenu alloc] initWithBrowser:browser
+                                              direction:direction
+                                               delegate:delegate];
+  if (!menu.hasPages) {
+    [menu close];
+    return nil;
+  }
+  _historyMenu = menu;
+  return menu;
 }
 
 - (void)focusPage {
