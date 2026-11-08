@@ -19,7 +19,7 @@ Clair SHALL ship ungoogled-chromium's default settings and Google-service remova
 - **THEN** it makes no network requests to Google service endpoints, such as Safe Browsing, sync, sign-in, metrics, or component and variations servers
 
 ### Requirement: Browser behavior as in ungoogled-chromium outside Clair's interface
-Apart from the identity defined in `app-identity`, the native layer defined in `native-layer`, the updater defined in `software-updates`, the native window defined in `browser-window`, `sidebar` and `command-bar`, and the password and autofill features Clair turns off, Clair SHALL behave the same as the ungoogled-chromium release it is built from. That includes page rendering, settings, `chrome://` pages, profiles, history, extensions' APIs, and the menus and keyboard shortcuts the native window doesn't change.
+Apart from its identity (`app-identity`), native layer (`native-layer`), updater (`software-updates`), native window (`browser-window`, `sidebar` and `command-bar`) and the password and autofill features it turns off, Clair SHALL behave the same as the ungoogled-chromium release it is built from. That includes page rendering, settings, `chrome://` pages, profiles, history, extensions' APIs, and the menus and keyboard shortcuts the native window doesn't change.
 
 #### Scenario: Stock browser UI
 - **WHEN** a user opens a window in a bare engine build
@@ -30,7 +30,7 @@ Apart from the identity defined in `app-identity`, the native layer defined in `
 - **THEN** it shows the same settings and defaults as the same ungoogled-chromium release, apart from Clair's identity and versions and the absent "Autofill and passwords" section
 
 ### Requirement: Changes to Chromium limited to hooks and identity
-Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, and hooks: the one that loads the native layer, those that hand Chromium's browser window and the UI attached to it to the native layer or to Clair's new source files, and those that turn off or hide the password and autofill features. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off. Other behaviour Clair adds SHALL live in the native layer, or in new source files that Clair adds to the Chromium tree, which change no existing file.
+Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, and hooks: loading the native layer, handing Chromium's browser window and its attached UI to Clair's code, and turning off or hiding the password and autofill features. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off. Other behaviour Clair adds SHALL live in the native layer or in new source files added to the Chromium tree.
 
 #### Scenario: Reviewing Clair's patch series
 - **WHEN** the patches in `patches/clair/` and `patches/helium/` are listed
