@@ -83,8 +83,7 @@ Fixes from the owner's side-by-side pass against Arc (D18), all in `ClairUI`. Ar
 - [x] 9.6 Incognito (D12): use the `eye.slash` symbol in the "Incognito" header and as the incognito new tab's icon. Verify by hand, and that the incognito runtime test still finds the header.
 - [x] 9.7 Command bar (D11, D18): keep the field still while results appear or change; the panel grows downwards only. Verify by hand with Cmd+L and Cmd+T, typing until results appear and deleting back to an empty field.
 - [x] 9.8 Link status (D8, D18): show the capsule once the pointer has rested on links for about 0.5 s and hide it about 0.5 s after it leaves them, fading both ways; moving between links while it shows updates it at once. Add unit tests for the timing rules against a fake clock. Verify that they pass, and check by hand.
-- [x] 9.9 Investigate the page receiving the pointer a few points above where it is, seen once on the new tab page and gone after a relaunch. Verify by recording the trigger and fixing it. Not reproduced by Claude or the owner after trying the sidebar, docking, window dragging, full screen, zoom and resizing; dropped at the owner's request on 2026-11-07.
-- [x] 9.10 Run the full quality checks on the branch. Verify that every runtime test passes.
+- [x] 9.9 Run the full quality checks on the branch. Verify that every runtime test passes.
 
 ## 10. Second polish pass
 
