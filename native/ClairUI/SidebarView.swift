@@ -451,11 +451,10 @@ struct SidebarFooter: View {
   weak var actions: (any SidebarActions)?
 
   static let height: CGFloat = 50
-  /// The footer's glyphs, as measured against Arc's library glyph (16.5 pt
-  /// tall) and plus (an SF Symbol at 17 pt medium): medium weight, sized so a
-  /// circled symbol is 16 pt across. The grey is the buttons' `.secondary`,
-  /// which matches Arc's.
-  static let glyphSize: CGFloat = 16
+  /// The footer's glyphs: medium weight like Arc's footer symbols (17 pt
+  /// medium), 20 pt, so a circled symbol is 20 pt across. The grey is the
+  /// buttons' `.secondary`, which matches Arc's.
+  static let glyphSize: CGFloat = 20
   static let glyphWeight: Font.Weight = .medium
 
   @State private var showsDownloads = false
@@ -554,26 +553,17 @@ struct ExtensionsList: View {
 }
 
 /// The downloads button, 32 pt as in Arc's footer, with the running
-/// downloads' progress drawn over the glyph's circle and a dot for unseen
-/// downloads.
+/// downloads' progress on the glyph's circle and a dot for unseen downloads.
 struct DownloadsButton: View {
   let progress: Double?
   let hasUnseen: Bool
   let action: () -> Void
 
+  @Environment(\.isWindowKey) private var isWindowKey
+
   var body: some View {
     IconButton(help: "Downloads", action: action) {
-      SymbolGlyph(systemImage: "arrow.down.circle", size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight)
-        .overlay {
-          if let progress {
-            // On the symbol's ring: 16 pt across with a 1.5 pt stroke.
-            Circle()
-              .trim(from: 0, to: progress)
-              .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-              .rotationEffect(.degrees(-90))
-              .frame(width: SidebarFooter.glyphSize - 1.5, height: SidebarFooter.glyphSize - 1.5)
-          }
-        }
+      glyph
         .frame(width: IconButtonSize.regular, height: IconButtonSize.regular)
       .overlay(alignment: .topTrailing) {
         if hasUnseen {
@@ -583,6 +573,39 @@ struct DownloadsButton: View {
     }
     .accessibilityValue(progress.map { "\(Int($0 * 100))%" } ?? (hasUnseen ? "New" : ""))
     .accessibilityIdentifier("clair.downloads")
+  }
+
+  @ViewBuilder private var glyph: some View {
+    if let progress {
+      if #available(macOS 26, *) {
+        // The symbol draws its own ring up to the progress (Variable Draw):
+        // the arrow in the button's grey, the ring in the accent colour.
+        Image(systemName: "arrow.down.circle", variableValue: progress)
+          .symbolRenderingMode(.palette)
+          .symbolVariableValueMode(.draw)
+          .font(.system(size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight))
+          .foregroundStyle(arrowColor, Color.accentColor)
+      } else {
+        // Variable Draw needs macOS 26, and the symbol has no variable
+        // layers before it, so macOS 15 draws the progress over the ring:
+        // 20 pt across with a 2 pt stroke.
+        SymbolGlyph(systemImage: "arrow.down.circle", size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight)
+          .overlay {
+            Circle()
+              .trim(from: 0, to: progress)
+              .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+              .rotationEffect(.degrees(-90))
+              .frame(width: SidebarFooter.glyphSize - 2, height: SidebarFooter.glyphSize - 2)
+          }
+      }
+    } else {
+      SymbolGlyph(systemImage: "arrow.down.circle", size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight)
+    }
+  }
+
+  /// The palette replaces the button's grey, so the arrow dims itself.
+  private var arrowColor: Color {
+    Color(nsColor: isWindowKey ? .secondaryLabelColor : .tertiaryLabelColor)
   }
 }
 
@@ -726,7 +749,7 @@ struct NewTabRow: View {
     Button(action: action) {
       HStack(spacing: TabRow.titleGap) {
         Image(systemName: "plus")
-          .font(.system(size: 15, weight: .regular))
+          .font(.system(size: 15, weight: .medium))
           .frame(width: TabRow.iconSize, height: TabRow.iconSize)
         Text("New Tab").font(TabRow.titleFont)
         Spacer(minLength: 0)
@@ -888,7 +911,7 @@ struct TabSpeakerButton: View {
     } label: {
       Image(systemName: muted ? "speaker.slash" : "speaker.wave.3")
         .font(.system(size: 13.5, weight: .medium))
-        .contentTransition(.symbolEffect(.replace, options: .speed(1.5)))
+        .contentTransition(.interpolate)
     }
     .onChange(of: isMuted) { _, reported in
       withAnimation(.snappy(duration: 0.2)) { shownMuted = reported }
