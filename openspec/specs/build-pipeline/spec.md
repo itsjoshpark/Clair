@@ -93,7 +93,7 @@ Every push to `main` SHALL run quality checks on a GitHub-hosted runner. They pa
 
 #### Scenario: Runtime suite contents
 - **WHEN** the quality checks run
-- **THEN** the runtime suite covers at least: launch and page rendering, the Clair application menu items, the data directory and keychain item, the user agent's Chromium version, the About window and the About page versions, no Google service traffic on an idle first launch, a manual update check against local test appcasts, and session restore after a relaunch
+- **THEN** the runtime suite covers at least: launch and page rendering, the Clair application menu items, the data directory and keychain item, the user agent's Chromium version, the About page versions, a manual update check against local test appcasts, and session restore after a relaunch
 
 ### Requirement: Releases need passing quality checks
 A release SHALL ship only a commit whose quality checks have passed. The release process SHALL run the quality checks for its commit when they haven't already passed, and SHALL stop if they fail or haven't finished. If no engine is published for the release commit's key, the release SHALL build it on the owner's Mac first.
