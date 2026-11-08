@@ -168,37 +168,6 @@ extension EnvironmentValues {
 /// How fast the sidebar's hover backgrounds and buttons fade (design D18).
 let sidebarHoverFade = Animation.easeOut(duration: 0.15)
 
-/// A square button in the sidebar's style: Arc's grey glyphs, 32 pt square
-/// (28 pt in the compact top row).
-struct SidebarButton: View {
-  let systemImage: String
-  let help: String
-  var shortcut: [String] = []
-  var isEnabled = true
-  var size: CGFloat = 32
-  let action: () -> Void
-
-  @State private var isHovered = false
-  @Environment(\.isWindowKey) private var isWindowKey
-
-  var body: some View {
-    Button(action: action) {
-      Image(systemName: systemImage)
-        .font(.system(size: 16, weight: .medium))
-        .frame(width: size, height: size)
-        .background(Color.primary.opacity(isHovered && isEnabled ? 0.08 : 0), in: .rect(cornerRadius: 6))
-        .animation(sidebarHoverFade, value: isHovered)
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .foregroundStyle(isEnabled && isWindowKey ? .secondary : .tertiary)
-    .disabled(!isEnabled)
-    .tooltip(help, shortcut: shortcut)
-    .accessibilityLabel(help)
-    .onHover { isHovered = $0 }
-  }
-}
-
 /// The top row, as in Arc: room for the window controls, hide-sidebar, then
 /// back, forward and reload or stop at the trailing edge. A narrow sidebar
 /// gets the compact row: back, forward and a menu with reload and Hide
@@ -206,8 +175,6 @@ struct SidebarButton: View {
 struct TopRow: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
-
-  @State private var isMoreHovered = false
 
   /// The trailing margin, and the gap between back, forward and reload.
   static let trailing: CGFloat = 6
@@ -227,9 +194,9 @@ struct TopRow: View {
     let isLoading = reloadStop.visible == .stop
     let controls = model.isWindowFullscreen ? WindowControlsMetrics.fullScreen : model.windowControls
     let isCompact = controls.hasCompactTopRow(width: model.sidebar.width)
-    let back = SidebarButton(
-      systemImage: "arrow.left", help: "Go back", shortcut: ["⌘", "["], isEnabled: tab?.canGoBack ?? false,
-      size: isCompact ? 28 : 32
+    let size = isCompact ? IconButtonSize.small : IconButtonSize.regular
+    let back = IconButton(
+      systemImage: "arrow.left", help: "Go back", shortcut: ["⌘", "["], isEnabled: tab?.canGoBack ?? false, size: size
     ) {
       actions?.goBack()
     }
@@ -237,9 +204,9 @@ struct TopRow: View {
       HistoryButtonCatcher(
         isEnabled: tab?.canGoBack ?? false, makeMenu: { actions?.historyMenu(.back) }))
     .accessibilityIdentifier("clair.back")
-    let forward = SidebarButton(
+    let forward = IconButton(
       systemImage: "arrow.right", help: "Go forward", shortcut: ["⌘", "]"], isEnabled: tab?.canGoForward ?? false,
-      size: isCompact ? 28 : 32
+      size: size
     ) {
       actions?.goForward()
     }
@@ -264,19 +231,14 @@ struct TopRow: View {
           .disabled(tab == nil || !reloadStop.isEnabled)
           Button("Hide Sidebar") { actions?.toggleSidebar() }.keyboardShortcut("s", modifiers: .command)
         } label: {
-          Image(systemName: "ellipsis")
-            .font(.system(size: 16, weight: .medium))
-            .frame(width: 28, height: 28)
-            .background(Color.primary.opacity(isMoreHovered ? 0.08 : 0), in: .rect(cornerRadius: 6))
-            .animation(sidebarHoverFade, value: isMoreHovered)
-            .contentShape(Rectangle())
+          SymbolGlyph(systemImage: "ellipsis")
+            .modifier(IconButtonChrome(size: IconButtonSize.small))
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
         .foregroundStyle(model.isWindowKey ? .secondary : .tertiary)
-        .onHover { isMoreHovered = $0 }
         .tooltip("More options")
         .accessibilityLabel("More options")
         .accessibilityIdentifier("clair.topRowMenu")
@@ -290,7 +252,7 @@ struct TopRow: View {
         // The window controls sit here (design D4).
         Color.clear.frame(width: Self.hideSidebarX(width: model.sidebar.width, controls: controls))
         // Arc's wording: a revealed sidebar's button docks it.
-        SidebarButton(
+        IconButton(
           systemImage: "sidebar.left",
           help: model.sidebar.isHidden && model.sidebar.isRevealed ? "Lock sidebar" : "Hide sidebar",
           shortcut: ["⌘", "S"]
@@ -300,7 +262,7 @@ struct TopRow: View {
         HStack(spacing: Self.gap) {
           back
           forward
-          SidebarButton(
+          IconButton(
             systemImage: isLoading ? "xmark" : "arrow.clockwise",
             help: isLoading ? "Stop loading this page" : "Reload this page",
             shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: tab != nil && reloadStop.isEnabled
@@ -333,7 +295,8 @@ struct URLField: View {
   @Environment(\.colorScheme) private var colorScheme
 
   static let height: CGFloat = 36
-  static let buttonSize: CGFloat = 30
+  /// Arc's URL-field buttons: 28 pt, side by side.
+  static let buttonSize = IconButtonSize.small
 
   static let indicatorSymbols: [(TabIndicators, String, String)] = [
     (.camera, "video.fill", "Camera"),
@@ -393,7 +356,6 @@ struct URLField: View {
       if showsButtons, display != nil {
         URLFieldButton(systemImage: "link", help: "Copy URL", shortcut: ["⇧", "⌘", "C"]) { actions?.copyURL() }
           .accessibilityIdentifier("clair.copyURL")
-          .padding(.trailing, -2)
           .transition(.opacity)
       }
       if showsButtons, hasSiteControls {
@@ -404,14 +366,14 @@ struct URLField: View {
         .transition(.opacity)
       }
     }
-    .padding(.trailing, showsButtons || tab?.indicators.isEmpty == false ? 4 : 12)
+    .padding(.trailing, showsButtons || tab?.indicators.isEmpty == false ? 5 : 12)
     .frame(height: Self.height)
     // Chromium's page info attaches where the site-controls button shows on
     // hover, whether or not it shows now.
     .overlay(alignment: .trailing) {
       Color.clear
         .frame(width: Self.buttonSize, height: Self.buttonSize)
-        .padding(.trailing, 4)
+        .padding(.trailing, 5)
         .anchorFrame(.siteControls)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -434,23 +396,10 @@ struct URLFieldButton: View {
   var shortcut: [String] = []
   let action: () -> Void
 
-  @State private var isHovered = false
-  @Environment(\.isWindowKey) private var isWindowKey
-
   var body: some View {
-    Button(action: action) {
-      Image(systemName: systemImage)
-        .font(.system(size: 13, weight: .medium))
-        .frame(width: URLField.buttonSize, height: URLField.buttonSize)
-        .background(Color.primary.opacity(isHovered ? 0.08 : 0), in: .rect(cornerRadius: 7))
-        .animation(sidebarHoverFade, value: isHovered)
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .foregroundStyle(isWindowKey ? .secondary : .tertiary)
-    .tooltip(help, shortcut: shortcut)
-    .accessibilityLabel(help)
-    .onHover { isHovered = $0 }
+    IconButton(
+      systemImage: systemImage, help: help, shortcut: shortcut, size: URLField.buttonSize, cornerRadius: 7,
+      glyphSize: 13, action: action)
   }
 }
 
@@ -469,7 +418,9 @@ struct ToolsRow: View {
           .anchorFrame(.extensionAction(action.extensionID))
       }
       if !model.extensionActions.isEmpty {
-        SidebarButton(systemImage: "puzzlepiece.extension", help: "Extensions") { showsExtensions.toggle() }
+        IconButton(systemImage: "puzzlepiece.extension", help: "Extensions", size: IconButtonSize.small) {
+          showsExtensions.toggle()
+        }
           .accessibilityIdentifier("clair.extensions")
           .anchorFrame(.extensionsButton)
           .popover(isPresented: $showsExtensions, arrowEdge: .trailing) {
@@ -488,7 +439,7 @@ struct ToolsRow: View {
         }
       }
     }
-    .frame(height: 30)
+    .frame(height: IconButtonSize.regular)
   }
 }
 
@@ -509,9 +460,9 @@ struct ExtensionButton: View {
   let run: () -> Void
 
   var body: some View {
-    Button(action: run) {
+    IconButton(help: action.name, size: IconButtonSize.small, action: run) {
       ExtensionIcon(action: action)
-        .frame(width: 28, height: 28)
+        .frame(width: IconButtonSize.small, height: IconButtonSize.small)
         .overlay(alignment: .bottomTrailing) {
           if !action.badgeText.isEmpty {
             Text(action.badgeText)
@@ -523,11 +474,7 @@ struct ExtensionButton: View {
           }
         }
         .opacity(action.isEnabled ? 1 : 0.4)
-        .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
-    .tooltip(action.name)
-    .accessibilityLabel(action.name)
     .accessibilityValue(action.badgeText)
     .accessibilityIdentifier("clair.extensionAction")
   }
@@ -572,13 +519,15 @@ struct ExtensionsList: View {
   }
 }
 
+/// The downloads button, 32 pt as in Arc's footer, with the running
+/// downloads' progress around the glyph and a dot for unseen downloads.
 struct DownloadsButton: View {
   let progress: Double?
   let hasUnseen: Bool
   let action: () -> Void
 
   var body: some View {
-    Button(action: action) {
+    IconButton(help: "Downloads", action: action) {
       ZStack {
         if let progress {
           Circle().stroke(Color.primary.opacity(0.15), lineWidth: 2)
@@ -588,17 +537,13 @@ struct DownloadsButton: View {
           .font(.system(size: 11, weight: .semibold))
       }
       .frame(width: 20, height: 20)
-      .frame(width: 28, height: 28)
+      .frame(width: IconButtonSize.regular, height: IconButtonSize.regular)
       .overlay(alignment: .topTrailing) {
         if hasUnseen {
-          Circle().fill(Color.accentColor).frame(width: 7, height: 7)
+          Circle().fill(Color.accentColor).frame(width: 7, height: 7).padding(2)
         }
       }
-      .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
-    .tooltip("Downloads")
-    .accessibilityLabel("Downloads")
     .accessibilityValue(progress.map { "\(Int($0 * 100))%" } ?? (hasUnseen ? "New" : ""))
     .accessibilityIdentifier("clair.downloads")
   }
@@ -787,7 +732,7 @@ struct TabRow: View {
   static let horizontalPadding: CGFloat = 9
   static let iconSize: CGFloat = 18
   static let faviconSize: CGFloat = 16
-  static let closeSize: CGFloat = 26
+  static let closeSize = IconButtonSize.tab
   static let speakerLeading: CGFloat = 4.5
   static let speakerTrailing: CGFloat = 5.5
   static let closeTrailing: CGFloat = 5
@@ -885,7 +830,6 @@ struct TabSpeakerButton: View {
   /// Asks for the tab to be muted (true) or unmuted.
   let setMuted: (Bool) -> Void
 
-  @State private var isHovered = false
   /// What Chromium last reported, kept here so the change animates: the
   /// list's rows ignore implicit animations. The button only ever shows what
   /// Chromium reports, so it can't fall out of step with the tab.
@@ -893,27 +837,21 @@ struct TabSpeakerButton: View {
 
   var body: some View {
     let muted = shownMuted ?? isMuted
-    Button {
+    // Arc's grey, which measures about 125 on the light pill.
+    IconButton(
+      help: muted ? "Unmute this tab" : "Mute this tab", size: TabRow.closeSize, dimsWhenInactive: false,
+      foreground: Color.primary.opacity(0.68)
+    ) {
       setMuted(!isMuted)
     } label: {
       Image(systemName: muted ? "speaker.slash" : "speaker.wave.3")
         .font(.system(size: 13.5, weight: .medium))
         .contentTransition(.symbolEffect(.replace, options: .speed(1.5)))
-        .frame(width: TabRow.closeSize, height: TabRow.closeSize)
-        .background(Color.primary.opacity(isHovered ? 0.08 : 0), in: .rect(cornerRadius: 6))
-        .animation(sidebarHoverFade, value: isHovered)
-        .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
-    // Arc's grey, which measures about 125 on the light pill.
-    .foregroundStyle(Color.primary.opacity(0.68))
     .onChange(of: isMuted) { _, reported in
       withAnimation(.snappy(duration: 0.2)) { shownMuted = reported }
     }
-    .tooltip(muted ? "Unmute this tab" : "Mute this tab")
-    .accessibilityLabel(muted ? "Unmute this tab" : "Mute this tab")
     .accessibilityIdentifier("clair.tabSpeaker")
-    .onHover { isHovered = $0 }
   }
 }
 
@@ -922,22 +860,12 @@ struct TabSpeakerButton: View {
 struct TabCloseButton: View {
   let action: () -> Void
 
-  @State private var isHovered = false
-
   var body: some View {
-    Button(action: action) {
-      Image(systemName: "xmark")
-        .font(.system(size: 12, weight: .bold))
-        .frame(width: TabRow.closeSize, height: TabRow.closeSize)
-        .background(Color.primary.opacity(isHovered ? 0.08 : 0), in: .rect(cornerRadius: 6))
-        .animation(sidebarHoverFade, value: isHovered)
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .foregroundStyle(.secondary)
-    .tooltip("Close tab", shortcut: ["⌘", "W"])
+    IconButton(
+      systemImage: "xmark", help: "Close tab", shortcut: ["⌘", "W"], size: TabRow.closeSize, glyphSize: 12,
+      glyphWeight: .bold, dimsWhenInactive: false, action: action
+    )
     .accessibilityIdentifier("clair.tabClose")
-    .onHover { isHovered = $0 }
   }
 }
 

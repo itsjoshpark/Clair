@@ -1,0 +1,3 @@
+kind: Changed
+body: The sidebar's buttons all highlight under the pointer and dim while the window is in the background, including the downloads button and pinned extensions. The URL field's buttons, pinned extensions and the extensions button are 28 pt and the downloads button 32 pt, as in Arc, and the tab close, find bar and infobar buttons have tooltips and VoiceOver labels
+time: 2026-11-08T02:04:24.28423-05:00
