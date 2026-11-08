@@ -29,7 +29,7 @@ Suggested order: 1, 2 (one engine build), then 3 and 4 in `ClairUI`, which can s
 
 ## 5. Verification and release notes
 
-- [ ] 5.1 **(owner)** Check by hand against Arc, side by side: the history menu's position and contents in both top rows, Cmd-choosing, favicons arriving in an open menu; the loading indicator against Arc's on a slow page, a fast page, a stopped load, a failed load, a tab switch mid-load, with the sidebar shown, hidden and revealed, in page full screen, in an incognito window and in Light and Dark Mode; and reload/stop on a page with busy iframes (a news site with ads). Verify each item and note the results in the PR.
+- [x] 5.1 **(owner)** Check by hand against Arc, side by side: the history menu's position and contents in both top rows, Cmd-choosing, favicons arriving in an open menu; the loading indicator against Arc's on a slow page, a fast page, a stopped load, a failed load, a tab switch mid-load, with the sidebar shown, hidden and revealed, in page full screen, in an incognito window and in Light and Dark Mode; and reload/stop on a page with busy iframes (a news site with ads). Verify each item and note the results in the PR.
 - [x] 5.2 Run `quality.yml` on the branch with the new engine. Verify that the whole runtime suite passes, including the test from 4.2.
 - [x] 5.3 Add a Changie fragment for the history menu and the loading indicator, mentioning the reload/stop fix and the Dock menu's New Incognito Window. Verify that `changie batch --dry-run` renders it.
 
