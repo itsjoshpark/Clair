@@ -231,7 +231,7 @@ struct TopRow: View {
         Spacer(minLength: 0)
         back
         forward
-        Menu {
+        IconMenu(help: "More options", size: IconButtonSize.small) {
           Group {
             if isLoading {
               Button("Stop") { actions?.reloadOrStop() }.keyboardShortcut(.escape, modifiers: [])
@@ -243,15 +243,7 @@ struct TopRow: View {
           Button("Hide Sidebar") { actions?.toggleSidebar() }.keyboardShortcut("s", modifiers: .command)
         } label: {
           SymbolGlyph(systemImage: "ellipsis")
-            .modifier(IconButtonChrome(size: IconButtonSize.small))
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .foregroundStyle(model.isWindowKey ? .secondary : .tertiary)
-        .tooltip("More options")
-        .accessibilityLabel("More options")
         .accessibilityIdentifier("clair.topRowMenu")
       }
       .padding(.trailing, Self.trailing)
@@ -444,8 +436,9 @@ struct ToolsRow: View {
 }
 
 /// The sidebar's footer, as in Arc: a 50 pt band at the bottom of the sidebar,
-/// with the downloads button always where Arc has its library button, 8 pt in
-/// from the side and 9 pt from the bottom.
+/// with the downloads button always where Arc has its library button and the
+/// plus menu at the other end, each 8 pt in from the side and 9 pt from the
+/// bottom.
 struct SidebarFooter: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
@@ -470,6 +463,13 @@ struct SidebarFooter: View {
         DownloadsList(model: model, actions: actions)
       }
       Spacer(minLength: 0)
+      // Arc's plus offers new Spaces and folders; Clair has only tabs so far.
+      IconMenu(help: "New") {
+        Button("New Tab") { actions?.newTab() }.keyboardShortcut("t", modifiers: .command)
+      } label: {
+        SymbolGlyph(systemImage: "plus", size: Self.glyphSize, weight: Self.glyphWeight)
+      }
+      .accessibilityIdentifier("clair.footerNew")
     }
     .padding(.horizontal, 8)
     .frame(height: Self.height)

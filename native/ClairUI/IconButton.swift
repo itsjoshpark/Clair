@@ -87,6 +87,32 @@ struct IconButton<Label: View>: View {
   }
 }
 
+/// A pull-down menu in the icon buttons' style: the same hover background,
+/// grey and dimming, with a native menu under it.
+struct IconMenu<Content: View, Label: View>: View {
+  let help: String
+  var size: CGFloat = IconButtonSize.regular
+  @ViewBuilder let content: () -> Content
+  @ViewBuilder let label: () -> Label
+
+  @Environment(\.isWindowKey) private var isWindowKey
+
+  var body: some View {
+    Menu {
+      content()
+    } label: {
+      label().modifier(IconButtonChrome(size: size))
+    }
+    .menuStyle(.button)
+    .buttonStyle(.plain)
+    .menuIndicator(.hidden)
+    .fixedSize()
+    .foregroundStyle(isWindowKey ? .secondary : .tertiary)
+    .tooltip(help)
+    .accessibilityLabel(help)
+  }
+}
+
 /// An SF Symbol at an icon button's glyph size.
 struct SymbolGlyph: View {
   let systemImage: String
