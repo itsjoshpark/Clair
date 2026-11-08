@@ -79,3 +79,19 @@ struct StatusCapsuleTests {
     #expect(state.deadline == nil)
   }
 }
+
+/// Keys in the popup's text (design D18).
+struct NoticeTextTests {
+  @Test func markedKeyIsKept() {
+    #expect(NoticePopupView.markingKeys(in: "To exit full screen, press |Esc|") == "To exit full screen, press |Esc|")
+  }
+
+  @Test func bareEscBecomesAKey() {
+    #expect(NoticePopupView.markingKeys(in: "To exit full screen, press Esc") == "To exit full screen, press |Esc|")
+    #expect(NoticePopupView.markingKeys(in: "Press and hold Esc to exit") == "Press and hold |Esc| to exit")
+  }
+
+  @Test func wordsContainingEscAreLeftAlone() {
+    #expect(NoticePopupView.markingKeys(in: "Escape room") == "Escape room")
+  }
+}

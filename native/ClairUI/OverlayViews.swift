@@ -117,10 +117,17 @@ struct CommandBarView: View {
       }
     }
     .background(OverlayStyle.background, in: .rect(cornerRadius: 14))
-    // Arc's border: a hairline of solid mid-grey, seen on light and dark pages.
-    .overlay(
-      RoundedRectangle(cornerRadius: 14)
-        .strokeBorder(Color(white: colorScheme == .dark ? 0.3 : 0.65), lineWidth: 0.5))
+    // Arc's border, measured: in Light Mode a hairline of solid mid-grey; in
+    // Dark Mode a point of grey, its inner half lighter. Each value is set to
+    // measure as Arc's, as the window draws greys a little lighter.
+    .overlay {
+      if colorScheme == .dark {
+        RoundedRectangle(cornerRadius: 14).strokeBorder(Color(white: 0.235), lineWidth: 0.5)
+        RoundedRectangle(cornerRadius: 13.5).strokeBorder(Color(white: 0.3), lineWidth: 0.5).padding(0.5)
+      } else {
+        RoundedRectangle(cornerRadius: 14).strokeBorder(Color(white: 0.65), lineWidth: 0.5)
+      }
+    }
     .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
     // The field can take focus only once it's laid out in the window, a
     // moment after it's added; keep asking until it has.

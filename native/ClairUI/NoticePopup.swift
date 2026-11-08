@@ -106,7 +106,7 @@ struct NoticePopupView: View {
 
   /// The text, with keys Chromium marks as "|Esc|" drawn as key caps.
   private func message(_ text: String) -> some View {
-    let parts = text.components(separatedBy: "|")
+    let parts = NoticePopupView.markingKeys(in: text).components(separatedBy: "|")
     return HStack(spacing: 4) {
       ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
         if index % 2 == 1 {
@@ -119,6 +119,13 @@ struct NoticePopupView: View {
         }
       }
     }
+  }
+
+  /// Marks a bare "Esc" as a key, so the text never says it as well as the
+  /// key cap: "To exit full screen, press Esc" reads as "…press [Esc]".
+  static func markingKeys(in text: String) -> String {
+    guard !text.contains("|") else { return text }
+    return text.replacingOccurrences(of: #"\bEsc\b"#, with: "|Esc|", options: .regularExpression)
   }
 
   private var background: some View {
