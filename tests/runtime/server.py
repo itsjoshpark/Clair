@@ -7,10 +7,13 @@ their updates, plus a download that stays in progress until it's told to finish.
     GET /slow-download         sends a chunk at a time until /slow-download/finish
     GET /slow-download/finish  lets every slow download end
     GET /download/clair.txt    a small text file, as a download
+    GET /slow-page?seconds=N   a page whose body arrives over N seconds (1 to 30)
+    GET /slow-frame            a small page sent after 300 ms, for busy iframes
 """
 
 import http.server
 import sys
+import urllib.parse
 import threading
 import time
 
@@ -28,6 +31,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_slow_download()
         elif self.path == "/download/clair.txt":
             self.send_text_download()
+        elif self.path.startswith("/slow-page"):
+            self.send_slow_page()
+        elif self.path.startswith("/slow-frame"):
+            time.sleep(0.3)
+            self.send_html(b"<!doctype html><title>Frame</title><p>Frame</p>")
         else:
             super().do_GET()
 
@@ -44,6 +52,38 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def send_html(self, body):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_slow_page(self):
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        try:
+            seconds = min(max(int(query.get("seconds", ["5"])[0]), 1), 30)
+        except ValueError:
+            seconds = 5
+        # Chunked, so the page commits at once and keeps loading.
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.end_headers()
+
+        def chunk(data):
+            self.wfile.write(b"%x\r\n%s\r\n" % (len(data), data))
+            self.wfile.flush()
+
+        chunk(b"<!doctype html><title>Clair slow page</title><p>Loading slowly</p>")
+        for _ in range(seconds * 4):
+            time.sleep(0.25)
+            chunk(b"<p>" + b"." * 512 + b"</p>")
+        chunk(b"<p id=done>Done</p>")
+        self.wfile.write(b"0\r\n\r\n")
 
     def send_slow_download(self):
         finished.clear()
