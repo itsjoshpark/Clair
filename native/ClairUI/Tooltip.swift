@@ -40,7 +40,10 @@ final class TooltipCenter {
   private var clicked: Set<UUID> = []
   private var clickMonitor: Any?
   private var pending: Task<Void, Never>?
-  private lazy var window = TooltipWindow()
+  /// Made on first show, and touched only while it shows: ordering even a
+  /// hidden panel out, in full screen, makes the window server redraw the
+  /// material behind the browser window for about a second (design D18).
+  private var window: TooltipWindow?
 
   /// The pointer is over control `id`.
   func pointerMoved(over id: UUID, tooltip: Tooltip, delay: Duration = TooltipCenter.delay) {
@@ -49,7 +52,7 @@ final class TooltipCenter {
       // Follow a changing label on the owner, as reload's turning into stop.
       if index == hovered.count - 1, current != nil, current != tooltip {
         current = tooltip
-        window.show(tooltip, at: nil)
+        window?.show(tooltip, at: nil)
       }
       return
     }
@@ -98,7 +101,9 @@ final class TooltipCenter {
         !self.clicked.contains(entry.id)
       else { return }
       self.current = entry.tooltip
-      self.window.show(entry.tooltip, at: NSEvent.mouseLocation)
+      let window = self.window ?? TooltipWindow()
+      self.window = window
+      window.show(entry.tooltip, at: NSEvent.mouseLocation)
     }
   }
 
@@ -106,7 +111,7 @@ final class TooltipCenter {
     pending?.cancel()
     pending = nil
     current = nil
-    window.hide()
+    window?.hide()
   }
 }
 
@@ -207,6 +212,7 @@ private final class TooltipWindow: NSPanel {
 
   func hide() {
     origin = nil
+    guard isVisible || parent != nil else { return }
     parent?.removeChildWindow(self)
     orderOut(nil)
   }

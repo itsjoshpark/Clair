@@ -108,7 +108,8 @@ More fixes from the owner's pass (D18). Arc's figures were measured with the pro
 - [ ] 11.3 Command bar border (D18): Arc's crisp mid-grey hairline. Verify by measuring the edge against Arc's.
 - [ ] 11.4 Clearing history (D13, D18): the clear-browsing-data hook. Verify that the patch check applies it and `engine.yml` builds the engine for the branch's key, then by hand that deleting all history from `chrome://settings/clearBrowserData` and from `chrome://history` leaves Clair running.
 - [ ] 11.5 The tab's speaker (D18): between the favicon and the title with even 10 pt gaps (a row without it keeps its gap), Arc's outline symbols in medium weight changing with a quicker SF Symbols replace effect, growing and fading in and out with the sound, Arc's size and grey, a hover background, and "Mute this tab" or "Unmute this tab". Add a runtime test of the row's layout from its accessibility frames: the favicon's inset and size, the favicon-to-title gap, and the speaker's gaps while the tab plays sound (D12, D18). Verify that it passes in `quality.yml`, and by hand with a tab playing sound, muted, unmuted and falling silent.
-- [ ] 11.6 Run the full quality checks on the branch. Verify that every runtime test passes.
+- [ ] 11.6 Full-screen sidebar colour (D18, issue #104): an opaque fill over the material in full screen in Light Mode. Verify by recording the sidebar while real mouse-moved events cross a tab row in full screen, that its colour holds, and that a window's sidebar is unchanged.
+- [ ] 11.7 Run the full quality checks on the branch. Verify that every runtime test passes.
 
 ## Workflow follow-up
 

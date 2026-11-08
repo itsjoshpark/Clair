@@ -213,6 +213,7 @@ final class BrowserRootView: NSView {
       _ = model.toast
       _ = model.exclusiveAccessNotice
       _ = model.notice.notice
+      _ = model.isWindowFullscreen
       _ = model.commandBar
     } onChange: { [weak self] in
       Task { @MainActor in
@@ -288,6 +289,12 @@ final class BrowserRootView: NSView {
     // the springs already have changes nothing.
     updateSidebarTargets()
     background.frame = bounds
+    // In full screen there's no desktop behind the window to blend with, and
+    // macOS redraws the behind-window material darker for about a second
+    // whenever the sidebar redraws, as on hover (design D18). An opaque fill
+    // of the material's usual colour covers it there.
+    backgroundTint.color = model.isWindowFullscreen ? SidebarTint.fullScreen : SidebarTint.window
+    backdropTint.color = backgroundTint.color
     backgroundTint.frame = bounds
     let layout = currentLayout
     card.frame = layout.card
@@ -569,7 +576,11 @@ extension NSHostingView {
 /// A view filled with a colour that follows the appearance, such as a
 /// translucent window background over a material.
 final class DynamicFillView: NSView {
-  private let color: NSColor
+  var color: NSColor {
+    didSet {
+      if color != oldValue { needsDisplay = true }
+    }
+  }
 
   init(color: NSColor) {
     self.color = color
@@ -607,6 +618,13 @@ enum SidebarTint {
   /// Dark Mode, including incognito windows.
   static let window = NSColor(name: nil) { appearance in
     appearance.isDark ? dark : .clear
+  }
+
+  /// Over the window's material in full screen: Arc's near-black in Dark
+  /// Mode, and in Light Mode the material's usual colour, (235, 236, 235) as
+  /// measured, made opaque.
+  static let fullScreen = NSColor(name: nil) { appearance in
+    appearance.isDark ? dark : NSColor(srgbRed: 233 / 255, green: 234 / 255, blue: 233 / 255, alpha: 1)
   }
 
   /// Over the revealed sidebar's lighter material, so it's less see-through.
