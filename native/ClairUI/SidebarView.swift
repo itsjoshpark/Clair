@@ -232,15 +232,13 @@ struct TopRow: View {
         back
         forward
         IconMenu(help: "More options", size: IconButtonSize.small) {
-          Group {
-            if isLoading {
-              Button("Stop") { actions?.reloadOrStop() }.keyboardShortcut(.escape, modifiers: [])
-            } else {
-              Button("Reload") { actions?.reloadOrStop() }.keyboardShortcut("r", modifiers: .command)
-            }
-          }
-          .disabled(tab == nil || !reloadStop.isEnabled)
-          Button("Hide Sidebar") { actions?.toggleSidebar() }.keyboardShortcut("s", modifiers: .command)
+          let canReload = tab != nil && reloadStop.isEnabled
+          return [
+            isLoading
+              ? .button("Stop", key: "\u{1b}", modifiers: [], isEnabled: canReload) { actions?.reloadOrStop() }
+              : .button("Reload", key: "r", isEnabled: canReload) { actions?.reloadOrStop() },
+            .button("Hide Sidebar", key: "s") { actions?.toggleSidebar() },
+          ]
         } label: {
           SymbolGlyph(systemImage: "ellipsis")
         }
@@ -464,8 +462,9 @@ struct SidebarFooter: View {
       }
       Spacer(minLength: 0)
       // Arc's plus offers new Spaces and folders; Clair has only tabs so far.
-      IconMenu(help: "New") {
-        Button("New Tab") { actions?.newTab() }.keyboardShortcut("t", modifiers: .command)
+      // Opens upwards, clear of the button, as at the bottom of the sidebar.
+      IconMenu(help: "New", edge: .top) {
+        [.button("New Tab", key: "t") { actions?.newTab() }]
       } label: {
         SymbolGlyph(systemImage: "plus", size: Self.glyphSize, weight: Self.glyphWeight)
       }

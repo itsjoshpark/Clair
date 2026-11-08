@@ -87,29 +87,107 @@ struct IconButton<Label: View>: View {
   }
 }
 
-/// A pull-down menu in the icon buttons' style: the same hover background,
-/// grey and dimming, with a native menu under it.
-struct IconMenu<Content: View, Label: View>: View {
+/// An item in an icon button's menu.
+enum IconMenuItem {
+  case action(title: String, key: String, modifiers: NSEvent.ModifierFlags, isEnabled: Bool, run: () -> Void)
+  case separator
+
+  /// A menu item. `key` is its key equivalent, which the menu shows as its
+  /// shortcut; the menu only exists while it's open, so it never takes the
+  /// key from the main menu.
+  static func button(
+    _ title: String, key: String = "", modifiers: NSEvent.ModifierFlags = .command, isEnabled: Bool = true,
+    run: @escaping () -> Void
+  ) -> IconMenuItem {
+    .action(title: title, key: key, modifiers: modifiers, isEnabled: isEnabled, run: run)
+  }
+}
+
+/// An icon button that opens a native menu against one of its edges: below it,
+/// or above it at the bottom of the sidebar. The menu starts clear of the
+/// button, so it never covers it. SwiftUI's `Menu` can't be placed: near the
+/// bottom of the screen it slides up over its button.
+struct IconMenu<Label: View>: View {
   let help: String
   var size: CGFloat = IconButtonSize.regular
-  @ViewBuilder let content: () -> Content
+  /// The edge of the button the menu opens from.
+  var edge: VerticalEdge = .bottom
+  /// The menu's items, made as it opens, so they show the current state.
+  let items: () -> [IconMenuItem]
   @ViewBuilder let label: () -> Label
 
-  @Environment(\.isWindowKey) private var isWindowKey
+  @State private var anchor = MenuAnchor()
 
   var body: some View {
-    Menu {
-      content()
-    } label: {
-      label().modifier(IconButtonChrome(size: size))
+    IconButton(help: help, size: size, action: { anchor.popUp(items(), from: edge) }, label: label)
+      .background(MenuAnchor.Host(anchor: anchor))
+  }
+}
+
+/// The button's AppKit view, which `NSMenu` positions its menu against.
+@MainActor
+final class MenuAnchor {
+  /// The gap between the button and the menu.
+  static let gap: CGFloat = 4
+
+  weak var view: NSView?
+
+  func popUp(_ items: [IconMenuItem], from edge: VerticalEdge) {
+    guard let view else { return }
+    let menu = NSMenu()
+    menu.autoenablesItems = false
+    for item in items {
+      switch item {
+      case .separator:
+        menu.addItem(.separator())
+      case .action(let title, let key, let modifiers, let isEnabled, let run):
+        let action = MenuAction(run: run)
+        let menuItem = NSMenuItem(title: title, action: #selector(MenuAction.runAction), keyEquivalent: key)
+        menuItem.keyEquivalentModifierMask = modifiers
+        menuItem.isEnabled = isEnabled
+        menuItem.target = action
+        // The item holds its action: an item's target isn't retained.
+        menuItem.representedObject = action
+        menu.addItem(menuItem)
+      }
     }
-    .menuStyle(.button)
-    .buttonStyle(.plain)
-    .menuIndicator(.hidden)
-    .fixedSize()
-    .foregroundStyle(isWindowKey ? .secondary : .tertiary)
-    .tooltip(help)
-    .accessibilityLabel(help)
+    // The point is the menu's top-left corner, in the view's coordinates.
+    let bounds = view.bounds
+    let below = view.isFlipped ? bounds.maxY + Self.gap : bounds.minY - Self.gap
+    let above = view.isFlipped ? bounds.minY - Self.gap - menu.size.height : bounds.maxY + Self.gap + menu.size.height
+    menu.popUp(positioning: nil, at: NSPoint(x: bounds.minX, y: edge == .bottom ? below : above), in: view)
+  }
+
+  /// Sits behind the button and lets every click through to it.
+  struct Host: NSViewRepresentable {
+    let anchor: MenuAnchor
+
+    func makeNSView(context: Context) -> PassThroughView {
+      let view = PassThroughView()
+      anchor.view = view
+      return view
+    }
+
+    func updateNSView(_ view: PassThroughView, context: Context) {
+      anchor.view = view
+    }
+  }
+
+  final class PassThroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+  }
+
+  /// A menu item's action, boxed for its target.
+  final class MenuAction: NSObject {
+    let run: () -> Void
+
+    init(run: @escaping () -> Void) {
+      self.run = run
+    }
+
+    @objc func runAction() {
+      run()
+    }
   }
 }
 
