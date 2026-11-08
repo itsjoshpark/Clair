@@ -24,13 +24,13 @@ Suggested order: 1, 2 (one engine build), then 3 and 4 in `ClairUI`, which can s
 ## 4. History menu and loading indicator
 
 - [x] 4.1 Add `HistoryMenuBuilder` and the right-click and Control-click handling on the back and forward buttons in both top rows (D3), as a native menu of page entries only. Add unit tests against `FakeBrowser`: items in order with titles and icons, a late favicon updating an open menu's item, choosing an entry, Cmd-choosing (new background tab), and no menu when the tab can't go that way. Verify that they pass in CI.
-- [ ] 4.2 Add a runtime test: visit three pages in one tab, open the back menu, choose the first page; the tab shows it and forward is enabled. Verify that it passes in `quality.yml` on the branch.
+- [x] 4.2 Add a runtime test: visit three pages in one tab, open the back menu, choose the first page; the tab shows it and forward is enabled. Verify that it passes in `quality.yml` on the branch.
 - [x] 4.3 Add `LoadingIndicatorModel` and `LoadingIndicatorView` (D4), with Arc's look and timings from task 1.1. Add unit tests for the model: the pulse from a visible load's start, the switch to the sweep after two pulses, the finish animation on finish and on stop, nothing drawn for a load that ends at once, and a tab switch jumping to the new tab's state. Verify that they pass in CI.
 
 ## 5. Verification and release notes
 
 - [ ] 5.1 **(owner)** Check by hand against Arc, side by side: the history menu's position and contents in both top rows, Cmd-choosing, favicons arriving in an open menu; the loading indicator against Arc's on a slow page, a fast page, a stopped load, a failed load, a tab switch mid-load, with the sidebar shown, hidden and revealed, in page full screen, in an incognito window and in Light and Dark Mode; and reload/stop on a page with busy iframes (a news site with ads). Verify each item and note the results in the PR.
-- [ ] 5.2 Run `quality.yml` on the branch with the new engine. Verify that the whole runtime suite passes, including the test from 4.2.
+- [x] 5.2 Run `quality.yml` on the branch with the new engine. Verify that the whole runtime suite passes, including the test from 4.2.
 - [x] 5.3 Add a Changie fragment for the history menu and the loading indicator, mentioning the reload/stop fix and the Dock menu's New Incognito Window. Verify that `changie batch --dry-run` renders it.
 
 ## Workflow follow-up
