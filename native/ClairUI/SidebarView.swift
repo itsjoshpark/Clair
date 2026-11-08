@@ -434,8 +434,8 @@ struct ToolsRow: View {
 }
 
 /// The sidebar's footer, as in Arc: a 50 pt band under the tab list, with the
-/// downloads button where Arc has its library button, 8 pt in from the side
-/// and 9 pt from the bottom.
+/// downloads button always where Arc has its library button, 8 pt in from the
+/// side and 9 pt from the bottom.
 struct SidebarFooter: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
@@ -446,15 +446,13 @@ struct SidebarFooter: View {
 
   var body: some View {
     HStack(spacing: 0) {
-      if !model.downloads.isEmpty {
-        DownloadsButton(progress: model.downloadProgress, hasUnseen: model.hasUnseenDownloads) {
-          showsDownloads.toggle()
-          if showsDownloads { actions?.downloadsListOpened() }
-        }
-        .anchorFrame(.downloads)
-        .popover(isPresented: $showsDownloads, arrowEdge: .trailing) {
-          DownloadsList(model: model, actions: actions)
-        }
+      DownloadsButton(progress: model.downloadProgress, hasUnseen: model.hasUnseenDownloads) {
+        showsDownloads.toggle()
+        if showsDownloads { actions?.downloadsListOpened() }
+      }
+      .anchorFrame(.downloads)
+      .popover(isPresented: $showsDownloads, arrowEdge: .trailing) {
+        DownloadsList(model: model, actions: actions)
       }
       Spacer(minLength: 0)
     }
@@ -576,8 +574,13 @@ struct DownloadsList: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      ForEach(model.downloads.prefix(8), id: \.downloadID) { download in
-        DownloadRow(download: download, actions: actions)
+      if model.downloads.isEmpty {
+        Text("No recent downloads")
+          .foregroundStyle(.secondary)
+      } else {
+        ForEach(model.downloads.prefix(8), id: \.downloadID) { download in
+          DownloadRow(download: download, actions: actions)
+        }
       }
       Divider()
       Button("Show All Downloads") { actions?.openDownloadsPage() }
