@@ -508,13 +508,13 @@ final class BrowserRootView: NSView {
     startReveal()
   }
 
-  // A move in the area starts the rest over.
+  // A move in the area starts the rest over. A mouse move carries no
+  // tracking area (asking for one throws), so look where the pointer is.
   override func mouseMoved(with event: NSEvent) {
-    guard let trackingArea = event.trackingArea else {
-      super.mouseMoved(with: event)
+    super.mouseMoved(with: event)
+    guard let rect = revealTrackingArea?.rect, rect.contains(convert(event.locationInWindow, from: nil)) else {
       return
     }
-    guard trackingArea === revealTrackingArea else { return }
     restartReveal()
   }
 

@@ -22,6 +22,19 @@ struct WindowContentTests {
     return (browser, controller)
   }
 
+  /// A mouse move carries no tracking area: reading one throws, which crashed
+  /// Clair on the first move in the hidden sidebar's reveal strip.
+  @Test func mouseMoveInTheRevealStripDoesNotCrash() throws {
+    let (browser, controller) = makeWindow()
+    controller.model.sidebar.isHidden = true
+    controller.rootView.layoutSubtreeIfNeeded()
+    let event = try #require(
+      NSEvent.mouseEvent(
+        with: .mouseMoved, location: NSPoint(x: 2, y: 300), modifierFlags: [], timestamp: 0,
+        windowNumber: browser.window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0))
+    controller.rootView.mouseMoved(with: event)
+  }
+
   @Test func activePageIsInTheCard() throws {
     let (browser, controller) = makeWindow()
     #expect(browser.window.contentView === controller.rootView)
