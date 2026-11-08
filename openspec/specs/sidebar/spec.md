@@ -99,11 +99,7 @@ The sidebar SHALL show the actions of extensions the user has pinned as buttons 
 - **THEN** its action runs, and its popup opens attached to the extensions button
 
 ### Requirement: Downloads indicator
-The sidebar SHALL always show a downloads button in its footer, where Arc has its library button. It SHALL show progress while a download is running and mark finished downloads the user hasn't looked at. Clicking it SHALL open a list of recent downloads that can open, reveal in Finder, cancel or retry each one, and open `chrome://downloads`; with no downloads from this session, the list SHALL say so.
-
-#### Scenario: Download in progress
-- **WHEN** a download starts
-- **THEN** the downloads button shows the download's progress until it finishes
+The sidebar SHALL always show a downloads button in its footer, where Arc has its library button. It SHALL mark finished downloads the user hasn't looked at. Clicking it SHALL open a list of recent downloads that can open, reveal in Finder, cancel or retry each one, and open `chrome://downloads`; with no downloads from this session, the list SHALL say so.
 
 #### Scenario: Opening a finished download
 - **WHEN** the user opens the downloads list and clicks a finished download
@@ -112,6 +108,17 @@ The sidebar SHALL always show a downloads button in its footer, where Arc has it
 #### Scenario: No downloads yet
 - **WHEN** the user opens the downloads list before downloading anything in this session
 - **THEN** the list says there are no recent downloads and still offers to show all downloads
+
+### Requirement: Download progress
+While downloads run, the downloads button SHALL show the same progress as the Dock icon, in every window: the running downloads of every profile, paused ones included, and no progress while any of them has an unknown size.
+
+#### Scenario: Download in progress
+- **WHEN** a download starts
+- **THEN** the downloads button shows the download's progress until it finishes
+
+#### Scenario: Download in another profile
+- **WHEN** a download runs in one profile while a window of another profile is open
+- **THEN** both windows' downloads buttons show the same progress as the Dock, and clear it when the download ends
 
 ### Requirement: Tab list
 Below the URL field, the sidebar SHALL show a "New Tab" row and then every tab of the window, in the window's tab order, with its favicon and title. The active tab SHALL be highlighted, more lightly while the window isn't key. A tab that plays sound or is muted SHALL show a speaker between its favicon and title, as in Arc, that mutes or unmutes it, with the tooltip "Mute this tab" or "Unmute this tab". The list SHALL scroll when it doesn't fit.

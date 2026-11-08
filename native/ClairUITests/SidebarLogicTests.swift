@@ -255,3 +255,27 @@ struct CommandBarTests {
     #expect(!model.acceptKeyword())
   }
 }
+
+/// The downloads button's ring follows the Dock's progress (sidebar spec,
+/// "Download progress").
+@MainActor
+struct DownloadProgressTests {
+  func ring(_ progress: DownloadProgress) -> Double? {
+    let model = BrowserWindowModel(profileKind: .regular, sidebar: SidebarState())
+    model.setDownloads([], progress: progress)
+    return model.downloadProgress
+  }
+
+  @Test func noRingWithoutRunningDownloads() {
+    #expect(ring(DownloadProgress(count: 0, isIndeterminate: false, fraction: 0)) == nil)
+  }
+
+  @Test func noRingWhileAnySizeIsUnknown() {
+    #expect(ring(DownloadProgress(count: 2, isIndeterminate: true, fraction: 0.4)) == nil)
+  }
+
+  @Test func ringShowsTheAppWideFraction() {
+    #expect(ring(DownloadProgress(count: 2, isIndeterminate: false, fraction: 0.25)) == 0.25)
+    #expect(ring(DownloadProgress(count: 1, isIndeterminate: false, fraction: 1.2)) == 1)
+  }
+}

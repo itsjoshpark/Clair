@@ -75,7 +75,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     setUpWindowDrag()
     model.setTabs(browser.tabs)
     model.setExtensionActions(browser.extensionActions)
-    model.setDownloads(browser.downloads)
+    model.setDownloads(browser.downloads, progress: browser.downloadProgress)
     activeTabDidChange(browser.activeTabID)
   }
 
@@ -470,8 +470,8 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     extensionPopup = nil
   }
 
-  func downloadsDidChange(_ downloads: [any ClairDownload]) {
-    model.setDownloads(downloads)
+  func downloadsDidChange(_ downloads: [any ClairDownload], progress: DownloadProgress) {
+    model.setDownloads(downloads, progress: progress)
   }
 
   func browserDidClose() {

@@ -7,9 +7,12 @@
 #include <algorithm>
 #include <vector>
 
+#include "base/no_destructor.h"
 #include "base/process/process.h"
 #include "base/strings/sys_string_conversions.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/clair/window/clair_browser_window.h"
+#include "chrome/browser/download/download_status_updater.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "components/download/public/common/download_item.h"
@@ -64,6 +67,20 @@ base::Time SessionStart() {
 
 }  // namespace
 
+namespace {
+
+// Every window's downloads, for the app-wide progress.
+std::set<ClairDownloads*>& Instances() {
+  static base::NoDestructor<std::set<ClairDownloads*>> instances;
+  return *instances;
+}
+
+// The Dock redraws its progress at most 5 times a second.
+constexpr int64_t kPollIntervalMs = 200;
+bool g_polling = false;
+
+}  // namespace
+
 ClairDownloads::ClairDownloads(ClairBrowserWindow* window)
     : window_(window), session_start_(SessionStart()) {
   Profile* profile = window_->browser()->GetProfile();
@@ -71,9 +88,45 @@ ClairDownloads::ClairDownloads(ClairBrowserWindow* window)
     notifier_ =
         std::make_unique<download::AllDownloadItemNotifier>(manager, this);
   }
+  Instances().insert(this);
 }
 
-ClairDownloads::~ClairDownloads() = default;
+ClairDownloads::~ClairDownloads() {
+  Instances().erase(this);
+}
+
+// static
+ClairDownloadProgress ClairDownloads::Progress() {
+  ClairDownloadProgress progress = {0, false, 0};
+  if (DownloadStatusUpdater* updater =
+          g_browser_process->download_status_updater()) {
+    float fraction = 0;
+    int count = 0;
+    bool certain = updater->GetProgress(&fraction, &count);
+    progress.count = count;
+    progress.isIndeterminate = !certain;
+    progress.fraction = fraction;
+  }
+  return progress;
+}
+
+// static
+void ClairDownloads::Poll() {
+  if (g_polling) {
+    return;
+  }
+  g_polling = true;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, kPollIntervalMs * NSEC_PER_MSEC),
+      dispatch_get_main_queue(), ^{
+        g_polling = false;
+        // Each window refreshes; one that still sees a download running
+        // polls again.
+        for (ClairDownloads* downloads : Instances()) {
+          downloads->Changed();
+        }
+      });
+}
 
 bool ClairDownloads::IsFromThisSession(download::DownloadItem* item) const {
   return !item->IsTransient() &&
@@ -174,18 +227,15 @@ void ClairDownloads::MarkSeen() {
   Changed();
 }
 
+// Any download counts toward the progress, so every one refreshes it.
 void ClairDownloads::OnDownloadCreated(content::DownloadManager* manager,
                                        download::DownloadItem* item) {
-  if (IsFromThisSession(item)) {
-    Changed();
-  }
+  Changed();
 }
 
 void ClairDownloads::OnDownloadUpdated(content::DownloadManager* manager,
                                        download::DownloadItem* item) {
-  if (IsFromThisSession(item)) {
-    Changed();
-  }
+  Changed();
 }
 
 void ClairDownloads::OnDownloadOpened(content::DownloadManager* manager,
@@ -217,7 +267,11 @@ void ClairDownloads::Changed() {
 
 void ClairDownloads::Flush() {
   flush_posted_ = false;
+  ClairDownloadProgress progress = Progress();
   if (id<ClairWindow> window = window_->clair_window()) {
-    [window downloadsDidChange:Snapshot()];
+    [window downloadsDidChange:Snapshot() progress:progress];
+  }
+  if (progress.count > 0) {
+    Poll();
   }
 }
