@@ -62,6 +62,8 @@ final class BrowserWindowModel {
   /// window controls to make room for.
   var isWindowFullscreen = false
   var windowControls = WindowControlsMetrics.macOS27
+  /// What the reload button shows (arc-navigation-feedback design D2).
+  let reloadStop = ReloadStopState(doubleClickInterval: NSEvent.doubleClickInterval)
 
   init(profileKind: ProfileKind, sidebar: SidebarState) {
     self.profileKind = profileKind

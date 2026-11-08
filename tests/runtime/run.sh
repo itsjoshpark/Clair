@@ -121,7 +121,7 @@ run_tests() {
     -resultBundlePath "$dir/results.xcresult" \
     -retry-tests-on-failure -test-iterations 2 \
     -parallel-testing-enabled NO \
-    -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+    -test-timeouts-enabled YES -default-test-execution-time-allowance 120 \
     "$@" || status=$?
 
   log show --last 2h --style compact --info \

@@ -1,0 +1,3 @@
+kind: New
+body: 'Right-click the back or forward button to see the tab''s history in that direction, with each page''s icon, and choose a page to go there (Cmd-click opens it in a new background tab). A loading page shows Arc''s small pulsing capsule above the page. The reload button no longer flickers to stop while a loaded page''s frames or ads keep loading, and it holds still for a moment if a load ends under the pointer, so a late click doesn''t reload. With every window closed, the Dock menu offers New Incognito Window'
+time: 2026-11-07T23:30:00.000000-05:00

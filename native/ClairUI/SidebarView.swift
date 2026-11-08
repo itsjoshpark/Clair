@@ -21,7 +21,11 @@ protocol SidebarActions: AnyObject {
   // The top row and the URL field.
   func goBack()
   func goForward()
+  /// Starts the back or forward history menu, or nil when the tab can't go
+  /// that way (arc-navigation-feedback design D3).
+  func historyMenu(_ direction: HistoryDirection) -> HistoryMenuBuilder?
   func reloadOrStop()
+  func reloadButtonHovered(_ hovering: Bool)
   func toggleSidebar()
   func editURL()
   func copyURL()
@@ -217,7 +221,10 @@ struct TopRow: View {
 
   var body: some View {
     let tab = model.activeTab
-    let isLoading = tab?.isLoading == true
+    // The button's own state, which holds stop under the pointer (design D2);
+    // the tab rows' spinners read the tab's `isLoading`.
+    let reloadStop = model.reloadStop.mode
+    let isLoading = reloadStop.visible == .stop
     let controls = model.isWindowFullscreen ? WindowControlsMetrics.fullScreen : model.windowControls
     let isCompact = controls.hasCompactTopRow(width: model.sidebar.width)
     let back = SidebarButton(
@@ -226,6 +233,9 @@ struct TopRow: View {
     ) {
       actions?.goBack()
     }
+    .overlay(
+      HistoryButtonCatcher(
+        isEnabled: tab?.canGoBack ?? false, makeMenu: { actions?.historyMenu(.back) }))
     .accessibilityIdentifier("clair.back")
     let forward = SidebarButton(
       systemImage: "arrow.right", help: "Go forward", shortcut: ["⌘", "]"], isEnabled: tab?.canGoForward ?? false,
@@ -233,6 +243,9 @@ struct TopRow: View {
     ) {
       actions?.goForward()
     }
+    .overlay(
+      HistoryButtonCatcher(
+        isEnabled: tab?.canGoForward ?? false, makeMenu: { actions?.historyMenu(.forward) }))
     .accessibilityIdentifier("clair.forward")
     // The row is centred on the window controls (design D3b).
     if isCompact {
@@ -248,7 +261,7 @@ struct TopRow: View {
               Button("Reload") { actions?.reloadOrStop() }.keyboardShortcut("r", modifiers: .command)
             }
           }
-          .disabled(tab == nil)
+          .disabled(tab == nil || !reloadStop.isEnabled)
           Button("Hide Sidebar") { actions?.toggleSidebar() }.keyboardShortcut("s", modifiers: .command)
         } label: {
           Image(systemName: "ellipsis")
@@ -290,10 +303,11 @@ struct TopRow: View {
           SidebarButton(
             systemImage: isLoading ? "xmark" : "arrow.clockwise",
             help: isLoading ? "Stop loading this page" : "Reload this page",
-            shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: tab != nil
+            shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: tab != nil && reloadStop.isEnabled
           ) {
             actions?.reloadOrStop()
           }
+          .onHover { actions?.reloadButtonHovered($0) }
           .accessibilityIdentifier("clair.reload")
         }
       }

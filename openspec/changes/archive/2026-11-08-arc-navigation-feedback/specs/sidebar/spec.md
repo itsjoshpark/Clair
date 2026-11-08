@@ -21,11 +21,11 @@ When a load ends while the pointer is on the stop button, the button SHALL stay 
 - **THEN** the button stays inert while the pointer stays on it, for up to about 1.35 seconds, and then shows reload
 
 ### Requirement: Navigation history menu
-Right-clicking the back or forward button, or pressing and holding it, SHALL open a menu attached to the button listing the active tab's pages in that direction, nearest first, each with its favicon and title (or its URL when it has no title), up to the number of entries Chromium's own back/forward menu shows. The compact top row's back and forward buttons SHALL behave the same. When the tab can't go that way, the button SHALL open no menu.
+Right-clicking or Control-clicking the back or forward button SHALL open a native menu attached to the button listing the active tab's pages in that direction, nearest first, each with its favicon and title (or its URL when it has no title), up to the number of entries Chromium's own back/forward menu shows. The compact top row's back and forward buttons SHALL behave the same. When the tab can't go that way, the button SHALL open no menu.
 
-#### Scenario: Press and hold
-- **WHEN** the user presses and holds the back button after visiting two pages
-- **THEN** the history menu opens without a navigation, and releasing over an entry goes there
+#### Scenario: Right-click
+- **WHEN** the user right-clicks the back button after visiting two pages
+- **THEN** the history menu opens under the button without a navigation, listing the previous page first
 
 #### Scenario: Nothing to go back to
 - **WHEN** the active tab has no previous page and the user right-clicks back
@@ -41,10 +41,3 @@ Choosing an entry in the history menu SHALL take the tab to that page. Choosing 
 #### Scenario: Opening an entry in a new tab
 - **WHEN** the user Cmd-chooses an entry in the back menu
 - **THEN** a new tab opens at the top of the tab list on that page, in the background, and the active tab doesn't navigate
-
-### Requirement: Full history from the history menu
-The history menu SHALL end with "Show Full History", after a separator, which SHALL open Chromium's history page as Chromium's own menu does.
-
-#### Scenario: Showing full history
-- **WHEN** the user right-clicks back and chooses Show Full History
-- **THEN** `chrome://history` opens in a tab, and the tab the menu was opened from doesn't navigate unless it was a new tab page

@@ -284,8 +284,14 @@ NS_SWIFT_NAME(ClairTab)
 @property(nonatomic, readonly) BOOL isNewTabPage;
 // The page's favicon, or nil while it has none, as on the new tab page.
 @property(nonatomic, readonly, nullable) NSImage *favicon;
-// Whether the tab is loading a page; reload shows as stop.
+// Whether the tab is loading a new document in its main frame, the state in
+// which Chromium's toolbar shows stop and its tab strip a spinner
+// (WebContents::IsLoading() && ShouldShowLoadingUI()). A frame loading on its
+// own or a same-document navigation doesn't count.
 @property(nonatomic, readonly) BOOL isLoading;
+// How far that load has got, from 0 to 1 (WebContents::GetLoadProgress()).
+// Only meaningful while `isLoading`.
+@property(nonatomic, readonly) double loadProgress;
 // Whether back and forward can go anywhere.
 @property(nonatomic, readonly) BOOL canGoBack;
 @property(nonatomic, readonly) BOOL canGoForward;
@@ -422,6 +428,67 @@ NS_SWIFT_NAME(ClairAutocomplete)
 - (void)stop;
 @end
 
+// Which way a history menu goes from the active tab's current page.
+typedef NS_ENUM(NSInteger, ClairHistoryDirection) {
+  ClairHistoryDirectionBack = 0,
+  ClairHistoryDirectionForward = 1,
+} NS_SWIFT_NAME(HistoryDirection);
+
+// What an item in a history menu is.
+typedef NS_ENUM(NSInteger, ClairHistoryItemKind) {
+  // A page in the tab's history.
+  ClairHistoryItemKindPage = 0,
+  // "Show Full History", which opens Chromium's history page. It comes last,
+  // after a separator, and only outside incognito.
+  ClairHistoryItemKindShowFullHistory = 1,
+} NS_SWIFT_NAME(HistoryItemKind);
+
+// An item in a history menu. Chromium implements it as a snapshot.
+NS_SWIFT_UI_ACTOR
+NS_SWIFT_NAME(ClairHistoryItem)
+@protocol ClairHistoryItem <NSObject>
+// Unique within its menu session; names the item in -openItem:disposition:.
+@property(nonatomic, readonly) NSInteger itemID;
+@property(nonatomic, readonly) ClairHistoryItemKind kind;
+// The page's title, or its URL when it has none; the item's label.
+@property(nonatomic, readonly, copy) NSString *title;
+// The page's URL, or nil for "Show Full History".
+@property(nonatomic, readonly, copy, nullable) NSURL *url;
+// The page's favicon, or nil while it has none yet; it may arrive later
+// through -historyMenu:itemsDidChange:. Always nil for "Show Full History".
+@property(nonatomic, readonly, nullable) NSImage *icon;
+@end
+
+@protocol ClairHistoryMenu;
+
+// What ClairUI implements to hear from a history menu session.
+NS_SWIFT_UI_ACTOR
+NS_SWIFT_NAME(ClairHistoryMenuDelegate)
+@protocol ClairHistoryMenuDelegate <NSObject>
+// The items changed: a favicon arrived, or the tab navigated. `items` is the
+// whole list, which is empty when the tab can no longer go that way.
+- (void)historyMenu:(id<ClairHistoryMenu>)menu itemsDidChange:(NSArray<id<ClairHistoryItem>> *)items
+    NS_SWIFT_NAME(historyMenu(_:itemsDidChange:));
+@end
+
+// One back or forward history menu on Chromium's BackForwardMenuModel for the
+// active tab (arc-navigation-feedback design D3). Chromium implements it.
+NS_SWIFT_UI_ACTOR
+NS_SWIFT_NAME(ClairHistoryMenu)
+@protocol ClairHistoryMenu <NSObject>
+// The pages in the session's direction, nearest first, up to Chromium's own
+// menu's limit, then "Show Full History".
+@property(nonatomic, readonly, copy) NSArray<id<ClairHistoryItem>> *items;
+// Goes to an item's page in the active tab, or opens it as `disposition`
+// says, as choosing it in Chromium's menu would. "Show Full History" ignores
+// `disposition`. It ends the session.
+- (void)openItem:(NSInteger)itemID disposition:(ClairOpenDisposition)disposition
+    NS_SWIFT_NAME(open(item:disposition:));
+// Ends the session without choosing. It sends nothing more, and ignores every
+// later call.
+- (void)close;
+@end
+
 // Where the window's close, minimize and zoom buttons go. The window ClairBrowser
 // hands over adopts it, and AppKit's own title bar layout puts the buttons
 // there, so no later title bar layout moves them. ClairUI sets it as the
@@ -504,6 +571,14 @@ NS_SWIFT_NAME(ClairBrowser)
 - (id<ClairAutocomplete>)startAutocompleteWithMode:(ClairCommandBarMode)mode
                                           delegate:(id<ClairAutocompleteDelegate>)delegate
     NS_SWIFT_NAME(startAutocomplete(mode:delegate:));
+
+// Starts a history menu session for the active tab, or returns nil when the
+// tab can't go that way. Chromium keeps `delegate` weakly. ClairUI starts one
+// when the user opens the back or forward button's menu and closes it when
+// the menu closes.
+- (nullable id<ClairHistoryMenu>)startHistoryMenuWithDirection:(ClairHistoryDirection)direction
+                                                      delegate:(id<ClairHistoryMenuDelegate>)delegate
+    NS_SWIFT_NAME(startHistoryMenu(direction:delegate:));
 
 // Gives the active tab's page keyboard focus, as when the command bar or find
 // closes.

@@ -1,0 +1,25 @@
+# The Dock menu offers New Incognito Window with no windows open, as it does
+# New Window (arc-navigation-feedback design D5). Chromium adds the item only
+# while a profile is loaded, and unloads the profile when the last window
+# closes. commandFromDock: loads the last profile before running the command.
+
+--- a/chrome/browser/app_controller_mac.mm
++++ b/chrome/browser/app_controller_mac.mm
+@@ -2167,6 +2167,17 @@
+   // profile picker is shown at startup, these buttons won't be added until the
+   // user picks a profile.
+   if (!profile) {
++    // Clair: the profile unloads when the last window closes, which hid New
++    // Incognito Window. Offer it anyway: commandFromDock: loads the profile
++    // first, as it does for New Window. Clair sets no incognito policy.
++    titleStr = l10n_util::GetNSStringWithFixup(IDS_NEW_INCOGNITO_WINDOW_MAC);
++    item = [[NSMenuItem alloc] initWithTitle:titleStr
++                                      action:@selector(commandFromDock:)
++                               keyEquivalent:@""];
++    item.target = self;
++    item.tag = IDC_NEW_INCOGNITO_WINDOW;
++    item.enabled = [self validateUserInterfaceItem:item];
++    [dockMenu addItem:item];
+     return dockMenu;
+   }
+ 
