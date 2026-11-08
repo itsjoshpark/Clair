@@ -63,7 +63,7 @@ final class AppTests: RuntimeTestCase {
     XCTAssertTrue(browser.ui.windows.firstMatch.waitForExistence(timeout: 30), "Clair shows no window")
   }
 
-  func testApplicationMenuNamesClair() async throws {
+  func testApplicationMenu() async throws {
     let browser = try await startBrowser(feed: upToDateFeed)
     browser.ui.activate()
     let clair = browser.ui.menuBars.menuBarItems["Clair"]
@@ -74,7 +74,22 @@ final class AppTests: RuntimeTestCase {
         browser.clairMenuItem(titled: title).waitForExistence(timeout: 10),
         "The Clair menu has no \(title) item")
     }
-    browser.ui.typeKey(.escape, modifierFlags: [])
+
+    // Settings… opens Clair's own window, not a chrome://settings tab.
+    let settings = browser.clairMenuItem(titled: "Settings…")
+    try require(settings.waitForExistence(timeout: 10), "The Clair menu has no Settings… item")
+    let items = browser.ui.menuBars.menuItems
+    XCTAssertEqual(items.matching(NSPredicate(format: "title == %@", "Settings…")).count, 1)
+    XCTAssertEqual(items.matching(NSPredicate(format: "title BEGINSWITH %@", "Preferences")).count, 0)
+    settings.click()
+    let window = browser.ui.windows["General"]
+    try require(window.waitForExistence(timeout: 10), "Settings… opened no window titled General")
+    for page in ["General", "Advanced"] {
+      XCTAssertTrue(
+        window.toolbars.descendants(matching: .any)[page].exists, "The Settings window has no \(page) page")
+    }
+    let settingsTabs = try await browser.pageTargets().filter { $0.url.hasPrefix("chrome://settings") }
+    XCTAssertTrue(settingsTabs.isEmpty, "Settings… opened \(settingsTabs.map(\.url))")
   }
 
   func testUsesClairsDataDirectoryAndKeychainItem() async throws {

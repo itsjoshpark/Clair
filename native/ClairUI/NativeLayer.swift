@@ -24,6 +24,10 @@ final class NativeLayer {
   /// Clair.app.
   private(set) var about: AboutWindowController?
 
+  /// The Settings window behind Settings…, once the layer is running inside
+  /// Clair.app.
+  private(set) var settings: SettingsWindowController?
+
   init(host: any ClairHost) {
     self.host = host
   }
@@ -37,6 +41,9 @@ final class NativeLayer {
     let about = AboutWindowController(host: host, info: AboutInfo(bundle: .main, host: host))
     about.install(in: NSApp.mainMenu)
     self.about = about
+    let settings = SettingsWindowController(host: host)
+    settings.install(in: NSApp.mainMenu)
+    self.settings = settings
     MainMenuTitles.apply(to: NSApp.mainMenu)
     MainMenuTitles.addCopyURL(to: NSApp.mainMenu)
 
