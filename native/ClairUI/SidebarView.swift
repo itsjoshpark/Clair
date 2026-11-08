@@ -791,8 +791,8 @@ struct TabRow: View {
           if tab.isLoading && tab.favicon == nil {
             ProgressView().controlSize(.small)
           } else if isIncognito && tab.isNewTabPage {
-            // In place of Chromium's incognito goggles: near-white, as in the
-            // header's badge and in Arc.
+            // Chromium gives the incognito new tab its goggles as a favicon. Show the
+            // crossed-out eye instead, near-white like the header's badge, as in Arc.
             Image(systemName: "eye.slash").foregroundStyle(Color.primary.opacity(0.94))
           } else if let favicon = tab.favicon {
             Image(nsImage: favicon).resizable().interpolation(.high)
