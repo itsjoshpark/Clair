@@ -15,6 +15,8 @@ Suggested order: 1, 2 (one engine build), then 3 and 4 in `ClairUI`, which can s
 - [ ] 2.1 Add to `native/ClairHost.h`: `ClairTab.loadProgress`, the `isLoading` comment stating it's Chromium's loading-UI state (D1), and `ClairHistoryDirection`, `ClairHistoryItem`, `ClairHistoryMenu`, `ClairHistoryMenuDelegate` and `-[ClairBrowser startHistoryMenuWithDirection:delegate:]` (D3). Implement them in `FakeBrowser`, with entries and late favicons it can script. Verify that `ClairUI`'s build and unit tests pass in CI.
 - [ ] 2.2 In the overlay: report `IsLoading() && ShouldShowLoadingUI()` as `isLoading` (D1); observe each tab's `LoadProgressChanged` and add `loadProgress` to the snapshot (D4); add `ClairHistoryMenuSession` over `BackForwardMenuModel`, listing history entries and then "Show Full History", pushing icon changes, and opening entries through `ActivatedAt` with the disposition's flags (D3), in `clair_browser_bridge.mm` so the hook patch's source list stays as it is. Verify that `patches/` is unchanged, that the patch check applies and `engine.yml` builds the engine for the branch's key.
 
+- [ ] 2.3 Add `patches/clair/dock-incognito.patch` (D5): the Dock menu's New Incognito Window without a loaded profile. Verify that the patch check applies it with the engine build of 2.2, then by hand that with every window closed the Dock menu offers New Incognito Window and that choosing it opens an incognito window.
+
 ## 3. Reload and stop
 
 - [ ] 3.1 Add `ReloadStopMode` (D2) and use it for the full row's reload button and the compact row's menu item; the tab row's spinner keeps reading `isLoading`. Add unit tests for the hover hold, its 1.35 s timeout, the double-click case and a tab switch. Verify that they pass in CI.
@@ -30,7 +32,7 @@ Suggested order: 1, 2 (one engine build), then 3 and 4 in `ClairUI`, which can s
 
 - [ ] 5.1 **(owner)** Check by hand against Arc, side by side: the history menu's look, position and contents in both top rows, press-and-hold, Cmd-choosing, favicons arriving in an open menu; the loading indicator on a slow page, a fast page, a stopped load, a failed load, a tab switch mid-load, with the sidebar shown, hidden and revealed, in page full screen, in an incognito window and in Light and Dark Mode; and reload/stop on a page with busy iframes (a news site with ads). Verify each item and note the results in the PR.
 - [ ] 5.2 Run `quality.yml` on the branch with the new engine. Verify that the whole runtime suite passes, including the tests from 3.2 and 4.2.
-- [ ] 5.3 Add a Changie fragment for the history menu and the loading indicator, mentioning the reload/stop fix. Verify that `changie batch --dry-run` renders it.
+- [ ] 5.3 Add a Changie fragment for the history menu and the loading indicator, mentioning the reload/stop fix and the Dock menu's New Incognito Window. Verify that `changie batch --dry-run` renders it.
 
 ## Workflow follow-up
 

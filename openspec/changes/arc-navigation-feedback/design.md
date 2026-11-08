@@ -96,9 +96,15 @@ See proposal.md for why, and `specs/sidebar/spec.md` and `specs/browser-window/s
 - **`ClairUI`.** `LoadingIndicatorView`, an AppKit layer-backed view in `BrowserRootView` over the card's top edge, in the top inset, as wide as the card and above it in z-order but below overlays (command bar, find, revealed sidebar). A `LoadingIndicatorModel`, free of AppKit and unit-tested, turns the active tab's `isLoading` and `loadProgress` into what to show: fade in when a visible load starts, advance smoothly towards the reported progress (never backwards within a load), run to the end and fade out when it finishes, fade out at once when stopped or failed, and jump to the new tab's state on a tab switch without animating. It hides in page full screen and follows the card as the sidebar hides or reveals.
 - **Look.** A thin glow in the accent colour along the card's top edge, drawn with Core Animation (a gradient layer and a blurred copy), not a shader. Height, colour, blur, how far it extends past the card, whether it's tied to progress or loops, and the fade timings come from a 60 fps recording of Arc (task 1.1), and the measured values are recorded in this design before group 3. We take Arc's behavior, not its code or assets.
 
-### D5. One engine build
+### D5. New Incognito Window in the Dock menu
 
-The header additions (D3, D4) and the overlay changes (D1, D3, D4) land together; task group 2 settles the header against `FakeBrowser` first, as `replace-browser-window` did, so the engine builds once. `ClairUI` work on the menu and indicator proceeds against the fake meanwhile.
+- **The problem:** with no windows open, Clair's Dock menu offers New Window but not New Incognito Window. Chromium's `-[AppController applicationDockMenu:]` adds the incognito item only when `lastProfileIfLoaded` returns a profile, so that it can check whether policy disables or replaces incognito, and Chromium unloads the profile once its last window closes. The bare engine behaves the same, so it's Chromium's behaviour, not the native window's (found 2026-11-07).
+- **The patch:** `patches/clair/dock-incognito.patch` adds the item even when no profile is loaded. Choosing it goes through `commandFromDock:`, which already loads the last profile before running a command, as it does for New Window. With a profile loaded, Chromium's checks run as before. Clair sets no incognito policy, so the unloaded case can assume incognito is available.
+- Alternative: keep a profile alive while no windows are open. Rejected: it changes Chromium's profile lifetime for one menu item.
+
+### D6. One engine build
+
+The header additions (D3, D4), the overlay changes (D1, D3, D4) and the Dock menu patch (D5) land together; task group 2 settles the header against `FakeBrowser` first, as `replace-browser-window` did, so the engine builds once. `ClairUI` work on the menu and indicator proceeds against the fake meanwhile.
 
 ## Risks / Trade-offs
 

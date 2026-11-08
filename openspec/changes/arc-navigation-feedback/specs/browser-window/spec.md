@@ -2,6 +2,13 @@
 
 ## ADDED Requirements
 
+### Requirement: New Incognito Window from the Dock with no windows
+Clair's Dock menu SHALL offer New Incognito Window whether or not a window is open.
+
+#### Scenario: No windows open
+- **WHEN** the user closes every window, right-clicks Clair in the Dock and chooses New Incognito Window
+- **THEN** an incognito window opens
+
 ### Requirement: Loading indicator
 While the active tab loads a new document in its main frame (the state that shows stop), the window SHALL show a loading indicator along the top edge of the page card, in the inset above it, that advances with the load's progress, as Arc's does. It SHALL fade in when the load starts and fade out once the load ends, whether it finished, was stopped or failed.
 
