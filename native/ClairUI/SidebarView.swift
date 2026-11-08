@@ -140,7 +140,7 @@ struct IncognitoBadge: View {
 enum SidebarFill {
   /// The URL field: a flat fill, no border.
   static func field(_ scheme: ColorScheme, hovered: Bool) -> Color {
-    scheme == .dark ? Color.white.opacity(hovered ? 0.24 : 0.18) : Color.black.opacity(hovered ? 0.09 : 0.045)
+    scheme == .dark ? Color.white.opacity(hovered ? 0.2 : 0.15) : Color.black.opacity(hovered ? 0.09 : 0.045)
   }
 
   /// The active tab's pill, lighter and flat while the window isn't key.
@@ -241,9 +241,15 @@ struct TopRow: View {
         back
         forward
         Menu {
-          Button(isLoading ? "Stop" : "Reload") { actions?.reloadOrStop() }
-            .disabled(tab == nil)
-          Button("Hide Sidebar") { actions?.toggleSidebar() }
+          Group {
+            if isLoading {
+              Button("Stop") { actions?.reloadOrStop() }.keyboardShortcut(.escape, modifiers: [])
+            } else {
+              Button("Reload") { actions?.reloadOrStop() }.keyboardShortcut("r", modifiers: .command)
+            }
+          }
+          .disabled(tab == nil)
+          Button("Hide Sidebar") { actions?.toggleSidebar() }.keyboardShortcut("s", modifiers: .command)
         } label: {
           Image(systemName: "ellipsis")
             .font(.system(size: 16, weight: .medium))

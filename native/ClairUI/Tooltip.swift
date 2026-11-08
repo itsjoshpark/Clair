@@ -200,6 +200,9 @@ private final class TooltipWindow: NSPanel {
     if parent == nil, let parent = Self.window(under: origin) {
       parent.addChildWindow(self, ordered: .above)
     }
+    // Light or dark as the window it shows over, as an incognito window is
+    // dark whatever the system's appearance.
+    appearance = parent?.effectiveAppearance
     if !isVisible {
       alphaValue = 0
       orderFront(nil)
@@ -228,6 +231,7 @@ private final class TooltipWindow: NSPanel {
 /// no Spaces yet, with the accent colour.
 struct TooltipView: View {
   let tooltip: Tooltip
+  @Environment(\.colorScheme) private var colorScheme
 
   /// Room around the capsule for its shadow.
   static let margin: CGFloat = 14
@@ -237,8 +241,8 @@ struct TooltipView: View {
     let accent = Color.accentColor
     HStack(spacing: 6) {
       Text(tooltip.text)
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(Color.primary.mix(with: accent, by: 0.3))
+        .font(.system(size: 12, weight: .regular))
+        .foregroundStyle(colorScheme == .dark ? Color.white.mix(with: accent, by: 0.1) : Color.primary.mix(with: accent, by: 0.3))
         .lineLimit(1)
       if !tooltip.shortcut.isEmpty {
         HStack(spacing: 3) {
@@ -255,7 +259,8 @@ struct TooltipView: View {
     // blur the text and shade the key caps.
     .background {
       Capsule()
-        .fill(OverlayStyle.background.mix(with: accent, by: 0.07))
+        // In Dark Mode, Arc's deep tinted capsule.
+        .fill(colorScheme == .dark ? Color.black.mix(with: accent, by: 0.4) : OverlayStyle.background.mix(with: accent, by: 0.07))
         .shadow(color: .black.opacity(0.22), radius: 7, y: 3)
     }
     .padding(Self.margin)
@@ -264,20 +269,23 @@ struct TooltipView: View {
   }
 }
 
-/// One key of a shortcut, drawn as a key cap with a deeper bottom edge.
+/// One key of a shortcut, drawn as a key cap with a deeper bottom edge. In
+/// Dark Mode the key stays light, with a deep glyph, as Arc's does.
 struct KeyCap: View {
   let key: String
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     let accent = Color.accentColor
     let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+    let isDark = colorScheme == .dark
     Text(key)
       .font(.system(size: 11, weight: .bold))
-      .foregroundStyle(accent.mix(with: .black, by: 0.15))
+      .foregroundStyle(accent.mix(with: .black, by: isDark ? 0.55 : 0.15))
       .padding(.horizontal, key.count > 1 ? 4 : 0)
       .frame(minWidth: 18, minHeight: 18)
-      .background(shape.fill(OverlayStyle.background.mix(with: accent, by: 0.16)))
-      .overlay(shape.strokeBorder(accent.opacity(0.45), lineWidth: 1))
+      .background(shape.fill(isDark ? Color.white.mix(with: accent, by: 0.14) : OverlayStyle.background.mix(with: accent, by: 0.16)))
+      .overlay(shape.strokeBorder(isDark ? accent.mix(with: .white, by: 0.35) : accent.opacity(0.45), lineWidth: 1))
       // The key's depth: its bottom edge, below the face.
       .background(shape.fill(accent.opacity(0.6)).offset(y: 1.5))
       .padding(.bottom, 1.5)

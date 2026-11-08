@@ -116,7 +116,10 @@ struct CommandBarView: View {
         .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .background(OverlayStyle.background, in: .rect(cornerRadius: 14))
+    // In Dark Mode, Arc's darker fill, about (30, 32, 32) as measured.
+    .background(
+      colorScheme == .dark ? Color(red: 0.085, green: 0.093, blue: 0.093) : OverlayStyle.background,
+      in: .rect(cornerRadius: 14))
     // Arc's border, measured: in Light Mode a hairline of solid mid-grey; in
     // Dark Mode a point of grey, its inner half lighter. Each value is set to
     // measure as Arc's, as the window draws greys a little lighter.

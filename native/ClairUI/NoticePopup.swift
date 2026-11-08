@@ -77,6 +77,7 @@ final class NoticeState {
 struct NoticePopupView: View {
   let state: NoticeState
   var share: ((URL) -> Void)?
+  @Environment(\.colorScheme) private var colorScheme
 
   /// Room around the popup for its shadow.
   static let margin: CGFloat = 12
@@ -114,7 +115,7 @@ struct NoticePopupView: View {
         } else if !part.trimmingCharacters(in: .whitespaces).isEmpty {
           Text(part.trimmingCharacters(in: .whitespaces))
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.primary)
+            .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
             .lineLimit(1)
         }
       }
@@ -131,8 +132,12 @@ struct NoticePopupView: View {
   private var background: some View {
     let accent = Color.accentColor
     let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-    let top = OverlayStyle.background.mix(with: accent, by: 0.18)
-    let bottom = OverlayStyle.background.mix(with: accent, by: 0.26)
+    // In Dark Mode, Arc's deep tinted gradient.
+    let isDark = colorScheme == .dark
+    // Arc's is muted, about (54, 77, 122) to (42, 62, 101): the accent mixed
+    // into grey, not black.
+    let top = isDark ? Color(white: 0.17).mix(with: accent, by: 0.24) : OverlayStyle.background.mix(with: accent, by: 0.18)
+    let bottom = isDark ? Color(white: 0.13).mix(with: accent, by: 0.22) : OverlayStyle.background.mix(with: accent, by: 0.26)
     return shape
       .fill(LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom))
       .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
@@ -141,7 +146,9 @@ struct NoticePopupView: View {
 
   private func shareButton(_ url: URL) -> some View {
     let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
-    let fill = OverlayStyle.background.mix(with: Color.accentColor, by: 0.08)
+    let isDark = colorScheme == .dark
+    // In Dark Mode, Arc's translucent light key with a white glyph.
+    let fill = isDark ? Color.white.opacity(0.3) : OverlayStyle.background.mix(with: Color.accentColor, by: 0.08)
     return Button {
       share?(url)
     } label: {
@@ -159,7 +166,7 @@ struct NoticePopupView: View {
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .foregroundStyle(.primary)
+    .foregroundStyle(isDark ? Color.white : Color.primary)
     .tooltip("Share")
     .accessibilityLabel("Share")
   }

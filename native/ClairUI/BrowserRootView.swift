@@ -146,13 +146,13 @@ final class BrowserRootView: NSView {
     revealedBackground.layer?.cornerCurve = .continuous
     revealedBackground.layer?.masksToBounds = true
     revealedBackground.layer?.borderWidth = 1
-    revealedBackground.layer?.borderColor = NSColor.white.withAlphaComponent(0.35).cgColor
     revealedPanel.wantsLayer = true
     revealedPanel.layer?.shadowColor = NSColor.black.cgColor
     revealedPanel.layer?.shadowOpacity = 0.22
     revealedPanel.layer?.shadowRadius = 8
     revealedPanel.layer?.shadowOffset = CGSize(width: 0, height: -2)
     revealedPanel.addSubview(revealedBackground)
+    updateRevealedBorder()
     revealedBackground.addSubview(revealedTint)
     revealedPanel.isHidden = true
     addSubview(background)
@@ -178,6 +178,18 @@ final class BrowserRootView: NSView {
   }
 
   override var isFlipped: Bool { true }
+
+  /// The revealed sidebar's edge: a light hairline, darker in Dark Mode,
+  /// where a light one stands out.
+  private func updateRevealedBorder() {
+    let isDark = effectiveAppearance.isDark
+    revealedBackground.layer?.borderColor = NSColor.white.withAlphaComponent(isDark ? 0.12 : 0.35).cgColor
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    updateRevealedBorder()
+  }
 
   /// Edit > Copy URL (Shift+Cmd+C), which reaches the window through the
   /// responder chain (design D18).
