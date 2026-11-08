@@ -75,6 +75,13 @@ jobs:
       - name: Lint workflows
         run: actionlint
 
+      # Specs and active changes must parse, with warnings counted as errors.
+      - name: Validate the OpenSpec specs and changes
+        env:
+          OPENSPEC_TELEMETRY: "0"
+          DO_NOT_TRACK: "1"
+        run: npx --yes @fission-ai/openspec@1.16.0 validate --all --strict --no-interactive
+
       - name: Check the appcast is well-formed
         run: xmllint --noout .sparkle/appcast.xml
 

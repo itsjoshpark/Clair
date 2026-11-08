@@ -283,57 +283,6 @@ final class Browser {
     item.click()
   }
 
-  // MARK: - The About window
-
-  /// The visible About windows: there should never be more than one.
-  var aboutWindows: [XCUIElement] {
-    ui.windows.matching(NSPredicate(format: "title == %@", "About Clair")).allElementsBoundByIndex
-  }
-
-  /// Chooses "About Clair" and returns the About window it shows.
-  func openAboutWindow() throws -> XCUIElement {
-    ui.activate()
-    let clair = ui.menuBars.menuBarItems["Clair"]
-    try require(clair.waitForExistence(timeout: 30), "There's no Clair menu")
-    clair.click()
-    let item = clairMenuItem(titled: "About Clair")
-    try require(item.waitForExistence(timeout: 10), "The Clair menu has no About Clair item")
-    item.click()
-    let window = ui.windows["About Clair"]
-    try require(window.waitForExistence(timeout: 10), "About Clair showed no About window")
-    return window
-  }
-
-  /// All the text in a window, with its line breaks as spaces.
-  func text(in window: XCUIElement) -> String {
-    window.staticTexts.allElementsBoundByIndex
-      .map { ($0.value as? String).flatMap { $0.isEmpty ? nil : $0 } ?? $0.label }
-      .joined(separator: " ")
-      .split(whereSeparator: \.isWhitespace).joined(separator: " ")
-  }
-
-  /// Clicks a link in the About window's credits. Two links read "open source
-  /// software": Chromium's credits come first, then Clair's other credits.
-  func clickLink(_ text: String, index: Int = 0, in window: XCUIElement) throws {
-    let links = window.links.matching(NSPredicate(format: "label == %@", text))
-    let link = links.element(boundBy: index)
-    try require(
-      link.waitForExistence(timeout: 10),
-      "The About window has no \"\(text)\" link. Links: \(window.links.allElementsBoundByIndex.map(\.label))")
-    link.click()
-  }
-
-  /// Closes every tab, and so every browser window. Clair keeps running.
-  func closeAllTabs() async throws {
-    let browser = try await browserSession()
-    defer { browser.close() }
-    for target in try await pageTargets() {
-      _ = try await browser.send("Target.closeTarget", ["targetId": target.id])
-    }
-    let closed = await Harness.wait(for: 30) { try await self.pageTargets().isEmpty }
-    try require(closed, "The browser windows didn't close")
-  }
-
   /// Whether the update item reads this way, without opening the menu or
   /// causing any input that would restart the idle clock.
   func updateItemExists(titled prefix: String, within seconds: TimeInterval) -> Bool {

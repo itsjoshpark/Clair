@@ -59,14 +59,14 @@ When the ungoogled-chromium pin is unchanged and only Clair's patches or overlay
 - **THEN** the build starts from a fresh source tree, and the published engine still matches its key
 
 ### Requirement: Fast merge gate
-Every pull request SHALL run a merge gate on GitHub-hosted runners that compiles no Chromium source. The gate covers the script tests, shellcheck, actionlint, and the native layer's build and unit tests against the contract header. The gate SHALL be the set of required checks for merging into `main`. For a pull request that doesn't change the engine key, the gate SHALL finish within 10 minutes.
+Every pull request SHALL run a merge gate on GitHub-hosted runners that compiles no Chromium source. The gate covers the script tests, shellcheck, actionlint, strict OpenSpec validation, and the native layer's build and unit tests against the contract header. The gate SHALL be the set of required checks for merging into `main`. For a pull request that doesn't change the engine key, the gate SHALL finish within 10 minutes.
 
 #### Scenario: Native-only pull request
 - **WHEN** a pull request changes only the native layer's Swift sources
 - **THEN** its checks finish within 10 minutes, and no job fetches Chromium source
 
 ### Requirement: Patch check for engine changes
-A pull request that changes the engine key SHALL also run a patch check on a GitHub-hosted runner, unless `chromium-engine-<key>` is already published for its head commit's key when the run starts. The check fetches the pinned Chromium source and applies ungoogled-chromium's series, Clair's series, the overlay and domain substitution, without compiling. Such a pull request SHALL NOT merge until `chromium-engine-<key>` is published for its head commit's key and its patch check, if it ran, has passed.
+A pull request that changes the engine key SHALL also run a patch check on a GitHub-hosted runner, unless `chromium-engine-<key>` is already published for its head commit's key when the run starts. The check fetches the pinned Chromium source and applies both patch series, the overlay and domain substitution, without compiling. Such a pull request SHALL NOT merge until its engine is published and its patch check, if it ran, has passed.
 
 #### Scenario: Patch no longer applies
 - **WHEN** a pull request bumps the ungoogled-chromium tag and one Clair patch no longer applies
@@ -93,10 +93,25 @@ Every push to `main` SHALL run quality checks on a GitHub-hosted runner. They pa
 
 #### Scenario: Runtime suite contents
 - **WHEN** the quality checks run
-- **THEN** the runtime suite covers at least: launch and page rendering, the Clair application menu items, the data directory and keychain item, the user agent's Chromium version, the About window and the About page versions, no Google service traffic on an idle first launch, a manual update check against local test appcasts, and session restore after a relaunch
+- **THEN** the runtime suite covers at least: launch and page rendering, the Clair application menu items, the data directory and keychain item, the user agent's Chromium version, the About page versions, a manual update check against local test appcasts, and session restore after a relaunch
+
+### Requirement: Quality checks reuse a passed run
+A push to `main` SHALL skip the runtime suite and count as passed when a quality run has already passed on a commit with the same file tree. When the push changes only documentation (`openspec/`, `docs/`, `.changes/` and Markdown files at the repository root), a pass on its parent, found the same way, SHALL count too. A release SHALL look for a passed run the same way.
+
+#### Scenario: Merge of a branch that passed
+- **WHEN** an up-to-date branch whose quality run passed is squash-merged, so `main` has the branch's file tree
+- **THEN** the quality run for the merge commit finds the branch's run, skips the suite, passes, and closes any open `quality-failure` issue
+
+#### Scenario: Merge of a branch that was behind
+- **WHEN** a branch whose quality run passed is squash-merged after other merges to `main`, so the merge commit's file tree is new
+- **THEN** the quality run for the merge commit runs the whole suite
+
+#### Scenario: Documentation-only merge
+- **WHEN** a merge to `main` changes only files under `openspec/` and `docs/`, and the quality checks passed on its parent
+- **THEN** the quality run for the merge commit skips the suite and passes
 
 ### Requirement: Releases need passing quality checks
-A release SHALL ship only a commit whose quality checks have passed. The release process SHALL run the quality checks for its commit when they haven't already passed, and SHALL stop if they fail or haven't finished. If no engine is published for the release commit's key, the release SHALL build it on the owner's Mac first.
+A release SHALL ship only a commit whose quality checks have passed, counting a reused run as a pass. The release process SHALL run the quality checks for its commit when they haven't already passed, and SHALL stop if they fail or haven't finished. If no engine is published for the release commit's key, the release SHALL build it on the owner's Mac first.
 
 #### Scenario: Quality checks failed
 - **WHEN** a release is started on a commit whose quality checks failed

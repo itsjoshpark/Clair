@@ -7,7 +7,7 @@ A release runs from `main` through `.github/workflows/release.yml`, mostly on th
 - **Notes:** `.changes/unreleased/` needs at least one Changie fragment. User-facing pull requests add their own; see [`.changes/README.md`](../.changes/README.md).
 - **Runner:** the owner's Mac must be online, with its runner started (`./run.sh`).
 - **Certificate:** the Developer ID certificate expires on 2027-02-01. The release warns in the last 30 days and stops once it has expired.
-- **Quality checks:** if `quality.yml` is still running for the commit after its merge, wait for it. Otherwise the release runs the whole suite again.
+- **Quality checks:** a passed quality run that covers the release commit counts: one on the same file tree, such as the branch run before the merge, or on its parent when the commit changed only documentation. If `quality.yml` is still running for the commit after its merge, wait for it. Otherwise the release runs the whole suite again.
 - **`main`:** merge nothing between the dry run you test and the release being published. The release ships `main` as it is when you start it, and stops if `main` moves before the Release is created.
 
 ## Start a release
@@ -24,7 +24,7 @@ With `auto`, a `New` fragment bumps the minor version and the other kinds bump t
 |---|---|---|
 | `validate` | Mac | Refuses a run with no fragments, an existing tag or notes, a build number Sparkle wouldn't offer, or notes that won't render |
 | `engine` | Mac | Builds the engine only if `chromium-engine-<key>` isn't published, which can take about 4 hours |
-| `quality` | Hosted | Runs the quality checks only if they haven't already passed for the commit |
+| `quality` | Hosted | Runs the quality checks only if no passed run covers the commit |
 | `package` | Mac, `release` environment | Checks the credentials, then signs, notarizes and staples the app and the DMG, verifies them, makes the deltas and signs every asset |
 | `publish` | Mac, `release` environment | Makes the release commit, tags it, creates the GitHub Release, and pushes to `main` |
 
