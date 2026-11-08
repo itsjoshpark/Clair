@@ -77,7 +77,8 @@ final class BrowserRootView: NSView {
   /// Arc reveals 100–117 ms after the pointer arrives; event delivery adds
   /// about 50 ms to this.
   static let revealDelay: Duration = .milliseconds(70)
-  static let concealDelay: Duration = .milliseconds(300)
+  /// How long a revealed sidebar stays after the pointer leaves it, as in Arc.
+  static let concealDelay: Duration = .milliseconds(100)
 
   let background = NSVisualEffectView()
   /// The window's material again, between the card and the sidebar, for
