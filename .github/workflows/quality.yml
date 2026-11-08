@@ -5,9 +5,11 @@
 # quality-failure issue, and a later pass closes it. No release ships without
 # these passing.
 #
-# A push to main skips the suite when a run on a commit with the same file tree
-# has already passed, such as the branch run before a squash merge of an
-# up-to-date branch. The run then counts as a pass.
+# A push to main skips the suite when a passed run already covers it
+# (scripts/find-quality-pass.sh): a run on a commit with the same file tree, such
+# as the branch run before a squash merge of an up-to-date branch, or, for a
+# documentation-only push, a run that covers its parent. The run then counts as
+# a pass.
 name: Quality
 
 on:
@@ -32,7 +34,7 @@ permissions:
 
 jobs:
   lookup:
-    name: Look for a pass on the same tree
+    name: Look for a passed run that covers the commit
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -45,6 +47,8 @@ jobs:
       - name: Check out
         uses: actions/checkout@v7
         with:
+          # The documentation-only commits it may walk back through.
+          fetch-depth: 25
           persist-credentials: false
 
       - name: Find a passed run
@@ -53,13 +57,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          tree="$(git rev-parse 'HEAD^{tree}')"
           status=0
-          url="$(./scripts/find-quality-pass.sh --tree "$tree")" || status=$?
+          url="$(./scripts/find-quality-pass.sh --commit HEAD)" || status=$?
           case "$status" in
-            0) echo "::notice::Skipping the suite: $url passed on the same tree ($tree)"
+            0) echo "::notice::Skipping the suite: $url already covers these files"
                echo "passed=true" >> "$GITHUB_OUTPUT" ;;
-            1) echo "No passed run on tree $tree"
+            1) echo "No passed run covers ${GITHUB_SHA:0:7}"
                echo "passed=false" >> "$GITHUB_OUTPUT" ;;
             *) echo "::warning::Couldn't look for a passed run, so the suite runs"
                echo "passed=false" >> "$GITHUB_OUTPUT" ;;

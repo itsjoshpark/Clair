@@ -106,7 +106,8 @@ jobs:
             echo "published=$published"
           } >> "$GITHUB_OUTPUT"
 
-      # A pass on any commit with the same file tree counts.
+      # A pass that covers the commit counts: one on the same file tree, or on its
+      # parent when the commit changes only documentation.
       - name: Look for the commit's quality checks
         id: quality
         env:
@@ -114,9 +115,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           passed=false
-          if url="$(./scripts/find-quality-pass.sh --tree "$(git rev-parse 'HEAD^{tree}')")"; then
+          if url="$(./scripts/find-quality-pass.sh --commit HEAD)"; then
             passed=true
-            echo "Quality checks passed on this tree: $url"
+            echo "Quality checks covering this commit passed: $url"
           fi
           echo "Quality checks already passed for ${GITHUB_SHA:0:7}: $passed"
           echo "passed=$passed" >> "$GITHUB_OUTPUT"

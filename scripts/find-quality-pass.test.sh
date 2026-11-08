@@ -1,5 +1,6 @@
 #!/bin/bash
-# Tests for find-quality-pass.sh, with a fake gh that serves runs and commits.
+# Tests for find-quality-pass.sh, in a scratch repository with a fake gh that
+# serves quality runs and reads commits' trees from that repository.
 
 set -uo pipefail
 
@@ -8,16 +9,35 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 failures=0
 
-commit_a="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-commit_b="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-tree_1="1111111111111111111111111111111111111111"
-tree_2="2222222222222222222222222222222222222222"
-tree_3="3333333333333333333333333333333333333333"
-url_a="https://github.com/itsjoshpark/Clair/actions/runs/10"
-url_b="https://github.com/itsjoshpark/Clair/actions/runs/20"
+repo="$work/repo"
+git init -q "$repo"
+git -C "$repo" config user.name test
+git -C "$repo" config user.email test@example.com
+git -C "$repo" config commit.gpgsign false
 
-# FAKE_RUNS: what `gh run list` prints. FAKE_TREES: "commit tree" lines for
-# `gh api`. FAKE_FAIL: a subcommand that fails.
+# commit <message> <path>...: writes each path and commits, printing the hash.
+commit() {
+  local message="$1" path
+  shift
+  for path in "$@"; do
+    mkdir -p "$repo/$(dirname "$path")"
+    echo "$message" >>"$repo/$path"
+  done
+  git -C "$repo" add -A
+  git -C "$repo" commit -q -m "$message"
+  git -C "$repo" rev-parse HEAD
+}
+
+code_1="$(commit "code 1" native/app.swift)"
+docs_1="$(commit "docs 1" docs/guide.md)"
+code_2="$(commit "code 2" native/app.swift)"
+docs_2="$(commit "docs 2" openspec/specs/a/spec.md .changes/unreleased/x.yaml CHANGELOG.md)"
+code_md="$(commit "code md" native/README.md)"
+# A branch commit with code_1's tree, as a squash merge has its branch's tree.
+branch_1="$(git -C "$repo" commit-tree "$(git -C "$repo" rev-parse "$code_1^{tree}")" -m branch)"
+
+url() { echo "https://github.com/itsjoshpark/Clair/actions/runs/$1"; }
+
 mkdir "$work/bin"
 cat >"$work/bin/gh" <<'FAKE'
 #!/bin/bash
@@ -25,19 +45,15 @@ printf '%s\n' "$*" >>"$FAKE_GH_LOG"
 [[ "$1" != "${FAKE_FAIL-}" ]] || exit 1
 case "$1" in
   run) printf '%s' "${FAKE_RUNS-}" ;;
-  api)
-    sha="${2##*/}"
-    while read -r commit tree; do
-      if [[ "$commit" == "$sha" ]]; then echo "$tree"; fi
-    done <<<"${FAKE_TREES-}"
-    ;;
+  api) git -C "$FAKE_REPO" rev-parse "${2##*/}^{tree}" ;;
 esac
 FAKE
 chmod +x "$work/bin/gh"
 
 run() {
   : >"$work/log"
-  PATH="$work/bin:$PATH" FAKE_GH_LOG="$work/log" "$script" "$@" >"$work/out" 2>&1
+  (cd "$repo" && PATH="$work/bin:$PATH" FAKE_GH_LOG="$work/log" FAKE_REPO="$repo" \
+    "$script" "$@" >"$work/out" 2>"$work/err")
 }
 
 check_exit() {
@@ -46,7 +62,7 @@ check_exit() {
     echo "ok       $name"
   else
     echo "FAIL     $name: exit $actual, expected $expected"
-    cat "$work/out"
+    cat "$work/out" "$work/err"
     failures=$((failures + 1))
   fi
 }
@@ -57,6 +73,7 @@ check_out() {
     echo "ok       $name"
   else
     echo "FAIL     $name: printed '$(cat "$work/out")', expected '$expected'"
+    cat "$work/err"
     failures=$((failures + 1))
   fi
 }
@@ -73,49 +90,71 @@ check_calls() {
   fi
 }
 
-export FAKE_RUNS="$commit_a $url_a
-$commit_b $url_b
-$commit_a https://github.com/itsjoshpark/Clair/actions/runs/5
+# Same tree: a squash merge of a branch that passed.
+FAKE_RUNS="$branch_1 $(url 1)
 "
-export FAKE_TREES="$commit_a $tree_1
-$commit_b $tree_2"
-
-# A run on a commit with the same tree is found.
-run --tree "$tree_2"
-check_exit "a matching tree is found" 0 $?
-check_out "it prints the matching run's URL" "$url_b"
+export FAKE_RUNS
+run --commit "$code_1"
+check_exit "a run on the same tree is found" 0 $?
+check_out "it prints that run's URL" "$(url 1)"
 check_calls "it asks for passed quality runs" "run list --workflow quality.yml --status success --limit 30" 1
 
-# The newest matching run wins, and a commit is looked up once.
-run --tree "$tree_3"
-check_exit "no matching tree exits 1" 1 $?
+# HEAD by default.
+run
+check_exit "no match for HEAD exits 1" 1 $?
+
+# A docs-only commit is covered by its parent's run.
+run --commit "$docs_1"
+check_exit "a docs-only commit is covered by its parent's run" 0 $?
+check_out "it prints the parent's run" "$(url 1)"
+
+# A code change isn't covered by an older run.
+run --commit "$code_2"
+check_exit "a code change isn't covered by an older run" 1 $?
 check_out "no match prints nothing" ""
-check_calls "each commit is looked up once" "^api " 2
-run --tree "$tree_1"
-check_out "the newest matching run wins" "$url_a"
 
-# The limit is passed on.
-run --tree "$tree_1" --limit 5
-check_calls "the limit is passed on" "--limit 5" 1
+# openspec/, .changes/ and root Markdown count as documentation.
+FAKE_RUNS="$code_2 $(url 2)
+" run --commit "$docs_2"
+check_exit "openspec, .changes and root Markdown are documentation" 0 $?
+check_out "it prints the code commit's run" "$(url 2)"
 
-# No passed runs at all.
-FAKE_RUNS="" run --tree "$tree_1"
+# Markdown outside the root and the documentation folders is not.
+FAKE_RUNS="$docs_2 $(url 3)
+" run --commit "$code_md"
+check_exit "Markdown in a code folder isn't documentation" 1 $?
+
+# The newest covering run wins, and each run's commit is read once.
+FAKE_RUNS="$code_1 $(url 5)
+$branch_1 $(url 4)
+$code_1 $(url 3)
+" run --commit "$docs_1"
+check_out "the newest covering run wins" "$(url 5)"
+check_calls "each commit is read once" "^api " 2
+
+# The walk stops at the first commit.
+FAKE_RUNS="" run --commit "$docs_1"
 check_exit "no runs exits 1" 1 $?
 
-# gh failures aren't mistaken for "no match".
-FAKE_FAIL=run run --tree "$tree_1"
+# The limit is passed on.
+run --commit "$code_1" --limit 5
+check_calls "the limit is passed on" "--limit 5" 1
+
+# gh failures aren't mistaken for "no run".
+FAKE_FAIL=run run --commit "$code_1"
 check_exit "a failed run list exits 2" 2 $?
-FAKE_FAIL=api run --tree "$tree_1"
+FAKE_RUNS="$code_1 $(url 1)
+" FAKE_FAIL=api run --commit "$code_1"
 check_exit "a failed commit lookup exits 2" 2 $?
 
 # Bad input is refused.
-run --tree "abc"
-check_exit "a short tree is refused" 2 $?
-run --tree "$tree_1; rm"
-check_exit "a tree with shell in it is refused" 2 $?
-run --tree "$tree_1" --limit 0
+run --commit "nosuchcommit"
+check_exit "an unknown commit is refused" 2 $?
+run --commit "--output=x"
+check_exit "an option as the commit is refused" 2 $?
+run --commit "$code_1" --limit 0
 check_exit "a zero limit is refused" 2 $?
-run --tree "$tree_1" --limit "5 --repo x"
+run --commit "$code_1" --limit "5 --repo x"
 check_exit "a limit with options in it is refused" 2 $?
 
 echo
