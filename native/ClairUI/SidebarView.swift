@@ -767,6 +767,8 @@ struct TabRow: View {
   static let iconSize: CGFloat = 18
   static let faviconSize: CGFloat = 16
   static let closeSize: CGFloat = 26
+  static let speakerLeading: CGFloat = 4.5
+  static let speakerTrailing: CGFloat = 5.5
   static let closeTrailing: CGFloat = 5
   static let titleGap: CGFloat = 8
   static let cornerRadius: CGFloat = 10
@@ -788,19 +790,17 @@ struct TabRow: View {
         }
       }
       .frame(width: Self.iconSize, height: Self.iconSize)
+      // The speaker goes between the favicon and the title, as in Arc, with
+      // the same visible gap on each side as between the favicon and the title
+      // of a row without it (10 pt drawn to drawn). Its 26 pt button pads the
+      // glyph by about 4 pt, and the drawn favicon sits 1 pt inside its frame.
+      if tab.isAudible || tab.isMuted {
+        TabSpeakerButton(isMuted: tab.isMuted) { actions?.setMuted(!tab.isMuted, tab: tab.tabID) }
+          .padding(.leading, Self.speakerLeading - Self.titleGap)
+          .padding(.trailing, Self.speakerTrailing - Self.titleGap)
+      }
       Text(tab.title).font(Self.titleFont).lineLimit(1)
       Spacer(minLength: 0)
-      if tab.isAudible || tab.isMuted {
-        Button {
-          actions?.setMuted(!tab.isMuted, tab: tab.tabID)
-        } label: {
-          Image(systemName: tab.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-            .font(.system(size: 11))
-        }
-        .buttonStyle(.plain)
-        .tooltip(tab.isMuted ? "Unmute tab" : "Mute tab")
-        .accessibilityIdentifier("clair.tabSpeaker")
-      }
       if isHovered {
         TabCloseButton { actions?.close(tab: tab.tabID) }
           .padding(.trailing, Self.closeTrailing - Self.horizontalPadding)
@@ -832,6 +832,36 @@ struct TabRow: View {
     .accessibilityLabel(tab.title)
     .accessibilityIdentifier("clair.tabRow")
     .accessibilityAddTraits(isActive ? .isSelected : [])
+  }
+}
+
+/// The tab's speaker, as in Arc: the outline speaker with three waves, or
+/// crossed out while muted, 17.5 pt wide in mid-grey on a 26 pt button
+/// with a hover background. SF Symbols animates the change.
+struct TabSpeakerButton: View {
+  let isMuted: Bool
+  let action: () -> Void
+
+  @State private var isHovered = false
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: isMuted ? "speaker.slash" : "speaker.wave.3")
+        .font(.system(size: 13.5, weight: .medium))
+        .contentTransition(.symbolEffect(.replace))
+        .frame(width: TabRow.closeSize, height: TabRow.closeSize)
+        .background(Color.primary.opacity(isHovered ? 0.08 : 0), in: .rect(cornerRadius: 6))
+        .animation(sidebarHoverFade, value: isHovered)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    // Arc's grey, which measures about 125 on the light pill.
+    .foregroundStyle(Color.primary.opacity(0.68))
+    .animation(.default, value: isMuted)
+    .tooltip(isMuted ? "Unmute this tab" : "Mute this tab")
+    .accessibilityLabel(isMuted ? "Unmute this tab" : "Mute this tab")
+    .accessibilityIdentifier("clair.tabSpeaker")
+    .onHover { isHovered = $0 }
   }
 }
 

@@ -225,8 +225,6 @@ struct TooltipView: View {
 
   /// Room around the capsule for its shadow.
   static let margin: CGFloat = 14
-  /// The key caps' height, with their deeper bottom edge.
-  static let keyHeight: CGFloat = 19.5
   static let height: CGFloat = 28
 
   var body: some View {
@@ -244,10 +242,8 @@ struct TooltipView: View {
         }
       }
     }
-    // With keys, the last key sits as far from the end as from the top and
-    // bottom, so the capsule's round end hugs it.
-    .padding(.leading, 10)
-    .padding(.trailing, tooltip.shortcut.isEmpty ? 10 : (Self.height - Self.keyHeight) / 2)
+    // The same on both sides, keys or not.
+    .padding(.horizontal, 10)
     .frame(height: Self.height)
     // The shadow belongs to the capsule alone; on the whole view it would
     // blur the text and shade the key caps.

@@ -111,7 +111,7 @@ The sidebar SHALL show a downloads button while the window's profile has downloa
 - **THEN** the file opens in its default app, and the button stops marking unseen downloads
 
 ### Requirement: Tab list
-Below the URL field, the sidebar SHALL show a "New Tab" row and then every tab of the window, in the window's tab order, with its favicon and title. The active tab SHALL be highlighted, more lightly while the window isn't key. A tab that plays sound or is muted SHALL show a speaker that mutes or unmutes it. The list SHALL scroll when it doesn't fit.
+Below the URL field, the sidebar SHALL show a "New Tab" row and then every tab of the window, in the window's tab order, with its favicon and title. The active tab SHALL be highlighted, more lightly while the window isn't key. A tab that plays sound or is muted SHALL show a speaker between its favicon and title, as in Arc, that mutes or unmutes it, with the tooltip "Mute this tab" or "Unmute this tab". The list SHALL scroll when it doesn't fit.
 
 #### Scenario: Selecting a tab
 - **WHEN** the user clicks a tab row

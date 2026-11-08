@@ -108,7 +108,8 @@ More fixes from the owner's pass (D18). Arc's figures were measured with the pro
 - [ ] 11.2 Tooltips (D18): key-cap depth, a softer and wider shadow, tighter sides with the keys sitting evenly at the end, a tab's title after 2 s, and no tooltip after a click or a right click until the pointer leaves the control. Verify by hand against Arc, including a tab's context menu.
 - [ ] 11.3 Command bar border (D18): Arc's crisp mid-grey hairline. Verify by measuring the edge against Arc's.
 - [ ] 11.4 Clearing history (D13, D18): the clear-browsing-data hook. Verify that the patch check applies it and `engine.yml` builds the engine for the branch's key, then by hand that deleting all history from `chrome://settings/clearBrowserData` and from `chrome://history` leaves Clair running.
-- [ ] 11.5 Run the full quality checks on the branch. Verify that every runtime test passes.
+- [ ] 11.5 The tab's speaker (D18): between the favicon and the title with even 10 pt gaps, Arc's outline symbols in medium weight changing with SF Symbols' replace effect, Arc's size and grey, a hover background, and "Mute this tab" or "Unmute this tab". Verify by hand with a tab playing sound, muted and unmuted.
+- [ ] 11.6 Run the full quality checks on the branch. Verify that every runtime test passes.
 
 ## Workflow follow-up
 
