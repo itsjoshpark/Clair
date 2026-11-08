@@ -22,6 +22,7 @@ protocol SidebarActions: AnyObject {
   func goBack()
   func goForward()
   func reloadOrStop()
+  func reloadButtonHovered(_ hovering: Bool)
   func toggleSidebar()
   func editURL()
   func copyURL()
@@ -217,7 +218,10 @@ struct TopRow: View {
 
   var body: some View {
     let tab = model.activeTab
-    let isLoading = tab?.isLoading == true
+    // The button's own state, which holds stop under the pointer (design D2);
+    // the tab rows' spinners read the tab's `isLoading`.
+    let reloadStop = model.reloadStop.mode
+    let isLoading = reloadStop.visible == .stop
     let controls = model.isWindowFullscreen ? WindowControlsMetrics.fullScreen : model.windowControls
     let isCompact = controls.hasCompactTopRow(width: model.sidebar.width)
     let back = SidebarButton(
@@ -248,7 +252,7 @@ struct TopRow: View {
               Button("Reload") { actions?.reloadOrStop() }.keyboardShortcut("r", modifiers: .command)
             }
           }
-          .disabled(tab == nil)
+          .disabled(tab == nil || !reloadStop.isEnabled)
           Button("Hide Sidebar") { actions?.toggleSidebar() }.keyboardShortcut("s", modifiers: .command)
         } label: {
           Image(systemName: "ellipsis")
@@ -290,10 +294,11 @@ struct TopRow: View {
           SidebarButton(
             systemImage: isLoading ? "xmark" : "arrow.clockwise",
             help: isLoading ? "Stop loading this page" : "Reload this page",
-            shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: tab != nil
+            shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: tab != nil && reloadStop.isEnabled
           ) {
             actions?.reloadOrStop()
           }
+          .onHover { actions?.reloadButtonHovered($0) }
           .accessibilityIdentifier("clair.reload")
         }
       }

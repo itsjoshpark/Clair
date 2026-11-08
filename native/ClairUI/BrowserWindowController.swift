@@ -287,10 +287,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   func tabsDidChange(_ tabs: [any ClairTab]) {
     model.setTabs(tabs)
+    model.reloadStop.loadingChanged(model.activeTab?.isLoading == true)
   }
 
   func tabDidChange(_ tab: any ClairTab) {
     model.updateTab(tab)
+    if tab.tabID == model.activeTabID {
+      model.reloadStop.loadingChanged(tab.isLoading)
+    }
     offerCommandBarIfNew()
     // The command bar a new window opened with gives way to a page that
     // loads without it, as a link from another app.
@@ -321,10 +325,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   func activeTabDidChange(_ tabID: TabID) {
     // The command bar belongs to the tab it opened on; another tab coming to
     // the front, from the command bar or not, closes it.
-    if tabID != model.activeTabID {
+    let switched = tabID != model.activeTabID
+    if switched {
       model.commandBar?.cancel()
     }
     model.setActiveTab(tabID)
+    if switched {
+      model.reloadStop.tabSwitched(isLoading: model.activeTab?.isLoading == true)
+    }
     rootView.card.show(page: browser?.pageView(for: tabID))
     devToolsDidChange()
     offerCommandBarIfNew()
@@ -520,10 +528,18 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func reloadOrStop() {
-    if model.activeTab?.isLoading == true {
-      browser?.stop()
+    switch model.reloadStop.press() {
+    case .stop: browser?.stop()
+    case .reload: browser?.reload()
+    case nil: break
+    }
+  }
+
+  func reloadButtonHovered(_ hovering: Bool) {
+    if hovering {
+      model.reloadStop.pointerEntered()
     } else {
-      browser?.reload()
+      model.reloadStop.pointerExited()
     }
   }
 
