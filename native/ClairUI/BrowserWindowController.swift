@@ -288,12 +288,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   func tabsDidChange(_ tabs: [any ClairTab]) {
     model.setTabs(tabs)
     model.reloadStop.loadingChanged(model.activeTab?.isLoading == true)
+    rootView.loadingIndicator.loadingChanged(model.activeTab?.isLoading == true)
   }
 
   func tabDidChange(_ tab: any ClairTab) {
     model.updateTab(tab)
     if tab.tabID == model.activeTabID {
       model.reloadStop.loadingChanged(tab.isLoading)
+      rootView.loadingIndicator.loadingChanged(tab.isLoading)
     }
     offerCommandBarIfNew()
     // The command bar a new window opened with gives way to a page that
@@ -332,6 +334,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.setActiveTab(tabID)
     if switched {
       model.reloadStop.tabSwitched(isLoading: model.activeTab?.isLoading == true)
+      rootView.loadingIndicator.tabSwitched(isLoading: model.activeTab?.isLoading == true)
     }
     rootView.card.show(page: browser?.pageView(for: tabID))
     devToolsDidChange()

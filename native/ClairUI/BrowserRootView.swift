@@ -95,6 +95,8 @@ final class BrowserRootView: NSView {
   let backgroundTint = DynamicFillView(color: SidebarTint.window)
   let backdropTint = DynamicFillView(color: SidebarTint.window)
   let card = PageCardView()
+  /// Arc's loading capsule in the inset above the card (arc-navigation-feedback D4).
+  let loadingIndicator = LoadingIndicatorView()
   let sidebar: NSView
   let resizeHandle = SidebarResizeHandle()
   private let model: BrowserWindowModel
@@ -159,6 +161,7 @@ final class BrowserRootView: NSView {
     // Above the materials, not inside them, where they'd blend it.
     addSubview(backgroundTint)
     addSubview(card)
+    addSubview(loadingIndicator)
     addSubview(sidebarBackdrop)
     addSubview(backdropTint)
     addSubview(revealedPanel)
@@ -332,6 +335,12 @@ final class BrowserRootView: NSView {
     revealedBackground.frame = revealedPanel.bounds
     revealedTint.frame = revealedBackground.bounds
     card.isBare = model.isPageFullscreen
+    // Centred on the card, 3 pt below the window's top with the card 10 pt in.
+    loadingIndicator.isHidden = model.isPageFullscreen
+    loadingIndicator.frame = CGRect(
+      x: layout.card.midX - LoadingIndicatorModel.trackWidth / 2 - 4,
+      y: layout.card.minY - WindowLayout.shownInset + LoadingIndicatorModel.topOffset,
+      width: LoadingIndicatorModel.trackWidth + 8, height: LoadingIndicatorModel.height)
     resizeHandle.isHidden = model.sidebar.isHidden || model.isPageFullscreen
     resizeHandle.frame = CGRect(x: layout.sidebar.maxX - 3, y: 0, width: 6, height: bounds.height)
     if let controls = window as? any ClairWindowControls {
