@@ -4,6 +4,7 @@
 Writes, relative to resources/icon/:
   AppIcon.icon/Assets/ring.svg, inlay.svg   Icon Composer layers (design D1)
   logo.svg, logo-mono.svg                   in-app product logos (design D5)
+  logo-mono-white.svg                       WebUI's dark-mode product logo (design D5)
   webui-product-icon.svg                    WebUI's inline chrome-product icon (design D6)
   vector_icons/<chromium path>.icon         Chromium vector icons (design D6)
 
@@ -32,6 +33,7 @@ RING_OUTER = RING["r"] + RING["width"] / 2
 
 GOLD_TOP, GOLD_BOTTOM = "#EBCB7A", "#9A6A1C"
 MONO = "#222222"
+MONO_WHITE = "#FFFFFF"
 GOLD_ARGB = (0xFF, 0xC9, 0x95, 0x36)
 
 # Icon Composer's 1024 px canvas is the tile: ring 72% of it, 2% right of centre.
@@ -252,6 +254,7 @@ def main(argv):
     logo = fitted(256, 0.94)
     write(os.path.join(HERE, "logo.svg"), svg(256, mark(logo), "url(#gold)", gold_defs(logo)))
     write(os.path.join(HERE, "logo-mono.svg"), svg(256, mark(logo, full=False), MONO))
+    write(os.path.join(HERE, "logo-mono-white.svg"), svg(256, mark(logo, full=False), MONO_WHITE))
     # WebUI's inline chrome-product icons, drawn at 20 and 24 px like the 24 px .icon files.
     write(os.path.join(HERE, "webui-product-icon.svg"),
           svg(24, mark(fitted(24, 0.92), full=False, samples=12), MONO))

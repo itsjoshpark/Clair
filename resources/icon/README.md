@@ -10,6 +10,7 @@ Everything here is drawn from one geometry: the gilded ring, a thick open gold r
 | `make_layers.py` | Outlines the geometry into every vector form below | hand |
 | `AppIcon.icon/` | Icon Composer document: `icon.json` plus the `ring.svg` and `inlay.svg` layers | `icon.json` by hand (saved from Icon Composer), layers by `make_layers.py` |
 | `logo.svg`, `logo-mono.svg` | In-app logo: the gold mark, and a one-colour silhouette | `make_layers.py` |
+| `logo-mono-white.svg` | The silhouette in white, for WebUI's dark-mode logo | `make_layers.py` |
 | `vector_icons/` | Chromium `.icon` vector icons, at the same paths as Chromium's | `make_layers.py` |
 | `webui-product-icon.svg` | The one-colour silhouette on a 24 px canvas, for WebUI's inline `chrome-product` icon | `make_layers.py` |
 | `make_wordmark.py` | Writes the wordmark: the mark plus "Clair" in Albert Sans, as outlines | hand |
