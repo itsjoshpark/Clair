@@ -452,9 +452,9 @@ struct SidebarFooter: View {
 
   static let height: CGFloat = 50
   /// The footer's glyphs: medium weight like Arc's footer symbols (17 pt
-  /// medium), 20 pt, so a circled symbol is 20 pt across. The grey is the
+  /// medium), 18 pt, so a circled symbol is 18 pt across. The grey is the
   /// buttons' `.secondary`, which matches Arc's.
-  static let glyphSize: CGFloat = 20
+  static let glyphSize: CGFloat = 18
   static let glyphWeight: Font.Weight = .medium
 
   @State private var showsDownloads = false
@@ -588,14 +588,14 @@ struct DownloadsButton: View {
       } else {
         // Variable Draw needs macOS 26, and the symbol has no variable
         // layers before it, so macOS 15 draws the progress over the ring:
-        // 20 pt across with a 2 pt stroke.
+        // 18 pt across with a stroke of about 1.75 pt.
         SymbolGlyph(systemImage: "arrow.down.circle", size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight)
           .overlay {
             Circle()
               .trim(from: 0, to: progress)
               .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
               .rotationEffect(.degrees(-90))
-              .frame(width: SidebarFooter.glyphSize - 2, height: SidebarFooter.glyphSize - 2)
+              .frame(width: SidebarFooter.glyphSize - 1.75, height: SidebarFooter.glyphSize - 1.75)
           }
       }
     } else {
@@ -911,7 +911,7 @@ struct TabSpeakerButton: View {
     } label: {
       Image(systemName: muted ? "speaker.slash" : "speaker.wave.3")
         .font(.system(size: 13.5, weight: .medium))
-        .contentTransition(.interpolate)
+        .contentTransition(.symbolEffect(.replace.magic(fallback: .replace), options: .speed(1.5)))
     }
     .onChange(of: isMuted) { _, reported in
       withAnimation(.snappy(duration: 0.2)) { shownMuted = reported }
