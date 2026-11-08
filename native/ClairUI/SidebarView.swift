@@ -77,6 +77,7 @@ struct SidebarView: View {
   @State private var isHovered = false
   /// Whether the tab list is shorter than its rows, so it scrolls.
   @State private var tabListOverflows = false
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     // Arc's metrics: the top row at y+8, the URL field at y+46, the list
@@ -111,9 +112,10 @@ struct SidebarView: View {
       SidebarFooter(model: model, actions: actions)
         .overlay(alignment: .top) {
           // Arc's line between a list that scrolls and the footer: 1 pt
-          // across the sidebar, about 4% darker than it.
+          // across the sidebar, about 4% black in Light Mode and 8% white
+          // in Dark Mode, as measured.
           if tabListOverflows {
-            Rectangle().fill(Color.primary.opacity(0.04)).frame(height: 1)
+            Rectangle().fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04)).frame(height: 1)
           }
         }
     }
