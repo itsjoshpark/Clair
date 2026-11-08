@@ -117,7 +117,7 @@ The suite covers the tests in design D12. `ClairRuntimeTests/` holds the XCUITes
 A few things in the suite look odd, for reasons that aren't obvious:
 
 - **Launching:** XCUITest sees Clair only when it launches it with `XCUIApplication(url:)`. That handle doesn't follow a relaunch, so tests read the state after a relaunch over DevTools.
-- **Failed steps:** tests never set `continueAfterFailure = false`. In an async test, that hangs until the test's 10-minute allowance runs out. Steps that later ones depend on call `require()`, which throws.
+- **Failed steps:** tests never set `continueAfterFailure = false`. In an async test, that hangs until the test's time allowance runs out: 2 minutes, or 5 for the idle-install tests. Steps that later ones depend on call `require()`, which throws.
 - **The test runner's sandbox:** Xcode sandboxes UI test runners by default, and `ClairRuntimeTests.entitlements` turns that off, so the tests can reset Clair's state.
 - **Downloads:** ungoogled-chromium asks where to save every download, so the download test sets a folder over DevTools.
 

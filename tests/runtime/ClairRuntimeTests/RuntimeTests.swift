@@ -268,6 +268,13 @@ extension RuntimeTestCase {
 final class IdleInstallTests: RuntimeTestCase {
   private let idleSeconds = 20
 
+  override func setUp() async throws {
+    // These wait out the idle timer and a relaunch, about two minutes, past
+    // run.sh's default allowance.
+    executionTimeAllowance = 300
+    try await super.setUp()
+  }
+
   /// Starts Clair and waits until a background check has an update waiting.
   private func startWithWaitingUpdate() async throws -> Browser {
     let browser = try await startBrowser(feed: updateFeed, idleSeconds: idleSeconds)
