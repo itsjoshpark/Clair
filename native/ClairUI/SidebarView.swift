@@ -838,7 +838,6 @@ struct TabRow: View {
   weak var actions: (any SidebarActions)?
 
   @State private var isHovered = false
-  @State private var showsClose = false
   @State private var showsSpeaker = false
   @Environment(\.colorScheme) private var colorScheme
 
@@ -904,7 +903,7 @@ struct TabRow: View {
           .accessibilityIdentifier("clair.tabTitle")
       }
       Spacer(minLength: 0)
-      if showsClose {
+      if isHovered {
         TabCloseButton { actions?.close(tab: tab.tabID) }
           .padding(.trailing, Self.closeTrailing - Self.horizontalPadding)
       }
@@ -928,12 +927,8 @@ struct TabRow: View {
     // AppKit's context menu rather than SwiftUI's, which makes the list draw
     // a selection ring around the row (design D18).
     .overlay(RowClickCatcher(onMiddleClick: { actions?.close(tab: tab.tabID) }, menuItems: menuItems))
-    .onHover { hovering in
-      // The hover background shows at once, as in Arc; the close button
-      // still fades.
-      isHovered = hovering
-      withAnimation(sidebarHoverFade) { showsClose = hovering }
-    }
+    // The hover background and the close button come and go at once.
+    .onHover { isHovered = $0 }
     // The full title, once the pointer has rested on the row (design D18).
     .tooltip(tab.title.isEmpty ? nil : tab.title, delay: Self.titleTooltipDelay)
     // The speaker comes and goes with the sound, the title making room. The
