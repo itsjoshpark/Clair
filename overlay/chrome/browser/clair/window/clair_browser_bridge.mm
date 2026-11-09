@@ -1057,6 +1057,15 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   }
 }
 
+- (NSMenu*)contextMenuForExtension:(NSString*)extensionID
+                             anchor:(ClairAnchorKind)anchor {
+  if (_browserWindow && _browserWindow->extensions()) {
+    return _browserWindow->extensions()->ContextMenu(
+        base::SysNSStringToUTF8(extensionID), anchor);
+  }
+  return nil;
+}
+
 - (void)answerExtensionPrompt:(NSInteger)promptID accepted:(BOOL)accepted {
   if (_browserWindow && _browserWindow->extensions()) {
     _browserWindow->extensions()->AnswerPrompt(promptID, accepted);

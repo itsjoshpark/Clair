@@ -133,3 +133,25 @@ An extension SHALL be able to open its own popup with `chrome.action.openPopup()
 #### Scenario: openPopup from a background script
 - **WHEN** an extension with a popup calls `chrome.action.openPopup()` while a Clair window is active
 - **THEN** the call succeeds and the extension's popup window opens beside its button
+
+### Requirement: Extension context menu
+Right-clicking or Control-clicking a pinned extension's button, or a row in the extensions button's list, SHALL show a native menu built from Chromium's extension menu. It SHALL offer the items Chromium offers for that extension, including its name (which opens its home page), its own `chrome.contextMenus` action items, site access where it applies, Options, Pin or Unpin, Remove and Manage. It SHALL NOT offer a side panel item or Inspect Popup.
+
+#### Scenario: Right-clicking a pinned button
+- **WHEN** the user right-clicks a pinned extension's button
+- **THEN** a native menu with that extension's items opens, and the extension's popup doesn't open
+
+#### Scenario: Removing from the menu
+- **WHEN** the user chooses the menu's Remove item
+- **THEN** the remove sheet asks for confirmation, as `Remove confirmation as a native sheet` defines
+
+#### Scenario: Unpinning from the menu
+- **WHEN** the user chooses Unpin in a pinned extension's menu
+- **THEN** its button leaves the sidebar's pinned actions
+
+### Requirement: No uninstall pages
+When an extension is removed, Clair SHALL NOT open the page the extension set with `chrome.runtime.setUninstallURL`. The API call SHALL still succeed.
+
+#### Scenario: Removing an extension with an uninstall page
+- **WHEN** the user removes an extension that has set an uninstall URL
+- **THEN** the extension is removed and no new tab opens

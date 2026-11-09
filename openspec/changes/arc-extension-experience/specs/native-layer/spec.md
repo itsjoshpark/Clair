@@ -7,7 +7,7 @@ The native layer SHALL reach Chromium only through the Objective-C protocols dec
 
 #### Scenario: Contract contents
 - **WHEN** `native/ClairHost.h` is read
-- **THEN** it covers the graceful relaunch that restores the session, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), the Chromium and ungoogled-chromium versions, opening a URL in a browser tab, and, for the native window: creating and closing windows, each window's tabs and their state, the active page's view and its docked DevTools, navigation, find, autocomplete, downloads, extension actions, extension install and remove confirmations, infobars, toasts and where Chromium's bubbles attach
+- **THEN** it covers the graceful relaunch that restores the session, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), the Chromium and ungoogled-chromium versions, opening a URL in a browser tab, and, for the native window: creating and closing windows, each window's tabs and their state, the active page's view and its docked DevTools, navigation, find, autocomplete, downloads, extension actions, extension install and remove confirmations, extension context menus, infobars, toasts and where Chromium's bubbles attach
 
 #### Scenario: Relaunch from the native layer
 - **WHEN** the native layer asks the host to relaunch

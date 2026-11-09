@@ -141,8 +141,21 @@ The native window has a toolbar in Chromium's sense: the sidebar shows the locat
 
 The restored `WebstoreInstaller` downloads through the download manager with `DownloadSource::EXTENSION_INSTALLER`. `ClairDownloads` leaves those items out of its snapshot and Dock progress, as Chrome's download bubble does.
 
+### D9. Right-click menus come from Chromium's model, shown as an `NSMenu`
+
+`-[ClairBrowser contextMenuForExtension:anchor:]` returns an `NSMenu`. `ClairExtensions` builds it from `ExtensionContextMenuModel` with `MenuControllerCocoa`, which already handles submenus and enabled states, and keeps the model and controller until the next menu or until the window closes. ClairUI only catches the right-click, with the sidebar's existing `RowClickCatcher`. `anchor` picks the model's source: a pinned button or a list row.
+
+The model gets no `PopupDelegate`, which leaves out Inspect Popup: it needs the popup to stay open while DevTools has focus, and Clair's closes on any click outside it. The native window hosts no side panels, so the model's side panel item doesn't appear.
+
+*Alternative:* snapshots of the items, as the history menu has. That re-implements submenus and checkmarks in ClairUI, and the history menu needs snapshots only because favicons update while it's open.
+
+### D10. Uninstall pages are switched off
+
+`RuntimeEventRouter::OnExtensionUninstalled` returns at once, in `patches/clair/no-extension-uninstall-page.patch`. `chrome.runtime.setUninstallURL` still succeeds and stores the URL, so extensions see no error.
+
 ## Risks / Trade-offs
 
+- **[The extension menu assumes Chromium's Views window]** Pin and Unpin touch `BrowserElements`. → Checked by hand (task 5.5).
 - **[Google sees installed extensions]** Update checks send each store extension's ID and version, the Chromium version and the platform to `clients2.google.com` every few hours. → This is the owner's choice. It's limited to profiles with store extensions; the Changie fragment says it; and `chromium-engine`'s idle-launch scenario still holds.
 - **[The store changes its page]** Its button markup or eligibility check can change without notice, and the button would then say "Chrome" or a nag would return. → The scripts fail open: installs keep working. The runtime suite doesn't cover the store (it needs Google), so it's a by-hand check at each engine bump.
 - **[The update server treats `chromiumcrx` differently]** Helium reports `prod=chromecrx` and a Windows platform to Google, for reasons not documented. → Check by hand that updates arrive with Chromium's own parameters. Spoof only if they don't, as a follow-up.

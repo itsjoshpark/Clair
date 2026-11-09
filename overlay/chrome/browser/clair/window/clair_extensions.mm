@@ -20,6 +20,7 @@
 #include "chrome/browser/clair/window/clair_window_hooks.h"
 #include "chrome/browser/extensions/extension_install_prompt_show_params.h"
 #include "chrome/browser/extensions/extension_action_runner.h"
+#include "chrome/browser/extensions/extension_context_menu_model.h"
 #include "chrome/browser/extensions/extension_view.h"
 #include "chrome/browser/extensions/extension_view_host.h"
 #include "chrome/browser/extensions/extension_view_host_factory.h"
@@ -46,6 +47,7 @@
 #include "skia/ext/skia_utils_mac.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
+#import "ui/menus/cocoa/menu_controller.h"
 
 // --- Snapshots ---------------------------------------------------------------
 
@@ -222,6 +224,8 @@ ClairExtensions::ClairExtensions(ClairBrowserWindow* window) : window_(window) {
 }
 
 ClairExtensions::~ClairExtensions() {
+  context_menu_controller_ = nil;
+  context_menu_.reset();
   popup_.reset();
   scoped_user_data_.reset();
   // The window is closing: anything it was asking counts as a cancel.
@@ -377,6 +381,34 @@ void ClairExtensions::PopupClosedByUser() {
 void ClairExtensions::ActiveTabChanged() {
   ClosePopup();
   Changed();
+}
+
+NSMenu* ClairExtensions::ContextMenu(const std::string& extension_id,
+                                     ClairAnchorKind anchor) {
+  Browser* browser = window_->browser();
+  Profile* profile = browser->GetProfile();
+  ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
+  const extensions::Extension* extension =
+      extensions::ExtensionRegistry::Get(profile)->enabled_extensions().GetByID(
+          extension_id);
+  if (!model || !extension) {
+    return nil;
+  }
+  // No PopupDelegate: Inspect Popup needs a popup that outlives losing focus.
+  auto menu_model = std::make_unique<extensions::ExtensionContextMenuModel>(
+      extension, browser, model->IsActionPinned(extension_id),
+      /*delegate=*/nullptr, /*can_show_icon_in_toolbar=*/true,
+      anchor == ClairAnchorKindExtensionAction
+          ? extensions::ExtensionContextMenuModel::ContextMenuSource::
+                kToolbarAction
+          : extensions::ExtensionContextMenuModel::ContextMenuSource::kMenuItem);
+  // The controller refers to its model, so it goes first.
+  context_menu_controller_ =
+      [[MenuControllerCocoa alloc] initWithModel:menu_model.get()
+                                   isContextMenu:YES
+                                        delegate:nil];
+  context_menu_ = std::move(menu_model);
+  return context_menu_controller_.menu;
 }
 
 void ClairExtensions::ShowPrompt(id<ClairExtensionPrompt> prompt,

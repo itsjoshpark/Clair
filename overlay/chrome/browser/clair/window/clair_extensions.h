@@ -27,9 +27,11 @@
 #include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
 
 class ClairBrowserWindow;
+@class MenuControllerCocoa;
 
 namespace extensions {
 class Extension;
+class ExtensionContextMenuModel;
 class ExtensionViewHost;
 }  // namespace extensions
 
@@ -60,6 +62,8 @@ class ClairExtensions : public ExtensionsContainer,
   void PopupClosedByUser();
   // The active tab changed, which changes icons and badges.
   void ActiveTabChanged();
+  // The extension's right-click menu, or nil. Good until the next call.
+  NSMenu* ContextMenu(const std::string& extension_id, ClairAnchorKind anchor);
 
   // Asks ClairUI to confirm `prompt`, whose ID came from NewPromptID().
   // `answer` runs once: with the user's answer, or false if the window closes.
@@ -130,6 +134,8 @@ class ClairExtensions : public ExtensionsContainer,
   std::map<int, base::OnceCallback<void(bool)>> prompts_;
   int next_prompt_id_ = 1;
   std::set<std::string> pending_pins_;
+  std::unique_ptr<extensions::ExtensionContextMenuModel> context_menu_;
+  MenuControllerCocoa* __strong context_menu_controller_;
   bool flush_posted_ = false;
   base::ScopedObservation<ToolbarActionsModel, ToolbarActionsModel::Observer>
       model_observation_{this};

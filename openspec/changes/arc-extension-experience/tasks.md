@@ -38,6 +38,9 @@ Suggested order: 1 and 2 (one engine build), then 3 and 4 in `ClairUI` (they can
   Verify that `engine.yml` builds the engine for the branch's key.
 - [x] 2.3 Pin newly installed extensions from `ClairExtensions` (D5), including when the action is added after `OnInstallSuccess`. Make `ClairBrowserWindow::IsToolbarVisible()` return true (D7). Verify with the runtime test in 4.2 and by hand: installing a CRX through "Always prompt for install" pins its button, and updating an unpinned extension leaves it unpinned.
 
+- [ ] 2.4 Add `-[ClairBrowser contextMenuForExtension:anchor:]` to `native/ClairHost.h`, with `FakeBrowser` support, and build the menu in `ClairExtensions` (D9). Verify that `engine.yml` builds the engine for the branch's key.
+- [ ] 2.5 Add `patches/clair/no-extension-uninstall-page.patch` (D10). Verify with 5.5.
+
 ## 3. Native confirmation sheets
 
 - [x] 3.1 Add the sheets in `ClairUI` (D4):
@@ -47,6 +50,8 @@ Suggested order: 1 and 2 (one engine build), then 3 and 4 in `ClairUI` (they can
   - one sheet at a time, and a cancel when the window closes.
 
   Add unit tests against `FakeBrowser` for each kind's text and buttons, for an install with no permissions (no "It can:"), for accept and cancel answering once with the prompt's ID, and for a dismissed prompt answering nothing. Verify that they pass in CI.
+
+- [ ] 3.2 Show the menu on a right click or Control-click of a pinned button and of a row in the extensions list (D9). Verify with 5.5.
 
 ## 4. Popup window
 
@@ -72,6 +77,7 @@ Suggested order: 1 and 2 (one engine build), then 3 and 4 in `ClairUI` (they can
   Verify that the only Google hosts contacted are the store page itself (by the user's navigation), `clients2.google.com` and its download redirect host. Turn off anything else that appears before shipping. Also verify that an older version of a store extension, installed from its CRX, updates to the store's version.
 - [x] 5.3 Run `quality.yml` on the branch with the new engine. Verify that the whole runtime suite passes, including 4.1 and 4.2.
 - [x] 5.4 Add a Changie fragment: Web Store installs and automatic updates (saying Clair now contacts Google for store extensions), native install and remove confirmations, auto-pinned new extensions, popups in a window, and the `chrome.action.openPopup()` fix. Verify that `changie batch --dry-run` renders it.
+- [ ] 5.5 By hand: right-click a pinned button and a list row, and check Pin/Unpin, Options, Remove (through the sheet) and Manage, with no side panel or Inspect Popup item. Remove an extension that sets an uninstall URL, and check that no tab opens.
 
 ## Workflow follow-up
 

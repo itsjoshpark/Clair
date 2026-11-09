@@ -651,6 +651,11 @@ NS_SWIFT_NAME(ClairBrowser)
     NS_SWIFT_NAME(setExtensionAction(_:pinned:));
 // The popup's popover closed, for example because the user clicked outside it.
 - (void)extensionPopupDidClose;
+// The extension's right-click menu, or nil if the extension is gone. `anchor`
+// says where it was opened: ClairAnchorKindExtensionAction for a pinned button,
+// ClairAnchorKindExtensionsButton for a row in the extensions list.
+- (nullable NSMenu *)contextMenuForExtension:(NSString *)extensionID anchor:(ClairAnchorKind)anchor
+    NS_SWIFT_NAME(contextMenu(forExtension:anchor:));
 // The user answered a confirmation from -[ClairWindow showExtensionPrompt:],
 // or its window closed, which counts as a cancel. Called once per prompt.
 - (void)answerExtensionPrompt:(NSInteger)promptID accepted:(BOOL)accepted

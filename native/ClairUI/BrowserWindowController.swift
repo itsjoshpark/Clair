@@ -608,6 +608,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     browser?.runExtensionAction(extensionID, anchor: pinned ? .extensionAction : .extensionsButton)
   }
 
+  func contextMenu(forExtension extensionID: String, pinned: Bool) -> NSMenu? {
+    browser?.contextMenu(forExtension: extensionID, anchor: pinned ? .extensionAction : .extensionsButton)
+  }
+
   func setExtension(_ extensionID: String, pinned: Bool) {
     browser?.setExtensionAction(extensionID, pinned: pinned)
   }

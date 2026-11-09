@@ -22,13 +22,14 @@ Arc stops working on 2026-12-22, and extensions are part of what people bring wi
   - **Other install prompts** (re-enabling after an update that asks for new permissions, an extension's optional permission request) use the same sheet, with Chromium's own text.
 - **No "extension has been added" box.** A newly installed extension is pinned to the sidebar instead, as Arc does.
 - **Popups in a window.** An extension's popup becomes a small titled window with only a close button. It can be dragged by its title bar and still opens beside the button that opened it. A click outside it or Esc closes it, as Arc's does, and its page is no longer clipped by rounded corners.
+- **Right-click menus.** Right-clicking a pinned extension or a row in the extensions list shows Chromium's extension menu natively, including Options, Pin/Unpin and Remove.
+- **No uninstall pages.** Removing an extension doesn't open the page it set with `chrome.runtime.setUninstallURL`.
 - **`chrome.action.openPopup()` works.** The native window reports a visible toolbar, so the API opens the popup through the sidebar.
 
 **Out of scope:**
 - Arc's custom-drawn dialog panel; the system alert replaces it.
 - A Clair proxy for extension downloads, as Helium has.
 - Content verification of store extensions, which ungoogled-chromium turns off and Clair leaves off.
-- A remove item in the sidebar's extensions list.
 - Other extension dialogs that still use Chromium's modal fallback (`ShowDialog` with no Views extensions container).
 
 ## Capabilities
@@ -55,7 +56,7 @@ Arc stops working on 2026-12-22, and extensions are part of what people bring wi
   - A component extension is added under `overlay/`, with a small registration hook.
   - The extension hooks join `native-window-hook.patch`: the install prompt, the uninstall dialog, the post-install box, and `IsToolbarVisible()`.
   - The engine key changes, so `engine.yml` builds one new engine.
-- **Contract:** `native/ClairHost.h` gains two confirmation requests: install and remove.
+- **Contract:** `native/ClairHost.h` gains two confirmation requests, install and remove, and a call for an extension's context menu.
 - **Native layer:** the confirmation sheets and the titled popup window, in `native/ClairUI/`, with unit tests for the sheets' content against `FakeBrowser`.
 - **Tests:**
   - The existing runtime popup test is updated for the window.

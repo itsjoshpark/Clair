@@ -515,6 +515,11 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   func extensionPopupDidClose() { record("popupClosed") }
 
+  func contextMenu(forExtension extensionID: String, anchor: AnchorKind) -> NSMenu? {
+    record("extensionMenu \(extensionID) \(anchor.rawValue)")
+    return nil
+  }
+
   func answerExtensionPrompt(_ promptID: Int, accepted: Bool) {
     record("answerPrompt \(promptID) \(accepted)")
   }

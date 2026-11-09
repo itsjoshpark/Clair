@@ -35,6 +35,7 @@ protocol SidebarActions: AnyObject {
   // Extensions and downloads.
   func runExtension(_ extensionID: String, pinned: Bool)
   func setExtension(_ extensionID: String, pinned: Bool)
+  func contextMenu(forExtension extensionID: String, pinned: Bool) -> NSMenu?
   func openDownload(_ downloadID: String)
   func showDownloadInFinder(_ downloadID: String)
   func cancelDownload(_ downloadID: String)
@@ -435,7 +436,10 @@ struct ToolsRow: View {
   var body: some View {
     HStack(spacing: 2) {
       ForEach(model.pinnedExtensionActions, id: \.extensionID) { action in
-        ExtensionButton(action: action) { actions?.runExtension(action.extensionID, pinned: true) }
+        ExtensionButton(
+          action: action,
+          contextMenu: { actions?.contextMenu(forExtension: action.extensionID, pinned: true) }
+        ) { actions?.runExtension(action.extensionID, pinned: true) }
           .anchorFrame(.extensionAction(action.extensionID))
       }
       IconButton(systemImage: "puzzlepiece.extension", help: "Extensions") {
@@ -507,6 +511,7 @@ struct ExtensionIcon: View {
 
 struct ExtensionButton: View {
   let action: any ClairExtensionAction
+  let contextMenu: () -> NSMenu?
   let run: () -> Void
 
   var body: some View {
@@ -525,6 +530,7 @@ struct ExtensionButton: View {
         }
         .opacity(action.isEnabled ? 1 : 0.4)
     }
+    .overlay(RowClickCatcher(onMiddleClick: {}, menuItems: [], menuProvider: contextMenu))
     .accessibilityValue(action.badgeText)
     .accessibilityIdentifier("clair.extensionAction")
   }
@@ -562,6 +568,10 @@ struct ExtensionsList: View {
           .accessibilityLabel(action.isPinned ? "Unpin" : "Pin")
         }
         .padding(.vertical, 4)
+        .overlay(
+          RowClickCatcher(
+            onMiddleClick: {}, menuItems: [],
+            menuProvider: { actions?.contextMenu(forExtension: action.extensionID, pinned: false) }))
       }
     }
     .padding(10)
@@ -1030,6 +1040,8 @@ struct RowClickCatcher: NSViewRepresentable {
 
   let onMiddleClick: () -> Void
   let menuItems: [Item]
+  /// A ready-made menu, used instead of `menuItems`.
+  var menuProvider: (() -> NSMenu?)?
 
   func makeNSView(context: Context) -> CatcherView {
     let view = CatcherView()
@@ -1040,11 +1052,13 @@ struct RowClickCatcher: NSViewRepresentable {
   func updateNSView(_ view: CatcherView, context: Context) {
     view.onMiddleClick = onMiddleClick
     view.menuItems = menuItems
+    view.menuProvider = menuProvider
   }
 
   final class CatcherView: NSView {
     var onMiddleClick: (() -> Void)?
     var menuItems: [Item] = []
+    var menuProvider: (() -> NSMenu?)?
 
     override func hitTest(_ point: NSPoint) -> NSView? {
       guard let event = NSApp.currentEvent else { return nil }
@@ -1066,14 +1080,19 @@ struct RowClickCatcher: NSViewRepresentable {
 
     override func mouseDown(with event: NSEvent) {
       // Only a Control-click gets here.
-      NSMenu.popUpContextMenu(makeMenu(), with: event, for: self)
+      if let menu = makeMenu() {
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
+      }
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
       makeMenu()
     }
 
-    private func makeMenu() -> NSMenu {
+    private func makeMenu() -> NSMenu? {
+      if let menuProvider {
+        return menuProvider()
+      }
       let menu = NSMenu()
       for item in menuItems {
         switch item {
