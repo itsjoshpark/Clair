@@ -237,6 +237,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       return self.dragPreference.isEnabled && !self.model.isPageFullscreen && !self.isWindowFullscreen
     }
     strip.onDragWindow = { [weak self] event in self?.dragWindow(with: event) }
+    rootView.topInset.onDoubleClick = { [weak self] in self?.titleBarDoubleClicked() }
   }
 
   private func dragWindow(with event: NSEvent) {
@@ -367,6 +368,12 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.sidebar.isHidden.toggle()
     model.sidebar.isRevealed = false
     preferences.remember(model.sidebar)
+  }
+
+  /// Does what System Settings says a title bar double-click does.
+  func titleBarDoubleClicked() {
+    guard !isWindowFullscreen, !model.isPageFullscreen else { return }
+    TitleBarDoubleClickAction.current().perform(on: window)
   }
 
   func showFind(text: String) {

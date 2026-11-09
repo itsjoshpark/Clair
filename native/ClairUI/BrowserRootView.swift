@@ -105,6 +105,8 @@ final class BrowserRootView: NSView {
   /// material, which is grey there; clear in Light Mode (design D18).
   let backgroundTint = DynamicFillView(color: SidebarTint.window)
   let backdropTint = DynamicFillView(color: SidebarTint.window)
+  /// The inset above the card, which acts as the window's title bar.
+  let topInset = TitleBarAreaView()
   let card = PageCardView()
   /// Arc's loading capsule in the inset above the card (arc-navigation-feedback D4).
   let loadingIndicator = LoadingIndicatorView()
@@ -181,6 +183,7 @@ final class BrowserRootView: NSView {
     addSubview(background)
     // Above the materials, not inside them, where they'd blend it.
     addSubview(backgroundTint)
+    addSubview(topInset)
     addSubview(card)
     addSubview(loadingIndicator)
     addSubview(sidebarBackdrop)
@@ -334,6 +337,8 @@ final class BrowserRootView: NSView {
     backgroundTint.frame = bounds
     let layout = currentLayout
     card.frame = layout.card
+    topInset.frame = layout.topInset(windowWidth: bounds.width)
+    topInset.isHidden = topInset.frame.isEmpty
     // The floating sidebar while it's revealed or sliding away; the one in
     // place once that is further in, as when Cmd+S shows a revealed sidebar.
     let floating = revealedSidebarFrame
