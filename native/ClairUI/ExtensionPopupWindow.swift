@@ -50,6 +50,11 @@ final class ExtensionPopupWindow: NSWindow {
     monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]) {
       [weak self] event in
       guard let self else { return event }
+      // A confirmation the popup's own page asked for: it stays open to hear
+      // the answer.
+      if event.window?.isSheet == true {
+        return event
+      }
       if event.type == .keyDown {
         if event.keyCode == 53 {  // Esc
           self.dismiss()
@@ -79,7 +84,7 @@ final class ExtensionPopupWindow: NSWindow {
   func resize(to size: NSSize) {
     let outer = frameRect(forContentRect: NSRect(origin: .zero, size: size)).size
     let frame = NSRect(x: frame.minX, y: frame.maxY - outer.height, width: outer.width, height: outer.height)
-    setFrame(onScreen(frame), display: true)
+    setFrame(onScreen(frame, on: screen), display: true)
   }
 
   /// Puts the popup beside the button.
@@ -88,11 +93,12 @@ final class ExtensionPopupWindow: NSWindow {
     let button = parent.convertToScreen(anchor)
     let size = frame.size
     let frame = NSRect(x: button.maxX + Self.gap, y: button.maxY - size.height, width: size.width, height: size.height)
-    setFrame(onScreen(frame), display: true)
+    // Not the popup's own screen: until it's placed, that's the primary display.
+    setFrame(onScreen(frame, on: parent.screen), display: true)
   }
 
-  private func onScreen(_ frame: NSRect) -> NSRect {
-    let visible = (screen ?? parentWindowRef?.screen ?? NSScreen.main)?.visibleFrame ?? .infinite
+  private func onScreen(_ frame: NSRect, on screen: NSScreen?) -> NSRect {
+    let visible = (screen ?? NSScreen.main)?.visibleFrame ?? .infinite
     var frame = frame
     frame.origin.x = min(max(frame.minX, visible.minX + Self.screenMargin), visible.maxX - Self.screenMargin - frame.width)
     frame.origin.y = min(max(frame.minY, visible.minY + Self.screenMargin), visible.maxY - Self.screenMargin - frame.height)

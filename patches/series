@@ -39,5 +39,5 @@ clair/page-cannot-move-window.patch
 clair/copy-url-shortcut.patch
 clair/dock-incognito.patch
 clair/restore-web-store.patch
-clair/store-fixups-component.patch
+helium/store-fixups-component.patch
 clair/no-extension-uninstall-page.patch
