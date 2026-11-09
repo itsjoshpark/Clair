@@ -60,7 +60,7 @@ Suggested order: 1 and 2 (one engine build), then 3 and 4 in `ClairUI` (they can
 
 ## 5. Verification and release notes
 
-- [ ] 5.1 **(owner)** Check by hand against Arc, on the Reddit Image Opener store page and with uBlock Origin Lite:
+- [x] 5.1 **(owner)** Check by hand against Arc, on the Reddit Image Opener store page and with uBlock Origin Lite:
   - the button reads "Add to Clair", and then "Remove from Clair", with no "Switch to Chrome" banner or popup;
   - the install sheet's text and permissions, Return to install, Esc to cancel;
   - no post-install box, and the new button pinned in the sidebar;
