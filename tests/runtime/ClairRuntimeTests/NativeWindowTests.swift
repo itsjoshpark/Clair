@@ -475,8 +475,14 @@ final class DownloadsTests: NativeWindowTestCase {
     // The progress is the whole app's, as on the Dock: an incognito window,
     // another profile, shows the regular window's download too.
     browser.ui.typeKey("n", modifierFlags: [.command, .shift])
-    let incognito = browser.ui.windows.containing(NSPredicate(format: "label == %@", "Incognito")).firstMatch
-    try require(incognito.waitForExistence(timeout: 30), "No incognito window opened")
+    let opened = await Harness.wait(for: 30) {
+      browser.ui.windows.containing(.any, identifier: "clair.sidebar").count >= 2
+    }
+    try require(opened, "No incognito window opened")
+    // The one with the "Incognito" badge, found as testNormalWindowsAreNative
+    // finds it.
+    let incognito = browser.ui.windows.containing(.staticText, identifier: "Incognito").firstMatch
+    try require(incognito.waitForExistence(timeout: 10), "The new window has no incognito badge")
     _ = try await tab.evaluate("location.href = '/slow-download'; 1")
     let incognitoButton = browser.element("clair.downloads", in: incognito)
     let shared = await Harness.wait(for: 30) { (incognitoButton.value as? String)?.hasSuffix("%") == true }
