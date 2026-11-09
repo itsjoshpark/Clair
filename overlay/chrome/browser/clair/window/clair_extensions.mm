@@ -273,6 +273,10 @@ NSArray<id<ClairExtensionAction>>* ClairExtensions::Snapshot() {
     item.extensionID = base::SysUTF8ToNSString(id);
     const std::string title = action->GetTitle(tab_id);
     item.name = base::SysUTF8ToNSString(title.empty() ? extension->name() : title);
+    if (extensions::IconImage* default_icon = action->default_icon_image();
+        default_icon && !icon_observations_.IsObservingSource(default_icon)) {
+      icon_observations_.AddObservation(default_icon);
+    }
     gfx::Image icon = action->GetExplicitlySetIcon(tab_id);
     if (icon.IsEmpty()) {
       icon = action->GetDeclarativeIcon(tab_id);
@@ -450,7 +454,15 @@ bool ClairExtensions::HasAnyExtensions() const {
 void ClairExtensions::OnToolbarActionAdded(
     const ToolbarActionsModel::ActionId& id) {
   if (pending_pins_.erase(id)) {
-    SetPinned(id, true);
+    // Not from here: pinning notifies the model's observers, and the model is
+    // still iterating over them.
+    base::WeakPtr<ClairExtensions> weak = weak_factory_.GetWeakPtr();
+    std::string pinned_id = id;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (weak) {
+        weak->SetPinned(pinned_id, true);
+      }
+    });
   }
   Changed();
 }
@@ -505,6 +517,16 @@ void ClairExtensions::OnExtensionUnloaded(
   }
   pending_pins_.erase(extension->id());
   Changed();
+}
+
+void ClairExtensions::OnExtensionIconImageChanged(
+    extensions::IconImage* image) {
+  Changed();
+}
+
+void ClairExtensions::OnExtensionIconImageDestroyed(
+    extensions::IconImage* image) {
+  icon_observations_.RemoveObservation(image);
 }
 
 // Changes come in bursts while the registry and the toolbar model change, so

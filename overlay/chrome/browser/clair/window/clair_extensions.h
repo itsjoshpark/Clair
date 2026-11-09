@@ -15,11 +15,13 @@
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #import "chrome/browser/clair/ClairHost.h"
 #include "chrome/browser/extensions/extension_action_dispatcher.h"
 #include "chrome/browser/ui/extensions/extensions_container.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
+#include "extensions/browser/extension_icon_image.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"
 #include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
@@ -40,7 +42,8 @@ class ExtensionViewHost;
 class ClairExtensions : public ExtensionsContainer,
                         public ToolbarActionsModel::Observer,
                         public extensions::ExtensionActionDispatcher::Observer,
-                        public extensions::ExtensionRegistryObserver {
+                        public extensions::ExtensionRegistryObserver,
+                        public extensions::IconImage::Observer {
  public:
   explicit ClairExtensions(ClairBrowserWindow* window);
   ClairExtensions(const ClairExtensions&) = delete;
@@ -106,6 +109,10 @@ class ClairExtensions : public ExtensionsContainer,
                            const extensions::Extension* extension,
                            extensions::UnloadedExtensionReason reason) override;
 
+  // extensions::IconImage::Observer:
+  void OnExtensionIconImageChanged(extensions::IconImage* image) override;
+  void OnExtensionIconImageDestroyed(extensions::IconImage* image) override;
+
   class Popup;
 
  private:
@@ -132,6 +139,10 @@ class ClairExtensions : public ExtensionsContainer,
   base::ScopedObservation<extensions::ExtensionRegistry,
                           extensions::ExtensionRegistryObserver>
       registry_observation_{this};
+  // Default icons load from disk after the first snapshot asks for them.
+  base::ScopedMultiSourceObservation<extensions::IconImage,
+                                     extensions::IconImage::Observer>
+      icon_observations_{this};
   std::unique_ptr<ui::ScopedUnownedUserData<ExtensionsContainer>>
       scoped_user_data_;
   base::WeakPtrFactory<ClairExtensions> weak_factory_{this};
