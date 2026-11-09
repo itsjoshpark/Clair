@@ -23,6 +23,17 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   /// The sidebar's controls, in its hosting view's coordinates.
   private var controlFrames: [AnchorControl: CGRect] = [:]
   private var extensionPopup: ExtensionPopupWindow?
+  private lazy var extensionPrompts = ExtensionPromptSheets(
+    present: { [weak self] alert, respond in
+      guard let window = self?.window else { return }
+      alert.beginSheetModal(for: window) { response in
+        MainActor.assumeIsolated { respond(response) }
+      }
+    },
+    close: { [weak self] alert in self?.window.endSheet(alert.window) },
+    answer: { [weak self] promptID, accepted in
+      self?.browser?.answerExtensionPrompt(promptID, accepted: accepted)
+    })
   nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
   /// Dragging the window from the top of the page (drag-window-from-page-top).
   private let dragPreference: WindowDragPreference
@@ -460,7 +471,8 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   func showExtensionPopup(_ view: NSView, size: NSSize, extension extensionID: String, anchor: AnchorKind) {
     extensionPopup?.dismiss(notify: false)
     let anchorRect = self.anchor(for: anchor, indicator: [], extensionID: extensionID).rect
-    let popup = ExtensionPopupWindow(page: view, size: size, parent: window, anchor: anchorRect) { [weak self] in
+    let name = model.extensionActions.first { $0.extensionID == extensionID }?.name ?? ""
+    let popup = ExtensionPopupWindow(page: view, size: size, name: name, parent: window, anchor: anchorRect) { [weak self] in
       self?.extensionPopup = nil
       self?.browser?.extensionPopupDidClose()
     }
@@ -477,6 +489,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     extensionPopup = nil
   }
 
+  func showExtensionPrompt(_ prompt: any ClairExtensionPrompt) {
+    extensionPrompts.show(prompt)
+  }
+
+  func dismissExtensionPrompt(_ promptID: Int) {
+    extensionPrompts.dismiss(promptID)
+  }
+
   func downloadsDidChange(_ downloads: [any ClairDownload], progress: DownloadProgress) {
     model.setDownloads(downloads, progress: progress)
   }
@@ -489,6 +509,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // The pages belong to Chromium; let go of them and of the browser.
     model.commandBar?.cancel()
     closeExtensionPopup()
+    extensionPrompts.cancelAll()
     rootView.card.show(page: nil)
     removeSafetyNet()
     rootView.card.show(devTools: nil, layout: DevToolsLayout(dockSide: .none, pageBounds: .zero, hidesPage: false))
@@ -585,6 +606,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   func runExtension(_ extensionID: String, pinned: Bool) {
     browser?.runExtensionAction(extensionID, anchor: pinned ? .extensionAction : .extensionsButton)
+  }
+
+  func contextMenu(forExtension extensionID: String) -> NSMenu? {
+    browser?.contextMenu(forExtension: extensionID)
   }
 
   func setExtension(_ extensionID: String, pinned: Bool) {

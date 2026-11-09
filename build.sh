@@ -132,10 +132,18 @@ apply_layer() {
   # Replace Chromium's app icon and product logos with Clair's. Fails and names
   # the path if a destination no longer exists in this Chromium version.
   "$_root_dir/scripts/replace-icon-resources.sh" "$tree"
+  # Leaves out the files that name the Chrome Web Store. Fails and names a file
+  # that is no longer in ungoogled-chromium's list.
+  local substitution_list="$_root_dir/build/domain_substitution.list"
+  "$_root_dir/scripts/filter-domain-substitution.sh" \
+    "$_main_repo/domain_substitution.list" \
+    "$_root_dir/utils/domain_substitution_exclude.list" \
+    "$substitution_list"
   python3 "$_main_repo/utils/domain_substitution.py" apply \
     -r "$_main_repo/domain_regex.list" \
-    -f "$_main_repo/domain_substitution.list" \
+    -f "$substitution_list" \
     "$tree"
+  rm -f "$substitution_list"
 }
 
 # Marks the time before a layer is applied, so record_layer can find the files
@@ -236,7 +244,11 @@ stage_update() {
   # Until the sync finishes, build/src is in an unknown state, and the next
   # update starts from fresh source.
   touch "$_updating_file"
-  python3 "$_sync_tree" sync "$_next_dir" "$_src_dir" "$_layer_file" "$_layer_file.new"
+  # Domain substitution keeps file times, so the layer lists don't name the
+  # files it changes. Its list goes in too, so a file that joins or leaves the
+  # substitution (utils/domain_substitution_exclude.list) is updated.
+  python3 "$_sync_tree" sync "$_next_dir" "$_src_dir" "$_layer_file" "$_layer_file.new" \
+    "$_main_repo/domain_substitution.list"
   mv "$_layer_file.new" "$_layer_file"
   rm -f "$_updating_file"
   rm -rf "$_next_dir"

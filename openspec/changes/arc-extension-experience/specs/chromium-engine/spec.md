@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Built from a pinned ungoogled-chromium release
-Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. That release's full patch series, binary pruning and domain substitution SHALL be applied, and the tag SHALL be recorded in the Clair source tree. The only exception is a list kept in Clair's source of files that domain substitution leaves out, which SHALL hold only files that name the Chrome Web Store's addresses for `extensions`.
+Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. That release's full patch series, binary pruning and domain substitution SHALL be applied, and the tag SHALL be recorded in the Clair source tree. The only exception is a list kept in Clair's source of files that domain substitution leaves out, which SHALL hold only files that name the Chrome Web Store's addresses, or the XML namespace of its update responses, for `extensions`.
 
 #### Scenario: Engine release is identifiable from source
 - **WHEN** the Clair source at a release tag is inspected
@@ -15,7 +15,7 @@ Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. 
 
 #### Scenario: Files left out of domain substitution
 - **WHEN** the list of files that domain substitution leaves out is read
-- **THEN** every file on it is one that names the Chrome Web Store's addresses, and a file on it that no longer exists in ungoogled-chromium's substitution list stops the build with an error naming it
+- **THEN** every file on it is one that names the Chrome Web Store's addresses or the XML namespace of its update responses, and a file on it that no longer exists in ungoogled-chromium's substitution list stops the build with an error naming it
 
 ### Requirement: ungoogled-chromium privacy defaults preserved
 Clair SHALL ship ungoogled-chromium's default settings and Google-service removals unchanged, except for the password and autofill settings that Clair turns off, and the Chrome Web Store installs and extension update checks that `extensions` restores. Clair MUST NOT re-enable any other Google service integration that ungoogled-chromium removes or disables.
@@ -44,7 +44,7 @@ Apart from its identity (`app-identity`), native layer (`native-layer`), updater
 - **THEN** it shows the same settings and defaults as the same ungoogled-chromium release, apart from Clair's identity and versions and the absent "Autofill and passwords" section
 
 ### Requirement: Changes to Chromium limited to hooks and identity
-Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, hooks, and restoring the Chrome Web Store installer and extension update checks that ungoogled-chromium removes. The hooks load the native layer, hand Chromium's browser window and its attached UI to Clair's code, register Clair's component extensions, and turn off or hide the password and autofill features. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off. Other behaviour Clair adds SHALL live in the native layer or in new source files added to the Chromium tree.
+Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, hooks, and restoring the Chrome Web Store installer and extension update checks that ungoogled-chromium removes, including sending those checks through the restored code. The hooks load the native layer, hand Chromium's browser window and its attached UI to Clair's code, register Clair's component extensions, turn off or hide the password and autofill features, and turn off extensions' uninstall pages. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off. Other behaviour Clair adds SHALL live in the native layer or in new source files added to the Chromium tree.
 
 #### Scenario: Reviewing Clair's patch series
 - **WHEN** the patches in `patches/clair/` and `patches/helium/` are listed
@@ -56,7 +56,7 @@ Clair's patches to existing Chromium source files SHALL be limited to macOS buil
 
 #### Scenario: Reviewing the store restoration
 - **WHEN** the patch that restores the Chrome Web Store is read
-- **THEN** each hunk puts back code that ungoogled-chromium's patches removed for the store installer or for extension update checks, and adds no other behavior
+- **THEN** each hunk puts back code that ungoogled-chromium's patches removed for the store installer or for extension update checks, or sends store update checks through that code, and adds no other behavior
 
 ## REMOVED Requirements
 

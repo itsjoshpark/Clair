@@ -1,0 +1,16 @@
+# Switches off the page an extension sets with chrome.runtime.setUninstallURL
+# (arc-extension-experience, design D10).
+--- a/extensions/browser/api/runtime/runtime_api.cc
++++ b/extensions/browser/api/runtime/runtime_api.cc
+@@ -694,6 +694,11 @@
+     content::BrowserContext* context,
+     const ExtensionId& extension_id,
+     UninstallReason reason) {
++  // Clair: extensions' uninstall pages don't open.
++  if ((true)) {
++    return;
++  }
++
+   if (!(reason == UNINSTALL_REASON_USER_INITIATED ||
+         reason == UNINSTALL_REASON_MANAGEMENT_API ||
+         reason == UNINSTALL_REASON_CHROME_WEBSTORE)) {

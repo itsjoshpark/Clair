@@ -1057,6 +1057,20 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   }
 }
 
+- (NSMenu*)contextMenuForExtension:(NSString*)extensionID {
+  if (_browserWindow && _browserWindow->extensions()) {
+    return _browserWindow->extensions()->ContextMenu(
+        base::SysNSStringToUTF8(extensionID));
+  }
+  return nil;
+}
+
+- (void)answerExtensionPrompt:(NSInteger)promptID accepted:(BOOL)accepted {
+  if (_browserWindow && _browserWindow->extensions()) {
+    _browserWindow->extensions()->AnswerPrompt(promptID, accepted);
+  }
+}
+
 // --- ClairBrowser: downloads ---
 
 - (ClairDownloads*)downloadsTracker {

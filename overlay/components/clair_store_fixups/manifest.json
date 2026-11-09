@@ -1,0 +1,22 @@
+// Copyright 2025 The Helium Authors
+// Copyright 2026 The Clair Authors
+// You can use, redistribute, and/or modify this source code under
+// the terms of the GPL-3.0 license that can be found in the LICENSE file.
+//
+// Adapted from Helium's components/extstore_fixups; see CREDITS.md.
+
+{
+  "name": "clair-store-fixups",
+  // chrome-extension://ddlmafbncdejdoldpkeejekkomgmmbkk
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqyE3zhEixmEatj4XS17fxJgLwODpSwMo/sCEw2K7yq5XJf5NuKIIRYmE++tigtfkXquUrBf6PKw0Rq3BIakJHlW7tUyEL76AXIdASX+6l+k9DILVkdQvT437KlrNehLqyWQrPZEjwNLGi3nER11AYmNV+YRLm/LghZiltQczmMXH8CMDdSUTUtjGY28MpK/BwlXyoKjmg+PZyWaYA/UWenguyrdqmIKdZkhmyp6ylhbkdoC9EbRjISY8pt5BdpS+4T/OKocphQrzeXucppgKiDJixPL1DidCGan2ZAhtfM6IwhU6UuQOY+iRLn+ILVPCOuHTz/M35o9tM9O2KfCFhQIDAQAB",
+  "version": "0.0.0",
+  "manifest_version": 3,
+  "content_scripts": [
+    {
+      "matches": [ "https://chromewebstore.google.com/*" ],
+      "run_at": "document_start",
+      "world": "ISOLATED",
+      "js": [ "chrome-webstore.js" ]
+    }
+  ]
+}

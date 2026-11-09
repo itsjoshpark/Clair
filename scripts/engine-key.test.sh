@@ -44,6 +44,8 @@ covered=(
   scripts/compile-icon.sh
   scripts/replace-icon-resources.sh
   scripts/install-native-contract.sh
+  scripts/filter-domain-substitution.sh
+  utils/domain_substitution_exclude.list
   resources/icon/AppIcon.icon/icon.json
   resources/icon/logos/chrome/app/theme/chromium/product_logo_16.png
   resources/icon/vector_icons/chrome/app/vector_icons/product.icon

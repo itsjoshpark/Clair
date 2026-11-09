@@ -13,14 +13,22 @@
 #include <vector>
 
 #include "base/logging.h"
+#include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/clair/window/clair_browser_window.h"
+#include "chrome/browser/clair/window/clair_window_hooks.h"
+#include "chrome/browser/extensions/extension_install_prompt_show_params.h"
 #include "chrome/browser/extensions/extension_action_runner.h"
+#include "chrome/browser/extensions/extension_context_menu_model.h"
 #include "chrome/browser/extensions/extension_view.h"
 #include "chrome/browser/extensions/extension_view_host.h"
 #include "chrome/browser/extensions/extension_view_host_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/input/native_web_keyboard_event.h"
 #include "components/sessions/content/session_tab_helper.h"
@@ -31,9 +39,15 @@
 #include "extensions/browser/extension_action_manager.h"
 #include "extensions/browser/extension_host.h"
 #include "extensions/browser/extension_host_observer.h"
+#include "extensions/browser/install_prompt_data.h"
+#include "extensions/browser/install_prompt_permissions.h"
+#include "extensions/browser/ui_util.h"
+#include "extensions/common/api/extension_action/action_info.h"
 #include "extensions/common/extension.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "ui/gfx/image/image.h"
+#include "ui/gfx/image/image_skia.h"
+#import "ui/menus/cocoa/menu_controller.h"
 
 // --- Snapshots ---------------------------------------------------------------
 
@@ -49,6 +63,32 @@
 @end
 
 @implementation ClairChromiumExtensionAction
+@end
+
+@interface ClairChromiumExtensionPrompt : NSObject <ClairExtensionPrompt>
+@property(nonatomic) NSInteger promptID;
+@property(nonatomic) ClairExtensionPromptKind kind;
+@property(nonatomic, copy) NSString* extensionName;
+@property(nonatomic, nullable) NSImage* icon;
+@property(nonatomic, copy) NSArray<NSString*>* permissions;
+@property(nonatomic, copy) NSString* title;
+@property(nonatomic, copy) NSString* permissionsHeading;
+@property(nonatomic, copy) NSString* acceptLabel;
+@property(nonatomic, copy) NSString* cancelLabel;
+@end
+
+@implementation ClairChromiumExtensionPrompt
+- (instancetype)init {
+  if ((self = [super init])) {
+    _extensionName = @"";
+    _permissions = @[];
+    _title = @"";
+    _permissionsHeading = @"";
+    _acceptLabel = @"";
+    _cancelLabel = @"";
+  }
+  return self;
+}
 @end
 
 // --- The popup ---------------------------------------------------------------
@@ -184,8 +224,16 @@ ClairExtensions::ClairExtensions(ClairBrowserWindow* window) : window_(window) {
 }
 
 ClairExtensions::~ClairExtensions() {
+  context_menu_controller_ = nil;
+  context_menu_.reset();
   popup_.reset();
   scoped_user_data_.reset();
+  // The window is closing: anything it was asking counts as a cancel.
+  std::map<int, base::OnceCallback<void(bool)>> prompts = std::move(prompts_);
+  prompts_.clear();
+  for (auto& [prompt_id, answer] : prompts) {
+    std::move(answer).Run(false);
+  }
 }
 
 NSArray<id<ClairExtensionAction>>* ClairExtensions::Snapshot() {
@@ -229,6 +277,10 @@ NSArray<id<ClairExtensionAction>>* ClairExtensions::Snapshot() {
     item.extensionID = base::SysUTF8ToNSString(id);
     const std::string title = action->GetTitle(tab_id);
     item.name = base::SysUTF8ToNSString(title.empty() ? extension->name() : title);
+    if (extensions::IconImage* default_icon = action->default_icon_image();
+        default_icon && !icon_observations_.IsObservingSource(default_icon)) {
+      icon_observations_.AddObservation(default_icon);
+    }
     gfx::Image icon = action->GetExplicitlySetIcon(tab_id);
     if (icon.IsEmpty()) {
       icon = action->GetDeclarativeIcon(tab_id);
@@ -331,6 +383,70 @@ void ClairExtensions::ActiveTabChanged() {
   Changed();
 }
 
+NSMenu* ClairExtensions::ContextMenu(const std::string& extension_id) {
+  Browser* browser = window_->browser();
+  Profile* profile = browser->GetProfile();
+  ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
+  const extensions::Extension* extension =
+      extensions::ExtensionRegistry::Get(profile)->enabled_extensions().GetByID(
+          extension_id);
+  if (!model || !extension) {
+    return nil;
+  }
+  // No PopupDelegate: Inspect Popup needs a popup that outlives losing focus.
+  // Always kToolbarAction, even for a list row: kMenuItem drops Pin/Unpin,
+  // because Chromium's own extensions menu has a separate pin button.
+  auto menu_model = std::make_unique<extensions::ExtensionContextMenuModel>(
+      extension, browser, model->IsActionPinned(extension_id),
+      /*delegate=*/nullptr, /*can_show_icon_in_toolbar=*/true,
+      extensions::ExtensionContextMenuModel::ContextMenuSource::kToolbarAction);
+  // The controller refers to its model, so it goes first.
+  context_menu_controller_ =
+      [[MenuControllerCocoa alloc] initWithModel:menu_model.get()
+                                   isContextMenu:YES
+                                        delegate:nil];
+  context_menu_ = std::move(menu_model);
+  return context_menu_controller_.menu;
+}
+
+void ClairExtensions::ShowPrompt(id<ClairExtensionPrompt> prompt,
+                                 base::OnceCallback<void(bool)> answer) {
+  prompts_[static_cast<int>(prompt.promptID)] = std::move(answer);
+  [window_->clair_window() showExtensionPrompt:prompt];
+}
+
+void ClairExtensions::AnswerPrompt(int prompt_id, bool accepted) {
+  auto it = prompts_.find(prompt_id);
+  if (it == prompts_.end()) {
+    return;
+  }
+  base::OnceCallback<void(bool)> answer = std::move(it->second);
+  prompts_.erase(it);
+  std::move(answer).Run(accepted);
+}
+
+void ClairExtensions::DismissPrompt(int prompt_id) {
+  if (prompts_.erase(prompt_id)) {
+    [window_->clair_window() dismissExtensionPrompt:prompt_id];
+  }
+}
+
+void ClairExtensions::PinNewExtension(const extensions::Extension& extension) {
+  Profile* profile = window_->browser()->GetProfile();
+  ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
+  // Not ExtensionActionManager: this runs before the extension is enabled,
+  // and it has no action for an extension that isn't.
+  if (!model || !extensions::ActionInfo::GetExtensionActionInfo(&extension)) {
+    return;
+  }
+  if (model->HasAction(extension.id())) {
+    SetPinned(extension.id(), true);
+  } else {
+    // Chromium's own post-install path waits for the action the same way.
+    pending_pins_.insert(extension.id());
+  }
+}
+
 // ExtensionsContainer:
 
 ToolbarActionViewModel* ClairExtensions::GetActionForId(
@@ -367,6 +483,17 @@ bool ClairExtensions::HasAnyExtensions() const {
 
 void ClairExtensions::OnToolbarActionAdded(
     const ToolbarActionsModel::ActionId& id) {
+  if (pending_pins_.erase(id)) {
+    // Not from here: pinning notifies the model's observers, and the model is
+    // still iterating over them.
+    base::WeakPtr<ClairExtensions> weak = weak_factory_.GetWeakPtr();
+    std::string pinned_id = id;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (weak) {
+        weak->SetPinned(pinned_id, true);
+      }
+    });
+  }
   Changed();
 }
 
@@ -418,7 +545,18 @@ void ClairExtensions::OnExtensionUnloaded(
   if (popup_ && popup_->extension_id() == extension->id()) {
     ClosePopup();
   }
+  pending_pins_.erase(extension->id());
   Changed();
+}
+
+void ClairExtensions::OnExtensionIconImageChanged(
+    extensions::IconImage* image) {
+  Changed();
+}
+
+void ClairExtensions::OnExtensionIconImageDestroyed(
+    extensions::IconImage* image) {
+  icon_observations_.RemoveObservation(image);
 }
 
 // Changes come in bursts while the registry and the toolbar model change, so
@@ -442,3 +580,169 @@ void ClairExtensions::Flush() {
     [window extensionActionsDidChange:Snapshot()];
   }
 }
+
+// --- The hooks (arc-extension-experience D4, D5) ---
+
+namespace {
+
+// The native window a dialog parented to `parent` belongs to. A popup window
+// is a child of its browser window, so its prompts go on the browser window.
+ClairBrowserWindow* WindowForNativeWindow(gfx::NativeWindow parent) {
+  ClairBrowserWindow* found = nullptr;
+  if (!parent) {
+    return found;
+  }
+  NSWindow* top = parent.GetNativeNSWindow();
+  while (top.parentWindow) {
+    top = top.parentWindow;
+  }
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [&](BrowserWindowInterface* browser) {
+        ClairBrowserWindow* window = ClairBrowserWindow::FromBrowser(browser);
+        if (window && window->GetNativeWindow().GetNativeNSWindow() == top) {
+          found = window;
+          return false;
+        }
+        return true;
+      });
+  return found;
+}
+
+// Prompts the alert can't show: those that take typed input or a parent's
+// approval, or have no accept button.
+bool NeedsChromiumDialog(const extensions::InstallPromptData& prompt) {
+  using Data = extensions::InstallPromptData;
+  return prompt.type() == Data::EXTENSION_REQUEST_PROMPT ||
+         prompt.type() == Data::EXTENSION_PENDING_REQUEST_PROMPT ||
+         prompt.type() == Data::EXTENSION_PARENT_APPROVAL_PROMPT ||
+         prompt.requires_parent_permission() ||
+         prompt.GetAcceptButtonLabel().empty();
+}
+
+// One entry per permission, with its details on the following lines.
+NSArray<NSString*>* PermissionLines(
+    const extensions::InstallPromptPermissions& permissions) {
+  NSMutableArray<NSString*>* lines = [NSMutableArray array];
+  for (size_t i = 0; i < permissions.permissions.size(); ++i) {
+    std::u16string line = permissions.permissions[i];
+    if (i < permissions.details.size() && !permissions.details[i].empty()) {
+      std::u16string details;
+      base::ReplaceChars(permissions.details[i], u"\n", u"\n    ", &details);
+      line += u"\n    " + details;
+    }
+    [lines addObject:base::SysUTF16ToNSString(line)];
+  }
+  return lines;
+}
+
+class PromptHandle : public clair::ExtensionPromptHandle {
+ public:
+  PromptHandle(base::WeakPtr<ClairExtensions> owner, int prompt_id)
+      : owner_(std::move(owner)), prompt_id_(prompt_id) {}
+  ~PromptHandle() override {
+    if (owner_) {
+      owner_->DismissPrompt(prompt_id_);
+    }
+  }
+
+ private:
+  base::WeakPtr<ClairExtensions> owner_;
+  const int prompt_id_;
+};
+
+}  // namespace
+
+namespace clair {
+
+bool ShowExtensionInstallPrompt(
+    ExtensionInstallPromptShowParams* show_params,
+    extensions::ExtensionInstallPromptClient::DoneCallback& done_callback,
+    std::unique_ptr<extensions::InstallPromptData>& prompt) {
+  content::WebContents* contents = show_params->GetParentWebContents();
+  ClairBrowserWindow* window =
+      contents ? ClairBrowserWindow::FromWebContents(contents) : nullptr;
+  if (!window) {
+    window = WindowForNativeWindow(show_params->GetParentWindow());
+  }
+  if (!window || !window->extensions() || NeedsChromiumDialog(*prompt)) {
+    return false;
+  }
+  ClairExtensions* owner = window->extensions();
+  ClairChromiumExtensionPrompt* snapshot =
+      [[ClairChromiumExtensionPrompt alloc] init];
+  snapshot.promptID = owner->NewPromptID();
+  const bool is_install =
+      prompt->type() == extensions::InstallPromptData::INSTALL_PROMPT;
+  snapshot.kind = is_install ? ClairExtensionPromptKindInstall
+                             : ClairExtensionPromptKindOther;
+  if (const extensions::Extension* extension = prompt->extension()) {
+    snapshot.extensionName = base::SysUTF16ToNSString(
+        extensions::ui_util::GetFixupExtensionNameForUIDisplay(extension->name()));
+  }
+  snapshot.icon = prompt->icon().IsEmpty() ? nil : prompt->icon().ToNSImage();
+  snapshot.permissions = PermissionLines(prompt->GetPermissions());
+  if (!is_install) {
+    snapshot.title = base::SysUTF16ToNSString(prompt->GetDialogTitle());
+    snapshot.permissionsHeading =
+        base::SysUTF16ToNSString(prompt->GetPermissionsHeading());
+    snapshot.acceptLabel = base::SysUTF16ToNSString(prompt->GetAcceptButtonLabel());
+    snapshot.cancelLabel = base::SysUTF16ToNSString(prompt->GetAbortButtonLabel());
+  }
+  prompt->OnDialogOpened();
+  owner->ShowPrompt(
+      snapshot,
+      base::BindOnce(
+          [](extensions::ExtensionInstallPromptClient::DoneCallback done,
+             std::unique_ptr<extensions::InstallPromptData> data,
+             bool accepted) {
+            using Payload =
+                extensions::ExtensionInstallPromptClient::DoneCallbackPayload;
+            using Result = extensions::ExtensionInstallPromptClient::Result;
+            if (!accepted) {
+              data->OnDialogCanceled();
+              std::move(done).Run(Payload(Result::USER_CANCELED));
+              return;
+            }
+            data->OnDialogAccepted();
+            std::move(done).Run(Payload(
+                data->ShouldWithheldPermissionsOnDialogAccept()
+                    ? Result::ACCEPTED_WITH_WITHHELD_PERMISSIONS
+                    : Result::ACCEPTED));
+          },
+          std::move(done_callback), std::move(prompt)));
+  return true;
+}
+
+std::unique_ptr<ExtensionPromptHandle> ShowExtensionRemovePrompt(
+    gfx::NativeWindow parent,
+    const extensions::Extension* extension,
+    const gfx::ImageSkia& icon,
+    base::OnceCallback<void(bool accepted)> answered) {
+  ClairBrowserWindow* window = WindowForNativeWindow(parent);
+  if (!window || !window->extensions() || !extension) {
+    return nullptr;
+  }
+  ClairExtensions* owner = window->extensions();
+  ClairChromiumExtensionPrompt* snapshot =
+      [[ClairChromiumExtensionPrompt alloc] init];
+  snapshot.promptID = owner->NewPromptID();
+  snapshot.kind = ClairExtensionPromptKindRemove;
+  snapshot.extensionName = base::SysUTF16ToNSString(
+      extensions::ui_util::GetFixupExtensionNameForUIDisplay(extension->name()));
+  snapshot.icon = icon.isNull() ? nil : gfx::Image(icon).ToNSImage();
+  owner->ShowPrompt(snapshot, std::move(answered));
+  return std::make_unique<PromptHandle>(owner->AsWeakPtr(),
+                                        static_cast<int>(snapshot.promptID));
+}
+
+bool ExtensionInstalled(BrowserWindowInterface* browser,
+                        const extensions::Extension* extension) {
+  ClairBrowserWindow* window = ClairBrowserWindow::FromBrowser(browser);
+  if (!window || !window->extensions()) {
+    return false;
+  }
+  window->extensions()->PinNewExtension(*extension);
+  return true;
+}
+
+}  // namespace clair

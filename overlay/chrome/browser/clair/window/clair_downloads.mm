@@ -237,7 +237,11 @@ void ClairDownloads::ProgressChanged(const ClairDownloadProgress& progress) {
 }
 
 bool ClairDownloads::IsFromThisSession(download::DownloadItem* item) const {
+  // A store install's download isn't one the user asked for (D8 of
+  // arc-extension-experience).
   return !item->IsTransient() &&
+         item->GetDownloadSource() !=
+             download::DownloadSource::EXTENSION_INSTALLER &&
          (session_start_.is_null() || item->GetStartTime() >= session_start_);
 }
 

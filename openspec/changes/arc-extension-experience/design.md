@@ -8,7 +8,9 @@ See proposal.md, "Why". What stands in the way today, from reading the engine tr
   - `extensions/common/extension_urls.cc` holds the store's base URLs, the CRX update URL `https://clients2.google.com/service/update2/crx` and the store API URL.
   - `extensions/common/api/_api_features.json` holds the `webstorePrivate` and `management` matches for `https://chromewebstore.google.com/*`.
   - Substituted, the real store isn't the store: it gets no `webstorePrivate`, so its page disables "Add to Chrome".
-  - Both files hold nothing else that substitution affects, apart from the hosts `IsSafeBrowsingUrl()` matches, which is only a predicate.
+  - `extensions/browser/updater/safe_manifest_parser.cc` holds the XML namespace of update responses, `http://www.google.com/update2/response`. It isn't an address Clair contacts, but substituted, every update response fails to parse.
+  - These files hold nothing else that substitution affects, apart from the hosts `IsSafeBrowsingUrl()` matches, which is only a predicate.
+- **Installed store extensions update through `UpdateService`, not `ExtensionDownloader`.** `ExtensionUpdater::CanUseUpdateService` picks it for an installed extension whose update URL is the store's or empty. It posts to `update.googleapis.com`, which comes from `components/component_updater/component_updater_url_constants.cc` and stays substituted, so those checks can only fail.
 - **`disable-webstore-urls.patch` (ungoogled-chromium)** does four things:
   - `ExtensionDownloader::DoStartAllPending` no longer starts update checks.
   - `SanitizeUpdateURL()` no longer fills in the store's update URL for extensions that have none.
@@ -41,7 +43,7 @@ See proposal.md, "Why". What stands in the way today, from reading the engine tr
 
 ### D1. A Clair list of files that domain substitution leaves out
 
-`utils/domain_substitution_exclude.list` names the two files. Before domain substitution, `build.sh` calls a new `scripts/filter-domain-substitution.sh`, which writes ungoogled-chromium's list without them to a temporary file. `build.sh` passes that file to `domain_substitution.py` with `-f`. A listed file that isn't in ungoogled-chromium's list stops the build with an error naming it, so a renamed file can't silently drop out. The script has its own `*.test.sh`, like the other build helpers. The list is under `utils/`, already an engine input; the script joins `scripts/engine-key.sh`'s inputs.
+`utils/domain_substitution_exclude.list` names the three files. Before domain substitution, `build.sh` calls a new `scripts/filter-domain-substitution.sh`, which writes ungoogled-chromium's list without them to a temporary file. `build.sh` passes that file to `domain_substitution.py` with `-f`. A listed file that isn't in ungoogled-chromium's list stops the build with an error naming it, so a renamed file can't silently drop out. The script has its own `*.test.sh`, like the other build helpers. The list is under `utils/`, already an engine input; the script joins `scripts/engine-key.sh`'s inputs.
 
 *Alternatives:*
 - **Splitting the hosts in Clair's patched C++** (`"chromewebstore.google" ".com"`) dodges the regex. But it doesn't work in JSON, and it hides the hosts from anyone reading the source.
@@ -52,15 +54,19 @@ See proposal.md, "Why". What stands in the way today, from reading the engine tr
 
 The patch puts back these hunks:
 - the update check loop in `ExtensionDownloader::DoStartAllPending`;
-- the default update URL and its HTTPS rule in `SanitizeUpdateURL`;
+- the HTTPS rule in `SanitizeUpdateURL`, but not its default update URL, so an extension with no update URL is never checked against the store (spec "Extensions update automatically");
 - the dedicated process for the store's origins, which is a security property of the page that can install extensions;
 - `WebstoreInstaller::DownloadCrx`, `StartCrxInstaller` and the `Webstore Downloads` folder.
 
+It adds one hunk that isn't a revert: `ExtensionUpdater::CanUseUpdateService` returns false, so store updates use the restored `ExtensionDownloader` and `clients2.google.com`. Helium does the same.
+
 It leaves the rest of both upstream patches as they are: content verification, the extension migrator's blank URL, the removed "days since active" ping, the cookies-only credentials, the web store app, and the histogram changes.
 
-Each hunk is a revert, so the patch header names the upstream patch and hunk it undoes. The `chromium-engine` spec allows this one category of behavior patch.
+Each revert hunk names the upstream patch and hunk it undoes. The `chromium-engine` spec allows this one category of behavior patch.
 
-*Alternative:* removing the two upstream patches from the series. That would bring back everything else they turn off, and Clair's series doesn't edit ungoogled-chromium's.
+*Alternatives:*
+- **Removing the two upstream patches from the series** would bring back everything else they turn off, and Clair's series doesn't edit ungoogled-chromium's.
+- **Leaving the component updater's URL file out of domain substitution** would let `UpdateService` work, but adds a Google host and un-substitutes the address the component updater uses.
 
 ### D3. The store fixes ship as a component extension in the overlay
 
@@ -71,7 +77,7 @@ Each hunk is a revert, so the patch header names the upstream patch and hunk it 
 | Isolated-world script | isolated | Replaces "Chrome" / "Google Chrome" in the main install button's text with "Clair", which gives "Add to Clair" and "Remove from Clair". Removes the promo popup and the "Switch to Chrome" banner. Re-runs through a `MutationObserver` as the single-page store re-renders. |
 | Main-world script | main | Forces the store's Chrome-eligibility check, as Helium's does. Only added if the banner can't be removed in the isolated world. |
 
-A hook in `component_loader.cc` registers it, the extension's ID and manifest resource are added to the component allowlist, and its grd is wired into `chrome_paks.gni` and `resource_ids.spec`. These are four small hunks, in a new `patches/clair/store-fixups-component.patch`.
+A hook in `component_loader.cc` registers it, the extension's ID and manifest resource are added to the component allowlist, its resources join `ChromeComponentExtensionResourceManager`, and its grd is wired into `chrome_paks.gni`, `chrome/browser/extensions/BUILD.gn` and `resource_ids.spec`. These small hunks are in a new `patches/clair/store-fixups-component.patch`.
 
 Component extensions may script the store, which other extensions may not. No other part of the store's text is changed (spec "Store wording names Clair").
 
@@ -135,8 +141,21 @@ The native window has a toolbar in Chromium's sense: the sidebar shows the locat
 
 The restored `WebstoreInstaller` downloads through the download manager with `DownloadSource::EXTENSION_INSTALLER`. `ClairDownloads` leaves those items out of its snapshot and Dock progress, as Chrome's download bubble does.
 
+### D9. Right-click menus come from Chromium's model, shown as an `NSMenu`
+
+`-[ClairBrowser contextMenuForExtension:]` returns an `NSMenu`. `ClairExtensions` builds it from `ExtensionContextMenuModel` with `MenuControllerCocoa`, which already handles submenus and enabled states, and keeps the model and controller until the next menu or until the window closes. ClairUI only catches the right-click, with the sidebar's existing `RowClickCatcher`. A pinned button and a list row both use the model's `kToolbarAction` source, because `kMenuItem` leaves out Pin/Unpin, which Chromium's own extensions menu shows as a separate button.
+
+The model gets no `PopupDelegate`, which leaves out Inspect Popup: it needs the popup to stay open while DevTools has focus, and Clair's closes on any click outside it. The native window hosts no side panels, so the model's side panel item doesn't appear.
+
+*Alternative:* snapshots of the items, as the history menu has. That re-implements submenus and checkmarks in ClairUI, and the history menu needs snapshots only because favicons update while it's open.
+
+### D10. Uninstall pages are switched off
+
+`RuntimeEventRouter::OnExtensionUninstalled` returns at once, in `patches/clair/no-extension-uninstall-page.patch`. `chrome.runtime.setUninstallURL` still succeeds and stores the URL, so extensions see no error.
+
 ## Risks / Trade-offs
 
+- **[The extension menu assumes Chromium's Views window]** Pin and Unpin touch `BrowserElements`. → Checked by hand (task 5.5).
 - **[Google sees installed extensions]** Update checks send each store extension's ID and version, the Chromium version and the platform to `clients2.google.com` every few hours. → This is the owner's choice. It's limited to profiles with store extensions; the Changie fragment says it; and `chromium-engine`'s idle-launch scenario still holds.
 - **[The store changes its page]** Its button markup or eligibility check can change without notice, and the button would then say "Chrome" or a nag would return. → The scripts fail open: installs keep working. The runtime suite doesn't cover the store (it needs Google), so it's a by-hand check at each engine bump.
 - **[The update server treats `chromiumcrx` differently]** Helium reports `prod=chromecrx` and a Windows platform to Google, for reasons not documented. → Check by hand that updates arrive with Chromium's own parameters. Spoof only if they don't, as a follow-up.
