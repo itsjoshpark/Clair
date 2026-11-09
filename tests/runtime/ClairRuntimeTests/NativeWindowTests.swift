@@ -450,7 +450,7 @@ final class ExtensionActionTests: NativeWindowTestCase {
     let badge = await Harness.wait(for: 15) { (pinned.value as? String) == "3" }
     XCTAssertTrue(badge, "The pinned action doesn't show its badge")
     pinned.click()
-    let popup = browser.ui.windows["clair.extensionPopup"]
+    let popup = browser.ui.dialogs["clair.extensionPopup"]
     XCTAssertTrue(popup.waitForExistence(timeout: 15), "The action's popup didn't open")
     let session = try await browser.browserSession()
     defer { session.close() }
@@ -488,7 +488,7 @@ final class ExtensionActionTests: NativeWindowTestCase {
     let worker = try await browser.session(onTarget: try XCTUnwrap(workerID))
     defer { worker.close() }
     _ = try await worker.evaluate("chrome.action.openPopup()")
-    let popup = browser.ui.windows["clair.extensionPopup"]
+    let popup = browser.ui.dialogs["clair.extensionPopup"]
     XCTAssertTrue(popup.waitForExistence(timeout: 15), "chrome.action.openPopup() didn't open the popup")
   }
 }

@@ -12,7 +12,7 @@ enum ExtensionPromptAlert {
   static func make(for prompt: any ClairExtensionPrompt) -> NSAlert {
     let alert = NSAlert()
     if let icon = prompt.icon {
-      alert.icon = icon
+      alert.icon = sized(icon)
     }
     switch prompt.kind {
     case .install:
@@ -29,6 +29,16 @@ enum ExtensionPromptAlert {
       addButtons(to: alert, accept: prompt.acceptLabel, cancel: prompt.cancelLabel)
     }
     return alert
+  }
+
+  /// NSAlert always draws its icon at 64 pt, so the extension's is drawn
+  /// smaller inside that square, next to the title and the text's leading edge.
+  private static func sized(_ icon: NSImage) -> NSImage {
+    let canvas = NSImage(size: NSSize(width: 64, height: 64))
+    canvas.lockFocus()
+    icon.draw(in: NSRect(x: 0, y: 0, width: 44, height: 44))
+    canvas.unlockFocus()
+    return canvas
   }
 
   private static func permissionText(heading: String, permissions: [String]) -> String {

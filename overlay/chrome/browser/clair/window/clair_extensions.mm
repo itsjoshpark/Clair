@@ -41,6 +41,7 @@
 #include "extensions/browser/install_prompt_data.h"
 #include "extensions/browser/install_prompt_permissions.h"
 #include "extensions/browser/ui_util.h"
+#include "extensions/common/api/extension_action/action_info.h"
 #include "extensions/common/extension.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "ui/gfx/image/image.h"
@@ -399,9 +400,9 @@ void ClairExtensions::DismissPrompt(int prompt_id) {
 void ClairExtensions::PinNewExtension(const extensions::Extension& extension) {
   Profile* profile = window_->browser()->GetProfile();
   ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
-  if (!model ||
-      !extensions::ExtensionActionManager::Get(profile)->GetExtensionAction(
-          extension)) {
+  // Not ExtensionActionManager: this runs before the extension is enabled,
+  // and it has no action for an extension that isn't.
+  if (!model || !extensions::ActionInfo::GetExtensionActionInfo(&extension)) {
     return;
   }
   if (model->HasAction(extension.id())) {
