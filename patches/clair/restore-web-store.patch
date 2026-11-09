@@ -1,0 +1,138 @@
+# Restores what the Chrome Web Store needs to install and update extensions
+# (arc-extension-experience, design D2). Each revert names the upstream patch
+# and hunk it undoes; the rest of those patches stays applied.
+
+# Reverts ungoogled-chromium disable-webstore-urls.patch, GetOriginsRequiringDedicatedProcess hunk.
+--- a/chrome/browser/extensions/chrome_content_browser_client_extensions_part.cc
++++ b/chrome/browser/extensions/chrome_content_browser_client_extensions_part.cc
+@@ -683,6 +683,12 @@
+ std::vector<url::Origin> ChromeContentBrowserClientExtensionsPart::
+     GetOriginsRequiringDedicatedProcess() {
+   std::vector<url::Origin> list;
++
++  // Require a dedicated process for the webstore origin.  See
++  // https://crbug.com/40094229.
++  list.push_back(url::Origin::Create(extension_urls::GetWebstoreLaunchURL()));
++  list.push_back(
++      url::Origin::Create(extension_urls::GetNewWebstoreLaunchURL()));
+ 
+   return list;
+ }
+# Reverts ungoogled-chromium disable-webstore-urls.patch, SanitizeUpdateURL's HTTPS rule. Its default update URL stays
+# removed, so an extension with no update URL is never checked against the store.
+--- a/extensions/browser/updater/extension_downloader.cc
++++ b/extensions/browser/updater/extension_downloader.cc
+@@ -176,6 +176,11 @@
+     return std::nullopt;
+   }
+ 
++  // Make sure we use SSL for store-hosted extensions.
++  if (extension_urls::IsWebstoreUpdateUrl(update_url) &&
++      !update_url.SchemeIsCryptographic()) {
++    return extension_urls::GetWebstoreUpdateUrl();
++  }
+ 
+   return update_url;
+ }
+# Reverts ungoogled-chromium disable-webstore-urls.patch, DoStartAllPending hunk.
+--- a/extensions/browser/updater/extension_downloader.cc
++++ b/extensions/browser/updater/extension_downloader.cc
+@@ -352,6 +352,10 @@
+     AddToFetches(fetches_preparing, std::move(task));
+   pending_tasks_.clear();
+ 
++  for (auto& fetch_list : fetches_preparing) {
++    for (auto& fetch : fetch_list.second)
++      StartUpdateCheck(std::move(fetch));
++  }
+ }
+ 
+ void ExtensionDownloader::SetIdentityManager(
+# Not a revert: sends store update checks through the restored downloader.
+--- a/chrome/browser/extensions/updater/extension_updater.cc
++++ b/chrome/browser/extensions/updater/extension_updater.cc
+@@ -791,6 +791,12 @@
+     const PendingExtensionInfo* info) const {
+   if (g_force_use_update_service_for_tests) {
+     return true;
++  }
++
++  // Clair: UpdateService's server address stays domain-substituted, so store
++  // extensions update through ExtensionDownloader instead.
++  if ((true)) {
++    return false;
+   }
+ 
+   // UpdateService can only update extensions that have been installed on the
+# Reverts ungoogled-chromium inox-patchset/0005-disable-default-extensions.patch, webstore_installer.cc download folder hunk.
+--- a/extensions/browser/webstore_installer.cc
++++ b/extensions/browser/webstore_installer.cc
+@@ -97,10 +97,14 @@
+ const char kAuthUserQueryKey[] = "authuser";
+ 
+ constexpr base::TimeDelta kTimeRemainingThreshold = base::Seconds(1);
++
++// Folder for downloading crx files from the webstore. This is used so that the
++// crx files don't go via the usual downloads folder.
++const base::FilePath::CharType kWebstoreDownloadFolder[] =
++    FILE_PATH_LITERAL("Webstore Downloads");
+ 
+ base::FilePath* g_download_directory_for_tests = nullptr;
+ 
+-[[maybe_unused]]
+ base::FilePath GetDownloadFilePath(const base::FilePath& download_directory,
+                                    const ExtensionId& id) {
+   // Ensure the download directory exists. TODO(asargent) - make this use
+# Reverts ungoogled-chromium inox-patchset/0005-disable-default-extensions.patch, DownloadCrx hunk.
+--- a/extensions/browser/webstore_installer.cc
++++ b/extensions/browser/webstore_installer.cc
+@@ -481,6 +481,21 @@
+ 
+ void WebstoreInstaller::DownloadCrx(const ExtensionId& extension_id,
+                                     InstallSource source) {
++  download_url_ = GetWebstoreInstallURL(extension_id, source);
++  MaybeAppendAuthUserParameter(approval_->authuser, download_url_);
++
++  base::FilePath user_data_dir =
++      ExtensionsBrowserClient::Get()->GetUserDataDir();
++  base::FilePath download_path = user_data_dir.Append(kWebstoreDownloadFolder);
++
++  base::FilePath download_directory(g_download_directory_for_tests
++                                        ? *g_download_directory_for_tests
++                                        : download_path);
++
++  GetExtensionFileTaskRunner()->PostTaskAndReplyWithResult(
++      FROM_HERE,
++      base::BindOnce(&GetDownloadFilePath, download_directory, extension_id),
++      base::BindOnce(&WebstoreInstaller::StartDownload, this, extension_id));
+ }
+ 
+ // http://crbug.com/40957413
+# Reverts ungoogled-chromium inox-patchset/0005-disable-default-extensions.patch, StartCrxInstaller hunk.
+--- a/extensions/browser/webstore_installer.cc
++++ b/extensions/browser/webstore_installer.cc
+@@ -650,6 +650,24 @@
+ void WebstoreInstaller::StartCrxInstaller(const DownloadItem& download) {
+   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+   DCHECK(!crx_installer_.get());
++
++  const InstallApproval* approval = GetAssociatedApproval(download);
++  DCHECK(approval);
++
++  crx_installer_ =
++      ExtensionsBrowserClient::Get()->CreateCrxInstallerFromDownloadItem(
++          browser_context_, download);
++
++  crx_installer_->set_expected_id(approval->extension_id);
++  crx_installer_->set_is_gallery_install(true);
++  crx_installer_->set_allow_silent_install(true);
++  crx_installer_->AddInstallerCallback(base::BindOnce(
++      &WebstoreInstaller::OnInstallerDone, weak_ptr_factory_.GetWeakPtr()));
++  if (approval->withhold_permissions) {
++    crx_installer_->set_withhold_permissions();
++  }
++
++  crx_installer_->InstallCrx(download.GetFullPath());
+ }
+ 
+ void WebstoreInstaller::ReportFailure(const std::string& error,

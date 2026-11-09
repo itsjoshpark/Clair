@@ -1,0 +1,6 @@
+# Files that domain substitution leaves out, one per line, as paths in
+# ungoogled-chromium's domain_substitution.list. Only files that name the
+# Chrome Web Store's addresses belong here (arc-extension-experience, D1):
+# substituted, the real store isn't the store, and it gets no install API.
+extensions/common/api/_api_features.json
+extensions/common/extension_urls.cc

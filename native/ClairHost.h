@@ -346,6 +346,36 @@ NS_SWIFT_NAME(ClairSuggestion)
 @property(nonatomic, readonly, copy, nullable) NSString *keywordName;
 @end
 
+// What a ClairExtensionPrompt asks.
+typedef NS_ENUM(NSInteger, ClairExtensionPromptKind) {
+  // Installing an extension. ClairUI words the sheet.
+  ClairExtensionPromptKindInstall = 0,
+  // Removing an extension. ClairUI words the sheet.
+  ClairExtensionPromptKindRemove = 1,
+  // Any other prompt, such as re-enabling an extension or an optional
+  // permission request. The sheet uses Chromium's text.
+  ClairExtensionPromptKindOther = 2,
+} NS_SWIFT_NAME(ExtensionPromptKind);
+
+// A confirmation for an extension. Chromium implements it as a snapshot.
+NS_SWIFT_UI_ACTOR
+NS_SWIFT_NAME(ClairExtensionPrompt)
+@protocol ClairExtensionPrompt <NSObject>
+// Names the prompt in answers and dismissals.
+@property(nonatomic, readonly) NSInteger promptID;
+@property(nonatomic, readonly) ClairExtensionPromptKind kind;
+@property(nonatomic, readonly, copy) NSString *extensionName;
+@property(nonatomic, readonly, nullable) NSImage *icon;
+// What the extension can do, one entry per permission. An entry's details
+// follow it on their own lines, indented. Empty when there's nothing to list.
+@property(nonatomic, readonly, copy) NSArray<NSString *> *permissions;
+// Chromium's text, for ClairExtensionPromptKindOther; empty otherwise.
+@property(nonatomic, readonly, copy) NSString *title;
+@property(nonatomic, readonly, copy) NSString *permissionsHeading;
+@property(nonatomic, readonly, copy) NSString *acceptLabel;
+@property(nonatomic, readonly, copy) NSString *cancelLabel;
+@end
+
 // An extension's toolbar action. Chromium implements it as a snapshot.
 NS_SWIFT_UI_ACTOR
 NS_SWIFT_NAME(ClairExtensionAction)
@@ -621,6 +651,10 @@ NS_SWIFT_NAME(ClairBrowser)
     NS_SWIFT_NAME(setExtensionAction(_:pinned:));
 // The popup's popover closed, for example because the user clicked outside it.
 - (void)extensionPopupDidClose;
+// The user answered a confirmation from -[ClairWindow showExtensionPrompt:],
+// or its window closed, which counts as a cancel. Called once per prompt.
+- (void)answerExtensionPrompt:(NSInteger)promptID accepted:(BOOL)accepted
+    NS_SWIFT_NAME(answerExtensionPrompt(_:accepted:));
 
 // --- Downloads: open a finished one in its default app (which counts as
 // seen), reveal it in Finder, cancel it, or resume an interrupted one ---
@@ -711,7 +745,7 @@ NS_SWIFT_NAME(ClairWindow)
 // The actions, pinned order, icons or badges changed.
 - (void)extensionActionsDidChange:(NSArray<id<ClairExtensionAction>> *)actions
     NS_SWIFT_NAME(extensionActionsDidChange(_:));
-// Shows an extension's popup page in a popover attached to `anchor`, at `size`.
+// Shows an extension's popup page in a window beside `anchor`, at `size`.
 - (void)showExtensionPopup:(NSView *)view
                       size:(NSSize)size
                  extension:(NSString *)extensionID
@@ -722,6 +756,12 @@ NS_SWIFT_NAME(ClairWindow)
 // Chromium closed the popup, for example because the extension called
 // window.close().
 - (void)closeExtensionPopup;
+// Asks the user to confirm an install or removal, in a sheet on the window.
+// ClairUI answers through -[ClairBrowser answerExtensionPrompt:accepted:].
+- (void)showExtensionPrompt:(id<ClairExtensionPrompt>)prompt NS_SWIFT_NAME(showExtensionPrompt(_:));
+// Chromium no longer needs the answer. ClairUI closes the sheet and doesn't
+// answer. An ID that's already answered or dismissed does nothing.
+- (void)dismissExtensionPrompt:(NSInteger)promptID NS_SWIFT_NAME(dismissExtensionPrompt(_:));
 
 // --- Downloads ---
 // One of the window's profile's downloads started, progressed, finished, or

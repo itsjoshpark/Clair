@@ -108,6 +108,33 @@ final class FakeSuggestion: NSObject, ClairSuggestion {
   }
 }
 
+/// A stand-in for an extension confirmation snapshot.
+final class FakeExtensionPrompt: NSObject, ClairExtensionPrompt {
+  let promptID: Int
+  let kind: ExtensionPromptKind
+  let extensionName: String
+  let icon: NSImage? = nil
+  let permissions: [String]
+  let title: String
+  let permissionsHeading: String
+  let acceptLabel: String
+  let cancelLabel: String
+
+  init(
+    id: Int, kind: ExtensionPromptKind, name: String, permissions: [String] = [], title: String = "",
+    heading: String = "", accept: String = "", cancel: String = ""
+  ) {
+    promptID = id
+    self.kind = kind
+    extensionName = name
+    self.permissions = permissions
+    self.title = title
+    permissionsHeading = heading
+    acceptLabel = accept
+    cancelLabel = cancel
+  }
+}
+
 /// A stand-in for an extension action snapshot.
 final class FakeExtensionAction: NSObject, ClairExtensionAction {
   let extensionID: String
@@ -374,6 +401,15 @@ final class FakeBrowser: NSObject, ClairBrowser {
     clairWindow?.devToolsDidChange()
   }
 
+  /// Asks the window to confirm, as Chromium does.
+  func showExtensionPrompt(_ prompt: FakeExtensionPrompt) {
+    clairWindow?.showExtensionPrompt(prompt)
+  }
+
+  func dismissExtensionPrompt(_ promptID: Int) {
+    clairWindow?.dismissExtensionPrompt(promptID)
+  }
+
   func setExtensionActions(_ actions: [FakeExtensionAction]) {
     extensionActions = actions
     clairWindow?.extensionActionsDidChange(actions)
@@ -478,6 +514,10 @@ final class FakeBrowser: NSObject, ClairBrowser {
   }
 
   func extensionPopupDidClose() { record("popupClosed") }
+
+  func answerExtensionPrompt(_ promptID: Int, accepted: Bool) {
+    record("answerPrompt \(promptID) \(accepted)")
+  }
   func openDownload(_ downloadID: String) { record("openDownload \(downloadID)") }
   func showDownloadInFinder(_ downloadID: String) { record("showDownload \(downloadID)") }
   func cancelDownload(_ downloadID: String) { record("cancelDownload \(downloadID)") }
@@ -537,6 +577,8 @@ final class RecordingWindow: NSObject, ClairWindow {
 
   func extensionPopupDidResize(_ size: NSSize) { calls.append("popupResize") }
   func closeExtensionPopup() { calls.append("closePopup") }
+  func showExtensionPrompt(_ prompt: any ClairExtensionPrompt) { calls.append("prompt \(prompt.promptID)") }
+  func dismissExtensionPrompt(_ promptID: Int) { calls.append("dismissPrompt \(promptID)") }
   func downloadsDidChange(_ downloads: [any ClairDownload], progress: DownloadProgress) {
     calls.append("downloads \(downloads.count)")
   }

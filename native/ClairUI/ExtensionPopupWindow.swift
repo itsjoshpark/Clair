@@ -4,12 +4,12 @@
 
 import AppKit
 
-/// An extension's popup page, attached to the sidebar button that opened it
-/// (design D7). It's a borderless child window rather than an NSPopover,
-/// whose material tints the page it hosts (Crest found on macOS 27). Like a
-/// popover, a click elsewhere, Esc, or the window moving dismisses it.
+/// An extension's popup page, in a small titled window that first opens beside
+/// the sidebar button that opened it (arc-extension-experience D6). It's a
+/// child window rather than an NSPopover, whose material tints the page it
+/// hosts (Crest found on macOS 27). A click elsewhere, Esc, its close button,
+/// or the browser window moving dismisses it.
 final class ExtensionPopupWindow: NSWindow {
-  static let cornerRadius: CGFloat = 10
   static let gap: CGFloat = 6
   static let screenMargin: CGFloat = 8
 
@@ -19,24 +19,18 @@ final class ExtensionPopupWindow: NSWindow {
   private var onDismiss: (() -> Void)?
   private var monitor: Any?
 
-  init(page: NSView, size: NSSize, parent: NSWindow, anchor: NSRect, onDismiss: @escaping () -> Void) {
+  init(page: NSView, size: NSSize, name: String, parent: NSWindow, anchor: NSRect, onDismiss: @escaping () -> Void) {
     self.parentWindowRef = parent
     self.anchor = anchor
     self.onDismiss = onDismiss
-    super.init(contentRect: NSRect(origin: .zero, size: size), styleMask: .borderless, backing: .buffered, defer: false)
+    super.init(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable], backing: .buffered, defer: false)
     isReleasedWhenClosed = false
-    isOpaque = false
-    backgroundColor = .clear
-    hasShadow = true
     animationBehavior = .none
     collectionBehavior = [.transient, .ignoresCycle]
-    // Nothing of Clair's is drawn behind the page, so what the renderer paints
-    // is what shows; the container only rounds the corners.
+    // Only VoiceOver and the window list read the name.
+    title = name
+    titleVisibility = .hidden
     let container = NSView(frame: NSRect(origin: .zero, size: size))
-    container.wantsLayer = true
-    container.layer?.cornerRadius = Self.cornerRadius
-    container.layer?.cornerCurve = .continuous
-    container.layer?.masksToBounds = true
     container.autoresizesSubviews = true
     page.frame = container.bounds
     page.autoresizingMask = [.width, .height]
@@ -50,7 +44,7 @@ final class ExtensionPopupWindow: NSWindow {
 
   func present() {
     guard let parent = parentWindowRef else { return }
-    position(size: frame.size)
+    placeBesideAnchor()
     parent.addChildWindow(self, ordered: .above)
     makeKeyAndOrderFront(nil)
     monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]) {
@@ -75,20 +69,34 @@ final class ExtensionPopupWindow: NSWindow {
     }
   }
 
-  func resize(to size: NSSize) {
-    position(size: size)
+  /// The close button: the same as any other way the user closes it.
+  override func performClose(_ sender: Any?) {
+    dismiss()
   }
 
-  /// Puts the popup beside the button, kept on screen.
-  private func position(size: NSSize) {
+  /// The page resized itself: the window keeps its top-leading corner, which
+  /// may not be beside the button any more if the user dragged it.
+  func resize(to size: NSSize) {
+    let outer = frameRect(forContentRect: NSRect(origin: .zero, size: size)).size
+    let frame = NSRect(x: frame.minX, y: frame.maxY - outer.height, width: outer.width, height: outer.height)
+    setFrame(onScreen(frame), display: true)
+  }
+
+  /// Puts the popup beside the button.
+  private func placeBesideAnchor() {
     guard let parent = parentWindowRef else { return }
     let button = parent.convertToScreen(anchor)
-    let visible = (parent.screen ?? NSScreen.main)?.visibleFrame ?? .infinite
-    var frame = NSRect(
-      x: button.maxX + Self.gap, y: button.maxY - size.height, width: size.width, height: size.height)
-    frame.origin.x = min(max(frame.minX, visible.minX + Self.screenMargin), visible.maxX - Self.screenMargin - size.width)
-    frame.origin.y = min(max(frame.minY, visible.minY + Self.screenMargin), visible.maxY - Self.screenMargin - size.height)
-    setFrame(frame, display: true)
+    let size = frame.size
+    let frame = NSRect(x: button.maxX + Self.gap, y: button.maxY - size.height, width: size.width, height: size.height)
+    setFrame(onScreen(frame), display: true)
+  }
+
+  private func onScreen(_ frame: NSRect) -> NSRect {
+    let visible = (screen ?? parentWindowRef?.screen ?? NSScreen.main)?.visibleFrame ?? .infinite
+    var frame = frame
+    frame.origin.x = min(max(frame.minX, visible.minX + Self.screenMargin), visible.maxX - Self.screenMargin - frame.width)
+    frame.origin.y = min(max(frame.minY, visible.minY + Self.screenMargin), visible.maxY - Self.screenMargin - frame.height)
+    return frame
   }
 
   /// Closes the popup; `notify` tells Chromium the user closed it.
@@ -100,7 +108,7 @@ final class ExtensionPopupWindow: NSWindow {
     parent?.removeChildWindow(self)
     orderOut(nil)
     // The page belongs to Chromium; let go of it.
-    contentView?.subviews.first?.subviews.forEach { $0.removeFromSuperview() }
+    contentView?.subviews.forEach { $0.removeFromSuperview() }
     contentView = NSView()
     close()
     let callback = onDismiss

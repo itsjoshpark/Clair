@@ -33,6 +33,7 @@ inputs=(
   patches overlay utils native/ClairHost.h
   scripts/engine-key.sh scripts/apply-overlay.sh scripts/compile-icon.sh scripts/patch-no-fuzz.sh
   scripts/replace-icon-resources.sh scripts/install-native-contract.sh
+  scripts/filter-domain-substitution.sh
   "$icon_dir/AppIcon.icon" "$icon_dir/logos" "$icon_dir/vector_icons" "$logo_list"
 )
 # "-" entries in product-logos.txt copy a file from resources/icon itself.

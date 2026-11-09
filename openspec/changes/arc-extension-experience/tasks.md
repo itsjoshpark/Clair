@@ -17,12 +17,14 @@ Suggested order: 1 and 2 (one engine build), then 3 and 4 in `ClairUI` (they can
   - after `./build.sh fetch prepare` in the patch check, `build/src` has `https://chromewebstore.google.com/` in both files, and `qjz9zk` hosts everywhere else.
 - [ ] 1.2 Add `patches/clair/restore-web-store.patch` (D2), each hunk headed with the upstream patch and hunk it reverts:
   - `ExtensionDownloader::DoStartAllPending`'s update checks;
-  - `SanitizeUpdateURL`'s default update URL and HTTPS rule;
+  - `SanitizeUpdateURL`'s HTTPS rule (not its default update URL);
   - the store origins' dedicated process;
   - `WebstoreInstaller::DownloadCrx`, `StartCrxInstaller` and the `Webstore Downloads` folder.
 
+  Add one hunk that isn't a revert, making `ExtensionUpdater::CanUseUpdateService` return false so store updates use the restored downloader.
+
   Verify that the patch check applies the series without fuzz.
-- [ ] 1.3 Add the store fixups component under `overlay/components/clair_store_fixups/` (D3): the manifest and an isolated-world script adapted from Helium's `extstore_fixups`, with its GPL-3.0 credit in `CREDITS.md`. Add `patches/clair/store-fixups-component.patch`, which registers it in `component_loader.cc`, the component allowlist, `chrome_paks.gni` and `resource_ids.spec`. Verify that the engine builds.
+- [ ] 1.3 Add the store fixups component under `overlay/components/clair_store_fixups/` (D3): the manifest and an isolated-world script adapted from Helium's `extstore_fixups`, with its GPL-3.0 credit in `CREDITS.md`. Add `patches/clair/store-fixups-component.patch`, which registers it in `component_loader.cc`, the component allowlist, the component resource manager, `chrome_paks.gni`, `chrome/browser/extensions/BUILD.gn` and `resource_ids.spec`. Verify that the engine builds.
 - [ ] 1.4 Leave store-installer downloads (`DownloadSource::EXTENSION_INSTALLER`) out of `ClairDownloads`' snapshot and Dock progress (D8). Verify by hand that a store install adds nothing to the sidebar's downloads.
 
 ## 2. Contract and engine hooks

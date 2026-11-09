@@ -5,8 +5,11 @@
 #ifndef CHROME_BROWSER_CLAIR_WINDOW_CLAIR_WINDOW_HOOKS_H_
 #define CHROME_BROWSER_CLAIR_WINDOW_CLAIR_WINDOW_HOOKS_H_
 
+#include <memory>
 #include <string>
 
+#include "base/functional/callback_forward.h"
+#include "extensions/browser/extension_install_prompt_client.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/native_ui_types.h"
@@ -17,6 +20,7 @@
 
 class BrowserWindow;
 class BrowserWindowInterface;
+class ExtensionInstallPromptShowParams;
 class Profile;
 class TabStripModel;
 
@@ -29,6 +33,15 @@ class WebContents;
 namespace download {
 class DownloadItem;
 }  // namespace download
+
+namespace extensions {
+class Extension;
+class InstallPromptData;
+}  // namespace extensions
+
+namespace gfx {
+class ImageSkia;
+}  // namespace gfx
 
 namespace ui {
 class SimpleMenuModel;
@@ -83,6 +96,36 @@ bool ContentsMouseEvent(content::WebContents* source, bool exited);
 // native window it belongs to (D7). False when it belongs to none, and
 // Chromium shows its own download UI.
 bool ShowNewDownload(download::DownloadItem* item);
+
+// extension_install_dialog_view.cc: shows an install or permission prompt as
+// a sheet on its native window (arc-extension-experience D4), and takes
+// `done_callback` and `prompt`. False, leaving both, when the prompt's parent
+// isn't a native window or the prompt needs input the sheet can't take.
+bool ShowExtensionInstallPrompt(
+    ExtensionInstallPromptShowParams* show_params,
+    extensions::ExtensionInstallPromptClient::DoneCallback& done_callback,
+    std::unique_ptr<extensions::InstallPromptData>& prompt);
+
+// Destroying it dismisses the sheet if it's still showing, without answering.
+class ExtensionPromptHandle {
+ public:
+  virtual ~ExtensionPromptHandle() = default;
+};
+
+// extension_uninstall_dialog_impl.cc: shows the remove confirmation as a sheet
+// on its native window (D4). Null when `parent` isn't one. `answered` runs
+// once, unless the handle is destroyed first.
+std::unique_ptr<ExtensionPromptHandle> ShowExtensionRemovePrompt(
+    gfx::NativeWindow parent,
+    const extensions::Extension* extension,
+    const gfx::ImageSkia& icon,
+    base::OnceCallback<void(bool accepted)> answered);
+
+// extension_install_ui_desktop.cc: pins a newly installed extension to a
+// native window's sidebar (D5). False when `browser` isn't a native window,
+// and Chromium shows its post-install box.
+bool ExtensionInstalled(BrowserWindowInterface* browser,
+                        const extensions::Extension* extension);
 
 // browser_prefs.cc: Clair's defaults for passwords and autofill, which are off
 // (D17). Called after Chromium registers its profile prefs.

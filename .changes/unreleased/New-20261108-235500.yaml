@@ -1,0 +1,3 @@
+kind: New
+body: Extensions install and update from the Chrome Web Store, so Clair now contacts Google for store extensions (their IDs and versions are sent with update checks). Clair asks before adding or removing one in a native sheet, pins new extensions to the sidebar, shows popups in their own small window, and supports chrome.action.openPopup()
+time: 2026-11-08T23:55:00.000000-05:00

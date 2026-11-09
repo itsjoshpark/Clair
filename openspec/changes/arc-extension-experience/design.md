@@ -9,6 +9,7 @@ See proposal.md, "Why". What stands in the way today, from reading the engine tr
   - `extensions/common/api/_api_features.json` holds the `webstorePrivate` and `management` matches for `https://chromewebstore.google.com/*`.
   - Substituted, the real store isn't the store: it gets no `webstorePrivate`, so its page disables "Add to Chrome".
   - Both files hold nothing else that substitution affects, apart from the hosts `IsSafeBrowsingUrl()` matches, which is only a predicate.
+- **Installed store extensions update through `UpdateService`, not `ExtensionDownloader`.** `ExtensionUpdater::CanUseUpdateService` picks it for an installed extension whose update URL is the store's or empty. It posts to `update.googleapis.com`, which comes from `components/component_updater/component_updater_url_constants.cc` and stays substituted, so those checks can only fail.
 - **`disable-webstore-urls.patch` (ungoogled-chromium)** does four things:
   - `ExtensionDownloader::DoStartAllPending` no longer starts update checks.
   - `SanitizeUpdateURL()` no longer fills in the store's update URL for extensions that have none.
@@ -52,15 +53,19 @@ See proposal.md, "Why". What stands in the way today, from reading the engine tr
 
 The patch puts back these hunks:
 - the update check loop in `ExtensionDownloader::DoStartAllPending`;
-- the default update URL and its HTTPS rule in `SanitizeUpdateURL`;
+- the HTTPS rule in `SanitizeUpdateURL`, but not its default update URL, so an extension with no update URL is never checked against the store (spec "Extensions update automatically");
 - the dedicated process for the store's origins, which is a security property of the page that can install extensions;
 - `WebstoreInstaller::DownloadCrx`, `StartCrxInstaller` and the `Webstore Downloads` folder.
 
+It adds one hunk that isn't a revert: `ExtensionUpdater::CanUseUpdateService` returns false, so store updates use the restored `ExtensionDownloader` and `clients2.google.com`. Helium does the same.
+
 It leaves the rest of both upstream patches as they are: content verification, the extension migrator's blank URL, the removed "days since active" ping, the cookies-only credentials, the web store app, and the histogram changes.
 
-Each hunk is a revert, so the patch header names the upstream patch and hunk it undoes. The `chromium-engine` spec allows this one category of behavior patch.
+Each revert hunk names the upstream patch and hunk it undoes. The `chromium-engine` spec allows this one category of behavior patch.
 
-*Alternative:* removing the two upstream patches from the series. That would bring back everything else they turn off, and Clair's series doesn't edit ungoogled-chromium's.
+*Alternatives:*
+- **Removing the two upstream patches from the series** would bring back everything else they turn off, and Clair's series doesn't edit ungoogled-chromium's.
+- **Leaving the component updater's URL file out of domain substitution** would let `UpdateService` work, but adds a Google host and un-substitutes the address the component updater uses.
 
 ### D3. The store fixes ship as a component extension in the overlay
 
@@ -71,7 +76,7 @@ Each hunk is a revert, so the patch header names the upstream patch and hunk it 
 | Isolated-world script | isolated | Replaces "Chrome" / "Google Chrome" in the main install button's text with "Clair", which gives "Add to Clair" and "Remove from Clair". Removes the promo popup and the "Switch to Chrome" banner. Re-runs through a `MutationObserver` as the single-page store re-renders. |
 | Main-world script | main | Forces the store's Chrome-eligibility check, as Helium's does. Only added if the banner can't be removed in the isolated world. |
 
-A hook in `component_loader.cc` registers it, the extension's ID and manifest resource are added to the component allowlist, and its grd is wired into `chrome_paks.gni` and `resource_ids.spec`. These are four small hunks, in a new `patches/clair/store-fixups-component.patch`.
+A hook in `component_loader.cc` registers it, the extension's ID and manifest resource are added to the component allowlist, its resources join `ChromeComponentExtensionResourceManager`, and its grd is wired into `chrome_paks.gni`, `chrome/browser/extensions/BUILD.gn` and `resource_ids.spec`. These small hunks are in a new `patches/clair/store-fixups-component.patch`.
 
 Component extensions may script the store, which other extensions may not. No other part of the store's text is changed (spec "Store wording names Clair").
 

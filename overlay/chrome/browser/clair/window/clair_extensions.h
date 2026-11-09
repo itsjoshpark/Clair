@@ -7,9 +7,12 @@
 
 #import <Foundation/Foundation.h>
 
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -24,13 +27,16 @@
 class ClairBrowserWindow;
 
 namespace extensions {
+class Extension;
 class ExtensionViewHost;
 }  // namespace extensions
 
 // The sidebar's extension actions (design D7): snapshots from Chromium's
 // toolbar model and actions, running an action as the toolbar would, and its
-// popup page, which ClairUI shows attached to the clicked button. It is the
-// browser's ExtensionsContainer, so chrome.action.openPopup() reaches it.
+// popup page, which ClairUI shows in a window beside the clicked button. It is
+// the browser's ExtensionsContainer, so chrome.action.openPopup() reaches it.
+// It also holds this window's install and remove confirmations
+// (arc-extension-experience D4) and pins newly installed extensions (D5).
 class ClairExtensions : public ExtensionsContainer,
                         public ToolbarActionsModel::Observer,
                         public extensions::ExtensionActionDispatcher::Observer,
@@ -51,6 +57,23 @@ class ClairExtensions : public ExtensionsContainer,
   void PopupClosedByUser();
   // The active tab changed, which changes icons and badges.
   void ActiveTabChanged();
+
+  // Asks ClairUI to confirm `prompt`, whose ID came from NewPromptID().
+  // `answer` runs once: with the user's answer, or false if the window closes.
+  // It doesn't run if the prompt is dismissed.
+  void ShowPrompt(id<ClairExtensionPrompt> prompt,
+                  base::OnceCallback<void(bool accepted)> answer);
+  int NewPromptID() { return next_prompt_id_++; }
+  // An ID that's already answered or dismissed does nothing.
+  void AnswerPrompt(int prompt_id, bool accepted);
+  void DismissPrompt(int prompt_id);
+  base::WeakPtr<ClairExtensions> AsWeakPtr() {
+    return weak_factory_.GetWeakPtr();
+  }
+
+  // The user installed `extension` through a confirmation: pins its action,
+  // now or as soon as the toolbar model has it.
+  void PinNewExtension(const extensions::Extension& extension);
 
   // ExtensionsContainer:
   ToolbarActionViewModel* GetActionForId(const std::string& action_id) override;
@@ -97,6 +120,9 @@ class ClairExtensions : public ExtensionsContainer,
 
   const raw_ptr<ClairBrowserWindow> window_;
   std::unique_ptr<Popup> popup_;
+  std::map<int, base::OnceCallback<void(bool)>> prompts_;
+  int next_prompt_id_ = 1;
+  std::set<std::string> pending_pins_;
   bool flush_posted_ = false;
   base::ScopedObservation<ToolbarActionsModel, ToolbarActionsModel::Observer>
       model_observation_{this};

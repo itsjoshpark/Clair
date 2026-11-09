@@ -1,0 +1,41 @@
+# Copyright 2025 The Helium Authors
+# Copyright 2026 The Clair Authors
+# You can use, redistribute, and/or modify this source code under
+# the terms of the GPL-3.0 license that can be found in the LICENSE file.
+#
+# Adapted from Helium's components/extstore_fixups; see CREDITS.md.
+
+import("//tools/grit/grit_rule.gni")
+import("//ui/webui/resources/tools/generate_grd.gni")
+
+generated_grd = "$target_gen_dir/resources.grd"
+
+generate_grd("clair_store_fixups_grd") {
+  out_grd = generated_grd
+
+  grd_prefix = "clair_store_fixups"
+  resource_path_prefix = "clair_store_fixups"
+
+  input_files_base_dir = rebase_path(".", "//")
+  input_files = [
+    "chrome-webstore.js",
+    "manifest.json",
+  ]
+}
+
+grit("clair_store_fixups") {
+  source = generated_grd
+
+  # Required because the .grd is generated.
+  enable_input_discovery_for_gn_analyze = false
+  output_dir = "$target_gen_dir/resources"
+
+  outputs = [
+    "clair_store_fixups_resources.pak",
+    "grit/clair_store_fixups_resources.h",
+    "grit/clair_store_fixups_resources_map.cc",
+    "grit/clair_store_fixups_resources_map.h",
+  ]
+
+  deps = [ ":clair_store_fixups_grd" ]
+}

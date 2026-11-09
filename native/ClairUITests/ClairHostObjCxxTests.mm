@@ -66,7 +66,7 @@
          @protocol(ClairBrowser), @protocol(ClairWindow), @protocol(ClairTab),
          @protocol(ClairAutocomplete), @protocol(ClairAutocompleteDelegate),
          @protocol(ClairSuggestion), @protocol(ClairDownload),
-         @protocol(ClairExtensionAction), @protocol(ClairInfobar),
+         @protocol(ClairExtensionAction), @protocol(ClairExtensionPrompt), @protocol(ClairInfobar),
          @protocol(ClairHistoryMenu), @protocol(ClairHistoryMenuDelegate), @protocol(ClairHistoryItem)
        ]) {
     XCTAssertTrue(protocol_conformsToProtocol(protocol, @protocol(NSObject)));

@@ -459,6 +459,37 @@ final class ExtensionActionTests: NativeWindowTestCase {
     XCTAssertTrue(
       infos.contains { ($0["url"] as? String)?.hasSuffix("/popup.html") == true },
       "No popup page is loaded")
+    let close = popup.buttons[XCUIIdentifierCloseWindow]
+    try require(close.waitForExistence(timeout: 10), "The popup window has no close button")
+    XCTAssertTrue(close.isEnabled, "The popup window's close button is disabled")
+    close.click()
+    let closed = await Harness.wait(for: 15) { !popup.exists }
+    XCTAssertTrue(closed, "The close button didn't close the popup")
+  }
+
+  func testBackgroundScriptOpensItsPopup() async throws {
+    let extensionPath = Fixture.directory.appending(path: "extensions/popup-badge").path
+    let (browser, tab) = try await startWithPage(arguments: ["--load-extension=\(extensionPath)"])
+    defer { tab.close() }
+    let session = try await browser.browserSession()
+    defer { session.close() }
+    var workerID: String?
+    let started = await Harness.wait(for: 30) {
+      let targets = try await session.send("Target.getTargets")
+      let infos = targets["targetInfos"] as? [[String: Any]] ?? []
+      workerID =
+        infos.first {
+          $0["type"] as? String == "service_worker"
+            && ($0["url"] as? String)?.hasSuffix("/background.js") == true
+        }?["targetId"] as? String
+      return workerID != nil
+    }
+    try require(started, "The extension's background script didn't start")
+    let worker = try await browser.session(onTarget: try XCTUnwrap(workerID))
+    defer { worker.close() }
+    _ = try await worker.evaluate("chrome.action.openPopup()")
+    let popup = browser.ui.windows["clair.extensionPopup"]
+    XCTAssertTrue(popup.waitForExistence(timeout: 15), "chrome.action.openPopup() didn't open the popup")
   }
 }
 

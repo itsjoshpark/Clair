@@ -1199,7 +1199,8 @@ bool ClairBrowserWindow::IsTabStripEditable() const {
 void ClairBrowserWindow::DisableTabStripEditingForTesting() {}
 
 bool ClairBrowserWindow::IsToolbarVisible() const {
-  return false;
+  // The sidebar is the toolbar: chrome.action.openPopup() checks this.
+  return true;
 }
 
 bool ClairBrowserWindow::IsToolbarShowing() const {

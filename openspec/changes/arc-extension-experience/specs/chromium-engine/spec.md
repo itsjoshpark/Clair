@@ -44,7 +44,7 @@ Apart from its identity (`app-identity`), native layer (`native-layer`), updater
 - **THEN** it shows the same settings and defaults as the same ungoogled-chromium release, apart from Clair's identity and versions and the absent "Autofill and passwords" section
 
 ### Requirement: Changes to Chromium limited to hooks and identity
-Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, hooks, and restoring the Chrome Web Store installer and extension update checks that ungoogled-chromium removes. The hooks load the native layer, hand Chromium's browser window and its attached UI to Clair's code, register Clair's component extensions, and turn off or hide the password and autofill features. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off. Other behaviour Clair adds SHALL live in the native layer or in new source files added to the Chromium tree.
+Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, hooks, and restoring the Chrome Web Store installer and extension update checks that ungoogled-chromium removes, including sending those checks through the restored code. The hooks load the native layer, hand Chromium's browser window and its attached UI to Clair's code, register Clair's component extensions, and turn off or hide the password and autofill features. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off. Other behaviour Clair adds SHALL live in the native layer or in new source files added to the Chromium tree.
 
 #### Scenario: Reviewing Clair's patch series
 - **WHEN** the patches in `patches/clair/` and `patches/helium/` are listed
@@ -56,7 +56,7 @@ Clair's patches to existing Chromium source files SHALL be limited to macOS buil
 
 #### Scenario: Reviewing the store restoration
 - **WHEN** the patch that restores the Chrome Web Store is read
-- **THEN** each hunk puts back code that ungoogled-chromium's patches removed for the store installer or for extension update checks, and adds no other behavior
+- **THEN** each hunk puts back code that ungoogled-chromium's patches removed for the store installer or for extension update checks, or sends store update checks through that code, and adds no other behavior
 
 ## REMOVED Requirements
 
