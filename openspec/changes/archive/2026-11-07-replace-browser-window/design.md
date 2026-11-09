@@ -50,7 +50,7 @@ See `proposal.md` for why, and `specs/` for the required behavior. This section 
 Each `BrowserWindow` method falls into one of four groups, listed in the class's header: forwarded to `ClairUI`; answered from the `NSWindow` (bounds, state, activation); handled in the overlay (the helpers above); or one of D9's unavailable features, which does nothing and logs once.
 
 **Alternatives considered:**
-- **Dia's model** (`dia-architecture.md`): the Swift app owns the process and embeds Chromium as a framework with its own Objective-C++ API. Rejected: Clair would need its own start-up, app delegate, session restore and menus, plus a 200-header API, before showing a window.
+- **Chromium as an embedded framework**: the Swift app owns the process and embeds Chromium as a framework with its own Objective-C++ API. Rejected: Clair would need its own start-up, app delegate, session restore and menus, plus a 200-header API, before showing a window.
 - **A Views shell with native content**, as `WebUIBrowserWindow` hosts a WebUI page: a `views::Widget` whose content is `ClairUI`'s `NSView`. Chromium's bubbles would anchor without changes, but the window, its title bar, traffic lights, full screen and event handling would stay Chromium's `BrowserFrameMac`, which is what the Arc layout has to replace. Rejected.
 
 ### D2. Which windows are native, and what happens without `ClairUI`

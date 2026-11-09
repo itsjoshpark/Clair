@@ -251,10 +251,13 @@ struct FindFieldView: View {
       // only the field takes focus, even with keyboard navigation on.
       Button { actions?.find(text, forward: false) } label: { Image(systemName: "chevron.up") }
         .buttonStyle(.plain).disabled(text.isEmpty).focusable(false)
+        .tooltip("Previous match", shortcut: ["⇧", "↩"]).accessibilityLabel("Previous match")
       Button { actions?.find(text, forward: true) } label: { Image(systemName: "chevron.down") }
         .buttonStyle(.plain).disabled(text.isEmpty).focusable(false)
+        .tooltip("Next match", shortcut: ["↩"]).accessibilityLabel("Next match")
       Button { actions?.closeFind() } label: { Image(systemName: "xmark") }
         .buttonStyle(.plain).focusable(false)
+        .tooltip("Close", shortcut: ["esc"]).accessibilityLabel("Close")
     }
     .padding(.horizontal, 10)
     .frame(height: 36)
@@ -323,6 +326,8 @@ struct InfobarsView: View {
           }
           Button { actions?.infobar(infobar.infobarID, didChoose: .dismiss) } label: { Image(systemName: "xmark") }
             .buttonStyle(.plain)
+            .tooltip("Dismiss")
+            .accessibilityLabel("Dismiss")
         }
         .padding(.horizontal, 12)
         .frame(minHeight: 40)

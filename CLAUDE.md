@@ -8,6 +8,11 @@ Leave ungoogled-chromium alone as much as possible. Patches to existing Chromium
 
 The work is planned as OpenSpec changes in `openspec/changes/<name>/`, each with `proposal.md`, `design.md`, `specs/` and `tasks.md`. Change 1, `ship-plain-ungoogled-build`, is archived in `openspec/changes/archive/2026-11-05-ship-plain-ungoogled-build/`: its `proposal.md` holds the product decisions, the roadmap and the MVP feature list, and its `arc-reference/` the Arc behavior references. Its capability specs are in `openspec/specs/`. Arc stops working on 2026-12-22.
 
+When work needs a change, following OpenSpec's own guidance:
+
+- **A change is required for:** new features or behavior; breaking changes (the `ClairHost.h` contract, data formats, identifiers); architecture changes or new patterns; performance work that changes behavior; security changes; anything that takes several steps or touches several systems, such as `ClairUI` and the engine.
+- **No change is needed for:** bug fixes that restore specified behavior; typos, formatting and comments; non-breaking dependency updates; configuration and environment changes; tests for existing behavior; documentation fixes. Such work may still correct a spec directly where it was wrong.
+
 - Read the relevant change's proposal, design and specs before implementing anything.
 - Mark a task `- [x]` only once its stated verification has passed. For anything that needs a build, that means the CI build passing.
 - If implementation contradicts the specs or design, update those artifacts rather than drifting from them silently.

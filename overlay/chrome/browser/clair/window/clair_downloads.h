@@ -35,6 +35,14 @@ class ClairDownloads : public download::AllDownloadItemNotifier::Observer {
   // Newest first.
   NSArray<id<ClairDownload>>* Snapshot();
 
+  // The whole app's download progress, from the DownloadStatusUpdater that
+  // drives the Dock icon.
+  static ClairDownloadProgress Progress();
+
+  // The app-wide progress changed: a download of any profile, whether or
+  // not it has a window, started, progressed, paused or ended.
+  void ProgressChanged(const ClairDownloadProgress& progress);
+
   void Open(const std::string& guid);
   void ShowInFinder(const std::string& guid);
   void Cancel(const std::string& guid);

@@ -241,7 +241,7 @@ struct TooltipView: View {
     let accent = Color.accentColor
     HStack(spacing: 6) {
       Text(tooltip.text)
-        .font(.system(size: 12, weight: .regular))
+        .font(.system(size: 12, weight: .medium))
         .foregroundStyle(colorScheme == .dark ? Color.white.mix(with: accent, by: 0.1) : Color.primary.mix(with: accent, by: 0.3))
         .lineLimit(1)
       if !tooltip.shortcut.isEmpty {

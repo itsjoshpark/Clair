@@ -4,6 +4,7 @@
 
 import AppKit
 import ClairHost
+import Observation
 import Testing
 
 @testable import ClairUI
@@ -253,5 +254,61 @@ struct CommandBarTests {
     let (browser, model, _) = open(.newTab)
     browser.autocomplete?.post(suggestions)
     #expect(!model.acceptKeyword())
+  }
+}
+
+/// The line between a scrolling tab list and the footer follows the tabs as
+/// well as the list's height.
+struct TabListOverflowTests {
+  @Test func followsTheTabCountAtAFixedHeight() {
+    let height = TabList.contentHeight(tabCount: 10) - 20
+    #expect(TabList.overflows(height: height, tabCount: 10))
+    // Tabs closed until the rows fit: the capped list keeps its height.
+    #expect(!TabList.overflows(height: height, tabCount: 9))
+    #expect(!TabList.overflows(height: TabList.contentHeight(tabCount: 3), tabCount: 3))
+  }
+
+  @Test func notBeforeTheListIsLaidOut() {
+    #expect(!TabList.overflows(height: 0, tabCount: 5))
+  }
+}
+
+/// The downloads button's ring follows the Dock's progress (sidebar spec,
+/// "Download progress").
+@MainActor
+struct DownloadProgressTests {
+  func ring(_ progress: DownloadProgress) -> Double? {
+    let model = BrowserWindowModel(profileKind: .regular, sidebar: SidebarState())
+    model.setDownloads([], progress: progress)
+    return model.downloadProgress
+  }
+
+  @Test func noRingWithoutRunningDownloads() {
+    #expect(ring(DownloadProgress(count: 0, isIndeterminate: false, fraction: 0)) == nil)
+  }
+
+  @Test func noRingWhileAnySizeIsUnknown() {
+    #expect(ring(DownloadProgress(count: 2, isIndeterminate: true, fraction: 0.4)) == nil)
+  }
+
+  @Test func unchangedProgressLeavesTheModelAlone() {
+    let model = BrowserWindowModel(profileKind: .regular, sidebar: SidebarState())
+    let progress = DownloadProgress(count: 1, isIndeterminate: false, fraction: 0.5)
+    model.setDownloadProgress(progress)
+    nonisolated(unsafe) var changed = false
+    withObservationTracking {
+      _ = model.downloadProgress
+    } onChange: {
+      changed = true
+    }
+    model.setDownloadProgress(progress)
+    #expect(!changed)
+    model.setDownloadProgress(DownloadProgress(count: 1, isIndeterminate: false, fraction: 0.6))
+    #expect(changed)
+  }
+
+  @Test func ringShowsTheAppWideFraction() {
+    #expect(ring(DownloadProgress(count: 2, isIndeterminate: false, fraction: 0.25)) == 0.25)
+    #expect(ring(DownloadProgress(count: 1, isIndeterminate: false, fraction: 1.2)) == 1)
   }
 }

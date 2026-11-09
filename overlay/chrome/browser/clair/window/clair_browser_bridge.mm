@@ -863,6 +863,10 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
              : @[];
 }
 
+- (ClairDownloadProgress)downloadProgress {
+  return ClairDownloads::Progress();
+}
+
 // --- ClairBrowser: tabs ---
 
 - (void)activateTab:(ClairTabID)tabID {

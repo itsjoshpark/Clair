@@ -21,11 +21,7 @@ See proposal.md for why, and `specs/sidebar/spec.md` and `specs/browser-window/s
 
 **So the flicker's root cause** is the bridge reporting `IsLoading()`: every snapshot pushed while an iframe, ad frame or `pushState` load is in flight says "loading", and snapshots are pushed for many unrelated reasons (title, favicon, audio, infobars, `UpdateLoadingAnimations`). The button flips to stop and back each time, while the tab spinner, shown only without a favicon, stays hidden.
 
-**What Arc does**, first from a static read of its binaries (strings and class names only); task 1.1's measurements are in the Measurements section below, and they replace these guesses where they differ (Arc's history list is a popover, and its loading indicator a timed capsule, not a progress glow):
-
-- `ArcCore` exposes `ArcBackForwardList` and `ArcBackForwardListItem` (with an `isAlternate` flag, maybe an Option-key variant), and `ARCUI`'s `BackForwardList.BackForwardListMenuManager` builds a menu anchored to the button (`MenuAnchorProviding`). Arc's buttons include a `LongPressButton` with `longPressDuration`. There's no "Show Full History" string.
-- The loading indicator is `GlowProgressLoadingIndicatorView`, drawn with a Metal shader (`ARC_GlowProgressLoadingIndicator.bundle/default.metallib`) beside a `GradientBorderGlowView`, and `ArcCore` reports `loadProgress`.
-- Tooltips are Arc's own: an `ArcTooltip` module with its own `TooltipWindow`, a delay and presentation of its own, and keyboard-shortcut hints (`tooltipKeyboardShortcut`, `optionKeyTitle`).
+**What Arc does** is in the Measurements section below (task 1.1).
 
 **Constraints:** every engine change goes into one contract addition and one engine build (D3 of `replace-browser-window`); the only patch to a Chromium file is D5's small Dock menu one. Tests stay on fundamentals: unit tests for logic, a runtime test only for core navigation, hand checks for the rest.
 

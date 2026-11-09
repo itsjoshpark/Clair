@@ -24,6 +24,8 @@ final class BrowserWindowModel {
 
   private(set) var extensionActions: [any ClairExtensionAction] = []
   private(set) var downloads: [any ClairDownload] = []
+  /// The whole app's download progress, as the Dock shows it.
+  private(set) var appDownloadProgress = DownloadProgress()
 
   var pinnedExtensionActions: [any ClairExtensionAction] {
     extensionActions.filter(\.isPinned)
@@ -35,14 +37,13 @@ final class BrowserWindowModel {
     downloads.contains { $0.state == .complete && !$0.isSeen }
   }
 
-  /// The overall progress of running downloads, 0 to 1, or nil when none runs
-  /// or none knows its size.
+  /// The progress ring's value, 0 to 1, as the Dock shows it: every
+  /// profile's running downloads, and no ring when none runs or any has an
+  /// unknown size.
   var downloadProgress: Double? {
-    let running = downloads.filter { $0.state == .inProgress && $0.totalBytes > 0 }
-    guard !running.isEmpty else { return nil }
-    let received = running.reduce(Int64(0)) { $0 + $1.receivedBytes }
-    let total = running.reduce(Int64(0)) { $0 + $1.totalBytes }
-    return total > 0 ? Double(received) / Double(total) : nil
+    let progress = appDownloadProgress
+    guard progress.count > 0, !progress.isIndeterminate else { return nil }
+    return min(max(progress.fraction, 0), 1)
   }
 
   // --- the window's own state ---
@@ -91,8 +92,20 @@ final class BrowserWindowModel {
     extensionActions = actions
   }
 
-  func setDownloads(_ downloads: [any ClairDownload]) {
+  func setDownloads(_ downloads: [any ClairDownload], progress: DownloadProgress) {
     self.downloads = downloads
+    setDownloadProgress(progress)
+  }
+
+  /// Takes the app-wide progress, leaving the model alone when nothing
+  /// changed, so the sidebar doesn't redraw for nothing.
+  func setDownloadProgress(_ progress: DownloadProgress) {
+    let current = appDownloadProgress
+    guard
+      progress.count != current.count || progress.isIndeterminate != current.isIndeterminate
+        || progress.fraction != current.fraction
+    else { return }
+    appDownloadProgress = progress
   }
 }
 

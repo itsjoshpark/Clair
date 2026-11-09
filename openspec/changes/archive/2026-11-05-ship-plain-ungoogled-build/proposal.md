@@ -56,7 +56,7 @@ This change also adds a minimal native layer: a Swift framework that Chromium lo
 - Add a release pipeline on GitHub Actions (public repo). Releases run on the owner's self-hosted Mac:
   - Developer ID signing, notarization, DMG creation
   - publishing to GitHub Releases
-- Capture an Arc behaviour reference in `arc-reference/`, because Arc stops working on 2026-12-22. It holds the menu and shortcut dump, a re-runnable script, filtered UI strings for the MVP features, a look-and-behaviour reference with screenshots (`look-and-behaviour.md`), how Dia (Arc's successor) is built on Chromium (`dia-architecture.md`), and Clair's decided menu bar and shortcuts (`clair-menus.md`). Change 1 itself ships Chromium's stock menus.
+- Capture an Arc behaviour reference in `arc-reference/`, because Arc stops working on 2026-12-22. It holds the menu and shortcut dump, a re-runnable script, a look-and-behaviour reference with screenshots (`look-and-behaviour.md`), and Clair's decided menu bar and shortcuts (`clair-menus.md`). Change 1 itself ships Chromium's stock menus.
 
 **Out of scope for this change:** any Clair browser UI or feature work beyond the update menu and the About window; replacing Chromium's window; removing the password manager or autofill; Widevine/DRM; sync; Homebrew cask; crash reporting.
 

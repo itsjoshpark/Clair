@@ -297,6 +297,7 @@ final class FakeBrowser: NSObject, ClairBrowser {
   private(set) var devToolsLayout = DevToolsLayout(dockSide: .none, pageBounds: .zero, hidesPage: false)
   private(set) var extensionActions: [any ClairExtensionAction] = []
   private(set) var downloads: [any ClairDownload] = []
+  private(set) var downloadProgress = DownloadProgress()
 
   /// The window ClairUI returned for this browser.
   var clairWindow: (any ClairWindow)?
@@ -378,9 +379,10 @@ final class FakeBrowser: NSObject, ClairBrowser {
     clairWindow?.extensionActionsDidChange(actions)
   }
 
-  func setDownloads(_ downloads: [FakeDownload]) {
+  func setDownloads(_ downloads: [FakeDownload], progress: DownloadProgress = DownloadProgress()) {
     self.downloads = downloads
-    clairWindow?.downloadsDidChange(downloads)
+    downloadProgress = progress
+    clairWindow?.downloadsDidChange(downloads, progress: progress)
   }
 
   /// Closes the window as Chromium does once its tabs have closed.
@@ -535,6 +537,9 @@ final class RecordingWindow: NSObject, ClairWindow {
 
   func extensionPopupDidResize(_ size: NSSize) { calls.append("popupResize") }
   func closeExtensionPopup() { calls.append("closePopup") }
-  func downloadsDidChange(_ downloads: [any ClairDownload]) { calls.append("downloads \(downloads.count)") }
+  func downloadsDidChange(_ downloads: [any ClairDownload], progress: DownloadProgress) {
+    calls.append("downloads \(downloads.count)")
+  }
+  func downloadProgressDidChange(_ progress: DownloadProgress) { calls.append("progress \(progress.count)") }
   func browserDidClose() { calls.append("closed") }
 }

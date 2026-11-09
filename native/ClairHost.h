@@ -243,6 +243,17 @@ typedef NS_ENUM(NSInteger, ClairDownloadState) {
   ClairDownloadStateInterrupted = 4,
 } NS_SWIFT_NAME(DownloadState);
 
+// The whole app's download progress, as the Dock shows it: the running
+// downloads of every profile, paused ones included.
+typedef struct {
+  // How many downloads are running; with none, there's no progress to show.
+  NSInteger count;
+  // Whether any of them has an unknown size. The Dock then shows no ring.
+  bool isIndeterminate;
+  // Bytes received over bytes expected, for the downloads of known size.
+  double fraction;
+} ClairDownloadProgress NS_SWIFT_NAME(DownloadProgress);
+
 // An infobar on a tab, such as "Clair is being controlled by automated test
 // software" or an extension debugging the browser. Chromium implements it as
 // a snapshot.
@@ -541,6 +552,8 @@ NS_SWIFT_NAME(ClairBrowser)
 
 // The window's profile's downloads from this session, newest first.
 @property(nonatomic, readonly, copy) NSArray<id<ClairDownload>> *downloads;
+// The whole app's download progress, as the Dock shows it.
+@property(nonatomic, readonly) ClairDownloadProgress downloadProgress;
 
 // --- Tabs ---
 // Makes the tab active.
@@ -711,8 +724,13 @@ NS_SWIFT_NAME(ClairWindow)
 - (void)closeExtensionPopup;
 
 // --- Downloads ---
-// A download started, progressed, finished, or was opened or removed.
-- (void)downloadsDidChange:(NSArray<id<ClairDownload>> *)downloads NS_SWIFT_NAME(downloadsDidChange(_:));
+// One of the window's profile's downloads started, progressed, finished, or
+// was opened or removed; the progress is the app-wide one at that moment.
+- (void)downloadsDidChange:(NSArray<id<ClairDownload>> *)downloads
+                  progress:(ClairDownloadProgress)progress NS_SWIFT_NAME(downloadsDidChange(_:progress:));
+// The app-wide progress changed: a download of any profile, whether or not
+// it has a window, started, progressed, paused or ended.
+- (void)downloadProgressDidChange:(ClairDownloadProgress)progress NS_SWIFT_NAME(downloadProgressDidChange(_:));
 
 // --- The window ---
 // Chromium is closing the window. ClairUI lets go of its views and the

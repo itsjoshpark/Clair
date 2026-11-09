@@ -20,16 +20,8 @@ See proposal.md for why, and `specs/browser-window/spec.md` for the required beh
 - The strip is 0–58 pt below the page view's top edge (58 moves, 59 doesn't), measured with the sidebar shown and hidden, on a page with a 60 px header and on a plain page with no header: it doesn't depend on the page's content. In both sidebar states Arc's page started 10 pt below the window's top; Clair measures from the page.
 - A double-click in the strip goes to the page (`dblclick`) and doesn't zoom the window, although the system's title bar double-click action is Fill.
 - In an inactive window, a drag from the strip brings Arc forward and moves the window.
-- A drag that started below the strip and moved up into it also moved Arc's window. The disassembly below explains it as stale state from an earlier press; Clair doesn't copy it.
-- The setting is "Allow window dragging from the top of webpages" in Settings › Advanced, `contentWindowDraggingEnabled` in Arc's binary, gated by a remote flag (`window-dragging-via-webcontents-enabled`). Arc stores no value for it in the owner's profile, so on is taken as its default.
-
-**How Arc does it**, from a static disassembly of Arc's binaries (a debugger can't attach: hardened runtime without `get-task-allow`, SIP on), confirmed by the cursor rows above:
-
-- `ARCUI.WindowContentGrabber`, an `NSView` over the top of the web content, overrides `hitTest:` and reads `NSApp.currentEvent`. It never claims the press: on a `leftMouseDown` it returns nil, so the page gets the press, and records whether the drag is armed: the current cursor is `NSCursor.arrowCursor` and its delegate (`WindowContentViewController`, which checks the setting and the window's state) agrees.
-- Chromium's `-[RenderWidgetHostViewCocoa shouldIgnoreMouseEvent:]` hit-tests the window's content view for every mouse event, drags included, so the grabber's `hitTest:` also runs for the first `leftMouseDragged`. If the drag is armed and the cursor is still the arrow, it calls `[window performWindowDragWithEvent:]` with that event. The page still receives that event, since Chromium keeps delivering events during an open press: that's the one `mousemove`. The window server then moves the window, and the release reaches the page.
-- After the hand-off, a local monitor for `leftMouseDragged` and `leftMouseUp` swallows further drags, and the release if the app itself saw more than 1 pt of movement, in case the window drag didn't take.
-- The armed state isn't cleared at the release, which is why a later drag from below that enters the strip can move the window.
-- Arc's Chromium drops `RenderWidgetHostViewCocoa`'s `mouseDownCanMoveWindow` override, so AppKit's title bar never moves the window from a press on the page.
+- A drag that started below the strip and moved up into it also moved Arc's window. Clair doesn't copy that.
+- The setting is "Allow window dragging from the top of webpages" in Settings › Advanced. Arc stores no value for it in the owner's profile, so on is taken as its default.
 
 **What Clair does today** (0.1.2, same day): a key window's page gets every press, so the top of the page can't move it. Once, in an inactive window, a drag from the page's top 30 pt moved it, which matches AppKit's title bar (40 pt tall since `place-traffic-lights-with-appkit`) handling the press, since stock Chromium's `RenderWidgetHostViewCocoa` answers `mouseDownCanMoveWindow` with YES. The window's content view is `ClairUI`'s `BrowserRootView`, and the page view sits in `PageCardView`'s container, so a `ClairUI` view above the page view is in the path of Chromium's hit test.
 
@@ -49,7 +41,7 @@ See proposal.md for why, and `specs/browser-window/spec.md` for the required beh
 
 ## Decisions
 
-### D1. Arc's approach: a strip view over the page, decided by the cursor
+### D1. A strip view over the page, decided by the cursor
 
 `PageTopDragStrip`, an `NSView` with no drawing, sits in `PageCardView`'s container directly above the page view, so infobars, the crashed-page view and everything in `BrowserRootView` over the card (command bar, find, toasts, the revealed sidebar) stay above it and take their presses first. Its `hitTest(_:)` always returns nil, so it never takes a press, and feeds `PageTopWindowDrag`, a plain state machine with no AppKit in it:
 
@@ -63,7 +55,7 @@ Double-clicks are never armed (`clickCount` 2), so they go to the page.
 5. **A window that isn't key.** Chromium doesn't pass the first press in such a window to the page (no click-through: `acceptsFirstMouse:` is NO by default), so neither the page nor Chromium's hit test sees its drags. Left alone, AppKit's title bar would move the window from the window's top 40 pt whatever the preference. The strip takes that press itself instead: `hitTest` returns the strip, which accepts first mouse and answers NO to `mouseDownCanMoveWindow`, with the preference on or off, and the press activates the window as any other would. With the preference on, its first drag moves the window, whatever the cursor, which Chromium doesn't update in an inactive window, so text and links in the strip move it too. The page loses nothing, since it wouldn't have had the press.
    - Arc, measured: its page accepts the first click (click-through), so its strip applies there as in a key window, and with the setting off nothing moves it. Click-through in Clair would change every first click in an inactive window (a link would open instead of the window activating), so it wasn't taken.
 
-- Why the cursor: it's the one signal Arc uses, it's available in `ClairUI` (Chromium sets it with `-[NSCursor set]` in the browser process), and it gives Arc's outcome for every measured row.
+- Why the cursor: it's available in `ClairUI` (Chromium sets it with `-[NSCursor set]` in the browser process), and it gives Arc's outcome for every measured row.
 - Why `hitTest`: Chromium already hit-tests the content view for every mouse event, so the strip sees the first drag without an event monitor in front of the page or held events, and the page gets exactly what it gets in Arc.
 - Why `performDrag(with:)`: it hands the move to the window server, so snapping, tiling and moving between displays and Spaces behave as for a title bar drag.
 - Alternative (the previous plan): `ClairHost.h` gains a contract through which the overlay reports Chromium's input acknowledgements (`RenderWidgetHost::InputEventObserver`), and `ClairUI` holds drag events until the page's answer. It would keep drags for canvases that cancel the press under the arrow cursor, but costs an engine build and a riskier spike (the acknowledgements might not separate the cases), and diverges from Arc. Rejected; it remains the path if pages that need it come up.
@@ -74,11 +66,11 @@ Double-clicks are never armed (`clickCount` 2), so they go to the page.
 
 The strip view's frame is the top 59 pt of the page view's frame, set in `PageCardView`'s layout next to the page view's own frame (the card, or the page's part of it when DevTools is docked), and hidden whenever the page view is. Its height is one constant with Arc's measurement next to it. It doesn't depend on scrolling, the sidebar's state, the card's insets or the page's content.
 
-### D3. Keeping AppKit's title bar out of the page: a patch, as in Arc
+### D3. Keeping AppKit's title bar out of the page: a patch
 
-Stock Chromium's `RenderWidgetHostViewCocoa` answers `mouseDownCanMoveWindow` with YES, so AppKit's title bar (the window's top 40 pt) moves the window from a press on the page, even one the page uses: in task 1.1 a link drag in the page's top 30 pt both started a link drag and moved the window. Chromium needs YES for frameless app windows, where a page marks its drag areas with `-webkit-app-region` and Chromium covers the rest with views that answer NO; in its own browser windows the page never reaches the title bar. Arc removed the override in its Chromium.
+Stock Chromium's `RenderWidgetHostViewCocoa` answers `mouseDownCanMoveWindow` with YES, so AppKit's title bar (the window's top 40 pt) moves the window from a press on the page, even one the page uses: in task 1.1 a link drag in the page's top 30 pt both started a link drag and moved the window. Chromium needs YES for frameless app windows, where a page marks its drag areas with `-webkit-app-region` and Chromium covers the rest with views that answer NO; in its own browser windows the page never reaches the title bar. In Arc, a press on the page never moves the window through the title bar.
 
-- `patches/clair/page-cannot-move-window.patch` makes the override answer NO, as Arc's Chromium does. It returns NO explicitly rather than dropping the override, since AppKit's default answers YES for a view that isn't opaque.
+- `patches/clair/page-cannot-move-window.patch` makes the override answer NO. It returns NO explicitly rather than dropping the override, since AppKit's default answers YES for a view that isn't opaque.
 - Clair doesn't support PWAs or Chrome Apps (owner, 2026-11-07), the only users of `-webkit-app-region`, so nothing loses by it.
 - Moves from the page then happen only through D1. The sidebar's empty areas and the window's edges are untouched.
 - Alternative: a hook that asks the window and keeps YES for Chromium's own windows. Rejected as unneeded once app windows were ruled out.

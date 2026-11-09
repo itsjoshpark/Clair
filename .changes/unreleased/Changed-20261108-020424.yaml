@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Every sidebar button now highlights under the pointer and dims when the window isn''t in front, including pinned extensions and the downloads button. The URL field''s buttons are smaller, as in Arc, and pinned extensions and the extensions button match the downloads button''s size. The tab close button and the find bar''s and infobar''s buttons have tooltips and VoiceOver labels, and tooltip text is a little bolder'
+time: 2026-11-08T02:04:24.28423-05:00
