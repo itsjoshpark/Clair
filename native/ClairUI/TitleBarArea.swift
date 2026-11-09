@@ -67,10 +67,9 @@ final class TitleBarAreaView: NSView {
   }
 
   override func mouseDown(with event: NSEvent) {
-    guard let window, !window.styleMask.contains(.fullScreen) else { return }
     if event.clickCount == 2 {
       onDoubleClick()
-    } else {
+    } else if let window, !window.styleMask.contains(.fullScreen) {
       window.performDrag(with: event)
     }
   }
