@@ -9,7 +9,7 @@ Recorded after the fact: the work shipped in PR #111. "By hand" means a check th
 ## 2. Footer
 
 - [x] 2.1 Add `SidebarFooter` at the bottom of the sidebar with the downloads button, and give the tab list layout priority. Verified: `ClairUI` builds and its unit tests pass; the owner checked the footer and its buttons in a local build.
-- [ ] 2.2 Always show the downloads button, with "No recent downloads" in an empty list, and update the sidebar spec. Verify: `openspec validate --all --strict` passes (done), and `DownloadsTests` pass in quality.yml.
+- [x] 2.2 Always show the downloads button, with "No recent downloads" in an empty list, and update the sidebar spec. Verified: `openspec validate --all --strict` passes, and `DownloadsTests` pass in quality.yml (run 42546108466).
 - [x] 2.3 Add the plus button's `IconMenu` with New Tab (⌘T). Verify by hand: the menu shows New Tab ⌘T, and choosing it behaves as ⌘T does (the command bar in new-tab mode). Verified: signed off by the owner (2026-11-08).
 - [x] 2.4 Show the line above the footer while the list scrolls, following the tab count. Verify: unit tests `TabListOverflowTests` pass, and by hand the line shows with a long list and goes when tabs are closed, in Light and Dark Mode. Verified: the unit tests pass; the hand check signed off by the owner (2026-11-08).
 - [x] 2.5 Show the tools row only with extensions, with 6 pt above the "New Tab" row. Verified: signed off by the owner (2026-11-08).
