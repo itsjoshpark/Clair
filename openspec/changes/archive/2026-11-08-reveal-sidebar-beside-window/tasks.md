@@ -8,7 +8,7 @@ Recorded after the fact: the work shipped in PR #111. Probe runs drove Arc or a 
 
 ## 2. Reveal
 
-- [x] 2.1 Reveal after 80 ms of rest, restarted by moves in the strip, and hide 100 ms after the pointer leaves. Verified: `ClairUI` builds and its unit tests pass, including `mouseMoveInTheRevealStripDoesNotCrash` for the crash this found by hand.
+- [x] 2.1 Reveal after 80 ms of rest, restarted by moves in the strip, and hide 100 ms after the pointer leaves. Verified: `ClairUI` builds and its unit tests pass; the owner's hand check found a crash on the first move in the strip; after the fix, the probe runs moved the pointer through the strip without one.
 - [x] 2.2 Treat the area beside the window as the inset, 50 pt or 250 pt, judged from the exit event's position. Verified: Clair probe run matched Arc for the strip, 40, 240 and 300 pt after crossing, and 30 and 100 pt from elsewhere.
 - [x] 2.3 Follow the pointer with a local monitor only while the sidebar is hidden and the window is key; moves only; remove it with the window or view. Verified: measured with a packaged build: every move beside the window seen about 8 ms late, no global monitor needed, and no extra `mousemove` for the page.
 - [x] 2.4 Update the sidebar spec. Verified: `openspec validate --all --strict` passes.
