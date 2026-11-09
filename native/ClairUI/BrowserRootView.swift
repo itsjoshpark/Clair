@@ -136,9 +136,11 @@ final class BrowserRootView: NSView {
   private var revealTask: Task<Void, Never>?
   /// Whether `revealTask` reveals (rather than conceals) the sidebar.
   private var revealTaskReveals = false
-  /// Watch the pointer while the sidebar is hidden: outside the window, the
-  /// tracking areas say nothing.
-  private var overshootMonitors: [Any] = []
+  /// Watch the pointer while the sidebar is hidden and the window is key:
+  /// outside the window, the tracking areas say nothing.
+  private let overshootMonitors = EventMonitors()
+  /// The window's key and close notifications, which start and stop them.
+  private var windowObservers: [NSObjectProtocol] = []
   /// Whether the area beside the window is wide: the pointer was last in the
   /// window or in the area.
   private var overshootIsWide = false
@@ -466,14 +468,14 @@ final class BrowserRootView: NSView {
     }
     revealTrackingArea = nil
     guard let rect else {
-      stopOvershoot()
+      updateOvershootMonitoring()
       return
     }
     let area = NSTrackingArea(
       rect: rect, options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow], owner: self)
     addTrackingArea(area)
     revealTrackingArea = area
-    startOvershoot()
+    updateOvershootMonitoring()
     checkPointer()
   }
 
@@ -522,9 +524,12 @@ final class BrowserRootView: NSView {
     guard event.trackingArea === revealTrackingArea else { return }
     // Out through the window's left edge, as when the pointer overshoots
     // the strip: the area beside the window still counts, as in Arc. The
-    // pointer comes from the window, so the area is wide.
+    // pointer comes from the window, so the area is wide. Where it left,
+    // not where it is by now: a slow exit can still be on the edge, and a
+    // fast one already far out.
     overshootIsWide = true
-    if isInOvershootZone(NSEvent.mouseLocation) {
+    let exit = window.map { $0.convertPoint(toScreen: event.locationInWindow) } ?? NSEvent.mouseLocation
+    if isInOvershootZone(exit) {
       pointerIsBesideWindow = true
       startReveal()
     } else {
@@ -535,39 +540,64 @@ final class BrowserRootView: NSView {
   // MARK: Overshoot (Arc's reveal from beside the window)
 
   /// Whether a point on screen is in the area left of the key window, level
-  /// with it.
+  /// with it. A point on the window's left edge counts: that's where a
+  /// pointer leaving through it is last seen.
   private func isInOvershootZone(_ point: NSPoint) -> Bool {
     guard let window, window.isKeyWindow, revealTrackingArea != nil else { return false }
     let frame = window.frame
     let width = overshootIsWide ? Self.wideOvershootWidth : Self.overshootWidth
-    return point.x < frame.minX && point.x >= frame.minX - width
+    return point.x <= frame.minX && point.x >= frame.minX - width
       && point.y >= frame.minY && point.y <= frame.maxY
   }
 
-  /// Follows the pointer while the sidebar is hidden: the active app's key
-  /// window keeps getting mouse moves outside it, which a local monitor sees,
-  /// and a global monitor covers moves that go to other apps.
-  private func startOvershoot() {
-    guard overshootMonitors.isEmpty else { return }
-    let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
-    if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
-      MainActor.assumeIsolated { self?.overshootPointerMoved() }
-      return event
-    }) {
-      overshootMonitors.append(local)
-    }
-    if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
-      MainActor.assumeIsolated { self?.overshootPointerMoved() }
-    }) {
-      overshootMonitors.append(global)
+  /// Follows the pointer only while the sidebar is hidden and the window is
+  /// key, so a window in the background costs nothing on mouse moves.
+  private func updateOvershootMonitoring() {
+    if revealTrackingArea != nil, window?.isKeyWindow == true {
+      startOvershoot()
+    } else {
+      stopOvershoot()
     }
   }
 
+  /// A local monitor, as Arc uses: the key window keeps getting mouse moves
+  /// while the pointer is outside it (measured: every move beside the window,
+  /// about 8 ms after it, and pages get no extra `mousemove`). The monitor
+  /// only runs while the window is key, so Clair is the active app and no
+  /// global monitor is needed. Moves only, not drags, as with the strip: a
+  /// drag past the edge, such as a text selection, doesn't reveal the sidebar.
+  private func startOvershoot() {
+    guard overshootMonitors.isEmpty else { return }
+    overshootMonitors.add(
+      NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
+        MainActor.assumeIsolated { self?.overshootPointerMoved() }
+        return event
+      })
+  }
+
   private func stopOvershoot() {
-    overshootMonitors.forEach(NSEvent.removeMonitor)
-    overshootMonitors = []
+    overshootMonitors.removeAll()
     overshootIsWide = false
     pointerIsBesideWindow = false
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    windowObservers.forEach(NotificationCenter.default.removeObserver)
+    windowObservers = []
+    guard let window else { return }
+    let center = NotificationCenter.default
+    for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+      windowObservers.append(
+        center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+          MainActor.assumeIsolated { self?.updateOvershootMonitoring() }
+        })
+    }
+    windowObservers.append(
+      center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+        MainActor.assumeIsolated { self?.stopOvershoot() }
+      })
+    updateOvershootMonitoring()
   }
 
   private func overshootPointerMoved() {
@@ -596,6 +626,8 @@ final class BrowserRootView: NSView {
     super.viewWillMove(toWindow: newWindow)
     if newWindow == nil {
       stopOvershoot()
+      windowObservers.forEach(NotificationCenter.default.removeObserver)
+      windowObservers = []
     }
   }
 
@@ -648,6 +680,30 @@ final class BrowserRootView: NSView {
 }
 
 /// Catches clicks outside the command bar, without dimming the page.
+/// `NSEvent` monitors that are removed when the holder goes, however its
+/// view is released, as well as when asked. Not tied to the main actor, so its
+/// `deinit` can remove them.
+nonisolated final class EventMonitors {
+  private var monitors: [Any] = []
+
+  var isEmpty: Bool { monitors.isEmpty }
+
+  func add(_ monitor: Any?) {
+    if let monitor {
+      monitors.append(monitor)
+    }
+  }
+
+  func removeAll() {
+    monitors.forEach(NSEvent.removeMonitor)
+    monitors = []
+  }
+
+  deinit {
+    removeAll()
+  }
+}
+
 final class ClickCatcherView: NSView {
   var onClick: (() -> Void)?
 
