@@ -15,4 +15,4 @@ Recorded after the fact: the work shipped in PR #111. "By hand" means a check th
 ## 3. Verification
 
 - [ ] 3.1 `DownloadsTests` pass in quality.yml against the new engine (progress, then the unseen mark).
-- [ ] 3.2 By hand: a download in one profile shows the same progress in another profile's window and on the Dock, and clears when it ends; a paused download leaves Clair idle.
+- [x] 3.2 By hand: a download in one profile shows the same progress in another profile's window and on the Dock, and clears when it ends; a paused download leaves Clair idle. Verified: signed off by the owner (2026-11-08).
