@@ -472,7 +472,21 @@ final class DownloadsTests: NativeWindowTestCase {
     let downloads = try await browser.allowDownloads(to: folder)
     defer { downloads.close() }
 
+    // The progress is the whole app's, as on the Dock: an incognito window,
+    // another profile, shows the regular window's download too.
+    browser.ui.typeKey("n", modifierFlags: [.command, .shift])
+    let incognito = browser.ui.windows.containing(NSPredicate(format: "label == %@", "Incognito")).firstMatch
+    try require(incognito.waitForExistence(timeout: 30), "No incognito window opened")
     _ = try await tab.evaluate("location.href = '/slow-download'; 1")
+    let incognitoButton = browser.element("clair.downloads", in: incognito)
+    let shared = await Harness.wait(for: 30) { (incognitoButton.value as? String)?.hasSuffix("%") == true }
+    XCTAssertTrue(shared, "The incognito window doesn't show the other profile's download")
+    browser.ui.typeKey("w", modifierFlags: [.command, .shift])
+    let closed = await Harness.wait(for: 15) {
+      browser.ui.windows.containing(.any, identifier: "clair.sidebar").count == 1
+    }
+    try require(closed, "The incognito window didn't close")
+
     let button = browser.element("clair.downloads")
     try require(button.waitForExistence(timeout: 30), "No downloads button appeared")
     let progress = await Harness.wait(for: 30) { (button.value as? String)?.hasSuffix("%") == true }
