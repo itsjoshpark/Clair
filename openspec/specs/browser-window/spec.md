@@ -144,7 +144,7 @@ When a tab's page crashes or its renderer is killed, the card SHALL show a nativ
 - **THEN** the card shows that the page crashed with a Reload button, and Reload loads the tab's previous page again
 
 ### Requirement: Chromium bubbles placed in the native window
-Chromium bubbles that remain, including permission prompts, page info, extension popups and extension install prompts, SHALL open attached to their control in the sidebar while the sidebar is shown, or to the card's top-leading corner while it is hidden or the window is in full screen. They SHALL work as they do in Chromium.
+Chromium bubbles that remain, including permission prompts and page info, SHALL open attached to their control in the sidebar while the sidebar is shown, or to the card's top-leading corner while it is hidden or the window is in full screen. They SHALL work as they do in Chromium. Extension popups, and the install and remove confirmations, are not bubbles: `extensions` defines them.
 
 #### Scenario: Permission prompt with the sidebar shown
 - **WHEN** a page asks for the user's location while the sidebar is shown
@@ -153,6 +153,10 @@ Chromium bubbles that remain, including permission prompts, page info, extension
 #### Scenario: Permission prompt with the sidebar hidden
 - **WHEN** a page asks for the user's location while the sidebar is hidden
 - **THEN** the prompt opens at the card's top-leading corner, fully on screen, and choosing Block denies the permission
+
+#### Scenario: Extension popup with the sidebar hidden
+- **WHEN** an extension opens its popup while the sidebar is hidden
+- **THEN** the popup window opens at the card's top-leading corner, fully on screen
 
 ### Requirement: Dialogs and windows Chromium keeps
 Tab-modal dialogs SHALL show over the card of the tab they belong to, including JavaScript alerts and confirms, HTTP authentication and print preview. File pickers SHALL open as sheets or panels of the native window. The task manager and profile picker SHALL open in Chromium's own windows.

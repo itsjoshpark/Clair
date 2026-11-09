@@ -7,7 +7,7 @@ Defines Clair's engine baseline. Clair is a build of a specific ungoogled-chromi
 ## Requirements
 
 ### Requirement: Built from a pinned ungoogled-chromium release
-Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. That release's full patch series, binary pruning and domain substitution SHALL be applied, and the tag SHALL be recorded in the Clair source tree.
+Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. That release's full patch series, binary pruning and domain substitution SHALL be applied, and the tag SHALL be recorded in the Clair source tree. The only exception is a list kept in Clair's source of files that domain substitution leaves out, which SHALL hold only files that name the Chrome Web Store's addresses, or the XML namespace of its update responses, for `extensions`.
 
 #### Scenario: Engine release is identifiable from source
 - **WHEN** the Clair source at a release tag is inspected
@@ -17,8 +17,12 @@ Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. 
 - **WHEN** any ungoogled-chromium, macOS or Clair patch fails to apply cleanly during a build
 - **THEN** the build stops with an error naming the patch and produces no app bundle
 
+#### Scenario: Files left out of domain substitution
+- **WHEN** the list of files that domain substitution leaves out is read
+- **THEN** every file on it is one that names the Chrome Web Store's addresses or the XML namespace of its update responses, and a file on it that no longer exists in ungoogled-chromium's substitution list stops the build with an error naming it
+
 ### Requirement: ungoogled-chromium privacy defaults preserved
-Clair SHALL ship ungoogled-chromium's default settings and Google-service removals unchanged, except for the password and autofill settings that Clair turns off. This change MUST NOT re-enable any Google service integration that ungoogled-chromium removes or disables.
+Clair SHALL ship ungoogled-chromium's default settings and Google-service removals unchanged, except for the password and autofill settings that Clair turns off, and the Chrome Web Store installs and extension update checks that `extensions` restores. Clair MUST NOT re-enable any other Google service integration that ungoogled-chromium removes or disables.
 
 #### Scenario: Default settings match ungoogled-chromium
 - **WHEN** a fresh Clair profile is compared with a fresh profile of the same ungoogled-chromium release
@@ -26,10 +30,14 @@ Clair SHALL ship ungoogled-chromium's default settings and Google-service remova
 
 #### Scenario: No Google service traffic on an idle first launch
 - **WHEN** Clair is launched for the first time with default settings and left on its new tab page with no user navigation
-- **THEN** it makes no network requests to Google service endpoints, such as Safe Browsing, sync, sign-in, metrics, or component and variations servers
+- **THEN** it makes no network requests to Google service endpoints, such as Safe Browsing, sync, sign-in, metrics, extension updates, or component and variations servers
+
+#### Scenario: Google contacted only for store extensions
+- **WHEN** the user has installed an extension from the Chrome Web Store
+- **THEN** Clair contacts Google's extension servers only to download that extension and to check it for updates, and no other Google service
 
 ### Requirement: Browser behavior as in ungoogled-chromium outside Clair's interface
-Apart from its identity (`app-identity`), native layer (`native-layer`), updater (`software-updates`), native window (`browser-window`, `sidebar` and `command-bar`) and the password and autofill features it turns off, Clair SHALL behave the same as the ungoogled-chromium release it is built from. That includes page rendering, settings, `chrome://` pages, profiles, history, extensions' APIs, and the menus and keyboard shortcuts the native window doesn't change.
+Apart from its identity (`app-identity`), native layer (`native-layer`), updater (`software-updates`), native window (`browser-window`, `sidebar` and `command-bar`), extensions (`extensions`) and the password and autofill features it turns off, Clair SHALL behave the same as the ungoogled-chromium release it is built from. That includes page rendering, settings, `chrome://` pages, profiles, history, extensions' APIs, and the menus and keyboard shortcuts the native window doesn't change.
 
 #### Scenario: Stock browser UI
 - **WHEN** a user opens a window in a bare engine build
@@ -40,22 +48,22 @@ Apart from its identity (`app-identity`), native layer (`native-layer`), updater
 - **THEN** it shows the same settings and defaults as the same ungoogled-chromium release, apart from Clair's identity and versions and the absent "Autofill and passwords" section
 
 ### Requirement: Changes to Chromium limited to hooks and identity
-Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, and hooks: loading the native layer, handing Chromium's browser window and its attached UI to Clair's code, and turning off or hiding the password and autofill features. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off. Other behaviour Clair adds SHALL live in the native layer or in new source files added to the Chromium tree.
+Clair's patches to existing Chromium source files SHALL be limited to macOS build fixes, identity and branding, versioning, hooks, and restoring the Chrome Web Store installer and extension update checks that ungoogled-chromium removes, including sending those checks through the restored code. Other behaviour Clair adds SHALL live in the native layer or in new source files added to the Chromium tree.
 
 #### Scenario: Reviewing Clair's patch series
 - **WHEN** the patches in `patches/clair/` and `patches/helium/` are listed
-- **THEN** each one is a build fix, an identity or branding change, a versioning change, or a hook, and none implements the updater, the update menu or the native window
+- **THEN** each one is a build fix, an identity or branding change, a versioning change, a hook, or the store and update restoration, and none implements the updater, the update menu or the native window
+
+#### Scenario: Reviewing the store restoration
+- **WHEN** the patch that restores the Chrome Web Store is read
+- **THEN** each hunk puts back code that ungoogled-chromium's patches removed for the store installer or for extension update checks, or sends store update checks through that code, and adds no other behavior
+
+### Requirement: What Clair's Chromium hooks may do
+Clair's hooks SHALL load the native layer, hand Chromium's browser window and its attached UI to Clair's code, register Clair's component extensions, turn off or hide the password and autofill features, and turn off extensions' uninstall pages. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off.
 
 #### Scenario: Reviewing a window hook
 - **WHEN** a hunk of the native-window hook patch is read
 - **THEN** it calls into Clair's overlay files or the native layer, makes Chromium skip UI the native window replaces, or switches off a feature Clair removes, and any behavior is in Clair's files
-
-### Requirement: Extension installation as in ungoogled-chromium
-Clair SHALL support installing Chrome extensions through the same mechanisms as ungoogled-chromium. One example is the `--extension-mime-request-handling=always-prompt-for-install` option, available as a flag in `chrome://flags`, which lets users install CRX files. Installed extensions SHALL run with full Chrome extension API support, except for APIs that show UI the native window doesn't host, such as side panels, as `browser-window` defines.
-
-#### Scenario: Installing an extension from a CRX file
-- **WHEN** a user enables "Always prompt for install" for extension MIME handling in `chrome://flags`, and then opens a link to an extension's CRX file
-- **THEN** Clair prompts to install the extension, and after installation the extension runs and its action is listed in the sidebar's extensions button
 
 ### Requirement: Engine updates without third-party macOS packaging
 Clair SHALL be able to move to any newer ungoogled-chromium release tag without waiting for a matching `ungoogled-chromium-macos` release. Moving to a new tag SHALL only require changing the pinned engine tag, plus adjusting a macOS or Clair patch where one no longer applies.
