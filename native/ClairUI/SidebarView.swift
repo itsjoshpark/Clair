@@ -75,8 +75,8 @@ struct SidebarView: View {
   /// The URL field's buttons show while the pointer is anywhere over the
   /// sidebar of the key window (design D18).
   @State private var isHovered = false
-  /// Whether the tab list is shorter than its rows, so it scrolls.
-  @State private var tabListOverflows = false
+  /// The tab list's height, as laid out.
+  @State private var tabListHeight: CGFloat = 0
   @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
@@ -100,9 +100,7 @@ struct SidebarView: View {
           .padding(.top, 8)
       }
       TabList(model: model, actions: actions)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-          tabListOverflows = height + 0.5 < TabList.contentHeight(tabCount: model.tabs.count)
-        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tabListHeight = $0 }
         .padding(.top, tabListTopPadding)
         // Ahead of the spacer, which would otherwise take half the room.
         .layoutPriority(1)
@@ -114,7 +112,7 @@ struct SidebarView: View {
           // Arc's line between a list that scrolls and the footer: 1 pt
           // across the sidebar, about 4% black in Light Mode and 8% white
           // in Dark Mode, as measured.
-          if tabListOverflows {
+          if TabList.overflows(height: tabListHeight, tabCount: model.tabs.count) {
             Rectangle().fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04)).frame(height: 1)
           }
         }
@@ -422,7 +420,8 @@ struct URLFieldButton: View {
   }
 }
 
-/// Pinned extension actions, the extensions button and the downloads button.
+/// Pinned extension actions and the extensions button, shown while there are
+/// extensions with an action.
 struct ToolsRow: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
@@ -435,15 +434,13 @@ struct ToolsRow: View {
         ExtensionButton(action: action) { actions?.runExtension(action.extensionID, pinned: true) }
           .anchorFrame(.extensionAction(action.extensionID))
       }
-      if !model.extensionActions.isEmpty {
-        IconButton(systemImage: "puzzlepiece.extension", help: "Extensions", size: IconButtonSize.regular) {
-          showsExtensions.toggle()
-        }
-          .accessibilityIdentifier("clair.extensions")
-          .anchorFrame(.extensionsButton)
-          .popover(isPresented: $showsExtensions, arrowEdge: .trailing) {
-            ExtensionsList(model: model, actions: actions) { showsExtensions = false }
-          }
+      IconButton(systemImage: "puzzlepiece.extension", help: "Extensions") {
+        showsExtensions.toggle()
+      }
+      .accessibilityIdentifier("clair.extensions")
+      .anchorFrame(.extensionsButton)
+      .popover(isPresented: $showsExtensions, arrowEdge: .trailing) {
+        ExtensionsList(model: model, actions: actions) { showsExtensions = false }
       }
       Spacer(minLength: 0)
     }
@@ -605,7 +602,7 @@ struct DownloadsButton: View {
         // Variable Draw needs macOS 26, and the symbol has no variable
         // layers before it, so macOS 15 draws the progress over the ring:
         // 18 pt across with a stroke of about 1.75 pt.
-        SymbolGlyph(systemImage: "arrow.down.circle", size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight)
+        footerGlyph
           .overlay {
             Circle()
               .trim(from: 0, to: progress)
@@ -615,8 +612,12 @@ struct DownloadsButton: View {
           }
       }
     } else {
-      SymbolGlyph(systemImage: "arrow.down.circle", size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight)
+      footerGlyph
     }
+  }
+
+  private var footerGlyph: SymbolGlyph {
+    SymbolGlyph(systemImage: "arrow.down.circle", size: SidebarFooter.glyphSize, weight: SidebarFooter.glyphWeight)
   }
 
   /// The palette replaces the button's grey, so the arrow dims itself.
@@ -723,6 +724,13 @@ struct TabList: View {
   /// The height of the "New Tab" row and the tabs, which the list grows to.
   static func contentHeight(tabCount: Int) -> CGFloat {
     TabRow.pitch * CGFloat(tabCount + 1) + slack
+  }
+
+  /// Whether a list this tall is shorter than its rows, so it scrolls. It
+  /// follows the number of tabs as well as the height: a list capped at the
+  /// room left keeps its height while tabs come and go.
+  static func overflows(height: CGFloat, tabCount: Int) -> Bool {
+    height > 0 && height + 0.5 < contentHeight(tabCount: tabCount)
   }
 
   var body: some View {

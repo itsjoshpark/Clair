@@ -83,7 +83,15 @@ struct IconButton<Label: View>: View {
 
   private var style: AnyShapeStyle {
     if let foreground { return AnyShapeStyle(foreground) }
-    return isEnabled && (isWindowKey || !dimsWhenInactive) ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary)
+    return IconButtonStyle.grey(isEnabled: isEnabled, isWindowKey: isWindowKey, dimsWhenInactive: dimsWhenInactive)
+  }
+}
+
+/// The icon controls' grey, shared by buttons and menus: secondary, or
+/// tertiary while disabled or while the window isn't key.
+enum IconButtonStyle {
+  static func grey(isEnabled: Bool = true, isWindowKey: Bool, dimsWhenInactive: Bool = true) -> AnyShapeStyle {
+    isEnabled && (isWindowKey || !dimsWhenInactive) ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary)
   }
 }
 
@@ -107,7 +115,7 @@ struct IconMenu<Content: View, Label: View>: View {
     .buttonStyle(.plain)
     .menuIndicator(.hidden)
     .fixedSize()
-    .foregroundStyle(isWindowKey ? .secondary : .tertiary)
+    .foregroundStyle(IconButtonStyle.grey(isWindowKey: isWindowKey))
     .tooltip(help)
     .accessibilityLabel(help)
   }

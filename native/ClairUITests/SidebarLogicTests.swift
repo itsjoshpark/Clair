@@ -256,6 +256,22 @@ struct CommandBarTests {
   }
 }
 
+/// The line between a scrolling tab list and the footer follows the tabs as
+/// well as the list's height.
+struct TabListOverflowTests {
+  @Test func followsTheTabCountAtAFixedHeight() {
+    let height = TabList.contentHeight(tabCount: 10) - 20
+    #expect(TabList.overflows(height: height, tabCount: 10))
+    // Tabs closed until the rows fit: the capped list keeps its height.
+    #expect(!TabList.overflows(height: height, tabCount: 9))
+    #expect(!TabList.overflows(height: TabList.contentHeight(tabCount: 3), tabCount: 3))
+  }
+
+  @Test func notBeforeTheListIsLaidOut() {
+    #expect(!TabList.overflows(height: 0, tabCount: 5))
+  }
+}
+
 /// The downloads button's ring follows the Dock's progress (sidebar spec,
 /// "Download progress").
 @MainActor
