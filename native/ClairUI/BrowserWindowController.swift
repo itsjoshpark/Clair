@@ -102,6 +102,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
           }
         })
     }
+    observers.append(
+      center.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main) { [weak self] _ in
+        MainActor.assumeIsolated { self?.extensionPopup?.dismiss() }
+      })
     for name in [NSWindow.didResizeNotification, NSWindow.didEnterFullScreenNotification,
                  NSWindow.didExitFullScreenNotification] {
       observers.append(

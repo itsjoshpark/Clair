@@ -9,6 +9,12 @@ import ClairHost
 /// Install and remove use Clair's wording; other prompts use Chromium's.
 @MainActor
 enum ExtensionPromptAlert {
+  /// The tallest the permission list gets before it scrolls, so a long list
+  /// can't push the sheet's buttons off the screen.
+  static let maxListHeight: CGFloat = 200
+  /// The width of an alert's text.
+  private static let listWidth: CGFloat = 218
+
   static func make(for prompt: any ClairExtensionPrompt) -> NSAlert {
     let alert = NSAlert()
     if let icon = prompt.icon {
@@ -17,7 +23,7 @@ enum ExtensionPromptAlert {
     switch prompt.kind {
     case .install:
       alert.messageText = "Add \"\(prompt.extensionName)\" to Clair?"
-      alert.informativeText = permissionText(heading: "It can:", permissions: prompt.permissions)
+      list(prompt.permissions, heading: "It can:", in: alert)
       addButtons(to: alert, accept: "Add Extension", cancel: "Cancel")
     case .remove:
       alert.messageText = "Remove \"\(prompt.extensionName)\" from Clair?"
@@ -25,7 +31,7 @@ enum ExtensionPromptAlert {
       alert.buttons.first?.hasDestructiveAction = true
     default:
       alert.messageText = prompt.title
-      alert.informativeText = permissionText(heading: prompt.permissionsHeading, permissions: prompt.permissions)
+      list(prompt.permissions, heading: prompt.permissionsHeading, in: alert)
       addButtons(to: alert, accept: prompt.acceptLabel, cancel: prompt.cancelLabel)
     }
     return alert
@@ -41,10 +47,35 @@ enum ExtensionPromptAlert {
     return canvas
   }
 
-  private static func permissionText(heading: String, permissions: [String]) -> String {
-    guard !permissions.isEmpty else { return "" }
-    let list = permissions.map { "• \($0)" }.joined(separator: "\n")
-    return heading.isEmpty ? list : "\(heading)\n\(list)"
+  private static func list(_ permissions: [String], heading: String, in alert: NSAlert) {
+    guard !permissions.isEmpty else { return }
+    alert.informativeText = heading
+    alert.accessoryView = permissionList(permissions)
+  }
+
+  private static func permissionList(_ permissions: [String]) -> NSScrollView {
+    let text = NSTextView(frame: NSRect(x: 0, y: 0, width: listWidth, height: 0))
+    text.string = permissions.map { "• \($0)" }.joined(separator: "\n")
+    text.font = .systemFont(ofSize: NSFont.systemFontSize)
+    text.textColor = .labelColor
+    text.isEditable = false
+    text.isSelectable = false
+    text.drawsBackground = false
+    text.textContainerInset = .zero
+    text.textContainer?.lineFragmentPadding = 0
+    var height: CGFloat = 0
+    if let layout = text.layoutManager, let container = text.textContainer {
+      layout.ensureLayout(for: container)
+      height = ceil(layout.usedRect(for: container).height)
+    }
+    text.frame.size.height = height
+    let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: listWidth, height: min(height, maxListHeight)))
+    scroll.drawsBackground = false
+    scroll.borderType = .noBorder
+    scroll.hasVerticalScroller = height > maxListHeight
+    scroll.autohidesScrollers = true
+    scroll.documentView = text
+    return scroll
   }
 
   private static func addButtons(to alert: NSAlert, accept: String, cancel: String) {

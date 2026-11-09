@@ -172,4 +172,4 @@ Nothing to migrate.
 
 ## Open Questions
 
-- Whether the main-world eligibility script (D3) is needed at all with Clair's user agent. To be decided when the store page is checked with the isolated-world script alone.
+- Resolved: the main-world eligibility script (D3) isn't needed. The store's uBlock Origin Lite and Reddit Image Opener pages showed no banner or popup with the isolated-world script alone.

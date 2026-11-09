@@ -23,12 +23,16 @@ final class ExtensionPromptTests {
   }
 
   private func buttons(_ alert: NSAlert) -> [String] { alert.buttons.map(\.title) }
+  private func list(_ alert: NSAlert) -> String? {
+    ((alert.accessoryView as? NSScrollView)?.documentView as? NSTextView)?.string
+  }
 
   @Test func installAlert() {
     let alert = ExtensionPromptAlert.make(
       for: FakeExtensionPrompt(id: 1, kind: .install, name: "Reader", permissions: ["Read your history", "Read data"]))
     #expect(alert.messageText == "Add \"Reader\" to Clair?")
-    #expect(alert.informativeText == "It can:\n• Read your history\n• Read data")
+    #expect(alert.informativeText == "It can:")
+    #expect(list(alert) == "• Read your history\n• Read data")
     #expect(buttons(alert) == ["Add Extension", "Cancel"])
     #expect(alert.buttons[0].keyEquivalent == "\r")
     #expect(alert.buttons[1].keyEquivalent == "\u{1b}")
@@ -37,6 +41,7 @@ final class ExtensionPromptTests {
   @Test func installWithoutPermissionsHasNoList() {
     let alert = ExtensionPromptAlert.make(for: FakeExtensionPrompt(id: 1, kind: .install, name: "Reader"))
     #expect(alert.informativeText == "")
+    #expect(alert.accessoryView == nil)
     #expect(buttons(alert) == ["Add Extension", "Cancel"])
   }
 
@@ -55,9 +60,17 @@ final class ExtensionPromptTests {
         id: 3, kind: .other, name: "Reader", permissions: ["Read data"], title: "Reader wants more",
         heading: "It could:", accept: "Allow", cancel: "Deny"))
     #expect(alert.messageText == "Reader wants more")
-    #expect(alert.informativeText == "It could:\n• Read data")
+    #expect(alert.informativeText == "It could:")
+    #expect(list(alert) == "• Read data")
     #expect(buttons(alert) == ["Allow", "Deny"])
     #expect(alert.buttons[1].keyEquivalent == "\u{1b}")
+  }
+
+  @Test func longListStaysCapped() {
+    let permissions = (1...100).map { "Read and change your data on site\($0).example" }
+    let alert = ExtensionPromptAlert.make(
+      for: FakeExtensionPrompt(id: 1, kind: .install, name: "Reader", permissions: permissions))
+    #expect(alert.accessoryView?.frame.height == ExtensionPromptAlert.maxListHeight)
   }
 
   @Test func answersOnceWithThePromptsID() {

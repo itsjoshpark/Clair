@@ -59,8 +59,22 @@
     changeDownloadButtonText();
   };
 
+  // The store re-renders constantly: once a frame is enough, and it still
+  // runs before the frame paints, so the store's own wording never shows.
+  let scheduled = false;
+  const schedule = () => {
+    if (scheduled) {
+      return;
+    }
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      handleChanges();
+    });
+  };
+
   window.addEventListener('load', handleChanges, {once: true});
-  const observer = new MutationObserver(handleChanges);
+  const observer = new MutationObserver(schedule);
   observer.observe(document, {
     childList: true,
     characterData: true,
