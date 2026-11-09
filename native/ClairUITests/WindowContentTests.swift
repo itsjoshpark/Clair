@@ -111,6 +111,15 @@ struct WindowLayoutTests {
     #expect(layout.card == CGRect(origin: .zero, size: size))
   }
 
+  @Test func topInsetSpansAboveTheCard() {
+    let shown = WindowLayout(size: size, sidebar: SidebarState(width: 228), isPageFullscreen: false)
+    #expect(shown.topInset(windowWidth: size.width) == CGRect(x: 228, y: 0, width: 972, height: 10))
+    let hidden = WindowLayout(size: size, sidebar: SidebarState(width: 228, isHidden: true), isPageFullscreen: false)
+    #expect(hidden.topInset(windowWidth: size.width) == CGRect(x: 0, y: 0, width: 1200, height: 10))
+    let fullscreen = WindowLayout(size: size, sidebar: SidebarState(width: 228), isPageFullscreen: true)
+    #expect(fullscreen.topInset(windowWidth: size.width).isEmpty)
+  }
+
   @Test func widthStaysInRange() {
     #expect(SidebarState(width: 50).width == 164)
     #expect(SidebarState(width: 900).width == 500)
@@ -223,5 +232,25 @@ struct DevToolsPlacementTests {
     #expect(
       DevToolsPlacement.pageFrame(
         in: card, layout: DevToolsLayout(dockSide: .right, pageBounds: .zero, hidesPage: true)) == nil)
+  }
+}
+
+/// The window's header acts as its title bar.
+@MainActor
+struct TitleBarAreaTests {
+  @Test func doubleClickCallsTheHandler() throws {
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled, .resizable],
+      backing: .buffered, defer: true)
+    let area = TitleBarAreaView(frame: NSRect(x: 0, y: 290, width: 400, height: 10))
+    window.contentView?.addSubview(area)
+    var doubleClicks = 0
+    area.onDoubleClick = { doubleClicks += 1 }
+    let event = try #require(
+      NSEvent.mouseEvent(
+        with: .leftMouseDown, location: NSPoint(x: 200, y: 295), modifierFlags: [], timestamp: 0,
+        windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 2, pressure: 1))
+    area.mouseDown(with: event)
+    #expect(doubleClicks == 1)
   }
 }

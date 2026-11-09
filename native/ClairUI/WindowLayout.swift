@@ -56,6 +56,13 @@ struct WindowLayout: Equatable {
       card: hiddenCard.interpolated(to: shownCard, by: cardShown))
   }
 
+  /// The inset above the card that acts as the window's title bar, from the
+  /// sidebar's trailing edge to the window's; empty with a page in full screen.
+  func topInset(windowWidth: CGFloat) -> CGRect {
+    let x = max(0, sidebar.maxX)
+    return CGRect(x: x, y: 0, width: max(0, windowWidth - x), height: max(0, card.minY))
+  }
+
   /// The hidden sidebar's frame while it floats over the page: 0 is off the
   /// leading edge, 1 is in place.
   static func revealedSidebar(size: CGSize, width: CGFloat, revealed: CGFloat) -> CGRect {

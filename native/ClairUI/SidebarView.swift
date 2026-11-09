@@ -27,6 +27,8 @@ protocol SidebarActions: AnyObject {
   func reloadOrStop()
   func reloadButtonHovered(_ hovering: Bool)
   func toggleSidebar()
+  /// A double-click on the top row's empty space, as on a title bar.
+  func titleBarDoubleClicked()
   func editURL()
   func copyURL()
   func showSiteControls(indicator: TabIndicators)
@@ -84,6 +86,8 @@ struct SidebarView: View {
     // from y+90 with rows the sidebar's width less 8 pt each side.
     VStack(alignment: .leading, spacing: 0) {
       TopRow(model: model, actions: actions)
+        // The row's empty space acts as the window's title bar.
+        .background { TitleBarArea { actions?.titleBarDoubleClicked() } }
       URLField(model: model, actions: actions, showsButtons: isHovered && model.isWindowKey)
         .padding(.horizontal, 8)
         .padding(.top, 6)
