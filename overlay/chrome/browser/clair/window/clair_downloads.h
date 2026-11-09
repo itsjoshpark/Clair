@@ -39,6 +39,10 @@ class ClairDownloads : public download::AllDownloadItemNotifier::Observer {
   // drives the Dock icon.
   static ClairDownloadProgress Progress();
 
+  // The app-wide progress changed: a download of any profile, whether or
+  // not it has a window, started, progressed, paused or ended.
+  void ProgressChanged(const ClairDownloadProgress& progress);
+
   void Open(const std::string& guid);
   void ShowInFinder(const std::string& guid);
   void Cancel(const std::string& guid);
@@ -62,12 +66,6 @@ class ClairDownloads : public download::AllDownloadItemNotifier::Observer {
   bool IsFromThisSession(download::DownloadItem* item) const;
   void Changed();
   void Flush();
-
-  // The progress is the whole app's, but each window hears only its own
-  // profile's downloads: while any download runs, every window refreshes
-  // at the Dock's rate, so a download in another profile, even one with no
-  // window, moves every window's progress and clears it when it ends.
-  static void Poll();
 
   const raw_ptr<ClairBrowserWindow> window_;
   std::unique_ptr<download::AllDownloadItemNotifier> notifier_;

@@ -4,6 +4,7 @@
 
 import AppKit
 import ClairHost
+import Observation
 import Testing
 
 @testable import ClairUI
@@ -288,6 +289,22 @@ struct DownloadProgressTests {
 
   @Test func noRingWhileAnySizeIsUnknown() {
     #expect(ring(DownloadProgress(count: 2, isIndeterminate: true, fraction: 0.4)) == nil)
+  }
+
+  @Test func unchangedProgressLeavesTheModelAlone() {
+    let model = BrowserWindowModel(profileKind: .regular, sidebar: SidebarState())
+    let progress = DownloadProgress(count: 1, isIndeterminate: false, fraction: 0.5)
+    model.setDownloadProgress(progress)
+    nonisolated(unsafe) var changed = false
+    withObservationTracking {
+      _ = model.downloadProgress
+    } onChange: {
+      changed = true
+    }
+    model.setDownloadProgress(progress)
+    #expect(!changed)
+    model.setDownloadProgress(DownloadProgress(count: 1, isIndeterminate: false, fraction: 0.6))
+    #expect(changed)
   }
 
   @Test func ringShowsTheAppWideFraction() {

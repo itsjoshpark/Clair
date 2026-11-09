@@ -724,10 +724,13 @@ NS_SWIFT_NAME(ClairWindow)
 - (void)closeExtensionPopup;
 
 // --- Downloads ---
-// A download started, progressed, finished, or was opened or removed: one
-// of the window's profile's, or, for the progress, any profile's.
+// One of the window's profile's downloads started, progressed, finished, or
+// was opened or removed; the progress is the app-wide one at that moment.
 - (void)downloadsDidChange:(NSArray<id<ClairDownload>> *)downloads
                   progress:(ClairDownloadProgress)progress NS_SWIFT_NAME(downloadsDidChange(_:progress:));
+// The app-wide progress changed: a download of any profile, whether or not
+// it has a window, started, progressed, paused or ended.
+- (void)downloadProgressDidChange:(ClairDownloadProgress)progress NS_SWIFT_NAME(downloadProgressDidChange(_:));
 
 // --- The window ---
 // Chromium is closing the window. ClairUI lets go of its views and the

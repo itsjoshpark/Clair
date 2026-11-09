@@ -540,5 +540,6 @@ final class RecordingWindow: NSObject, ClairWindow {
   func downloadsDidChange(_ downloads: [any ClairDownload], progress: DownloadProgress) {
     calls.append("downloads \(downloads.count)")
   }
+  func downloadProgressDidChange(_ progress: DownloadProgress) { calls.append("progress \(progress.count)") }
   func browserDidClose() { calls.append("closed") }
 }

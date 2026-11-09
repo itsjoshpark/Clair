@@ -474,6 +474,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.setDownloads(downloads, progress: progress)
   }
 
+  func downloadProgressDidChange(_ progress: DownloadProgress) {
+    model.setDownloadProgress(progress)
+  }
+
   func browserDidClose() {
     // The pages belong to Chromium; let go of them and of the browser.
     model.commandBar?.cancel()

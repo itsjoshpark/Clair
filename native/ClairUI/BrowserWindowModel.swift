@@ -94,6 +94,17 @@ final class BrowserWindowModel {
 
   func setDownloads(_ downloads: [any ClairDownload], progress: DownloadProgress) {
     self.downloads = downloads
+    setDownloadProgress(progress)
+  }
+
+  /// Takes the app-wide progress, leaving the model alone when nothing
+  /// changed, so the sidebar doesn't redraw for nothing.
+  func setDownloadProgress(_ progress: DownloadProgress) {
+    let current = appDownloadProgress
+    guard
+      progress.count != current.count || progress.isIndeterminate != current.isIndeterminate
+        || progress.fraction != current.fraction
+    else { return }
     appDownloadProgress = progress
   }
 }
