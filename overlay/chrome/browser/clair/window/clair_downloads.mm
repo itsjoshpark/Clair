@@ -114,18 +114,20 @@ class ProgressWatcher : public ProfileManagerObserver,
   // Guest and incognito profiles don't reach OnProfileAdded, so each window
   // also adds its own.
   void Watch(Profile* profile) {
-    if (!profile_observations_.IsObservingSource(profile)) {
-      profile_observations_.AddObservation(profile);
+    // Once per profile: an off-the-record profile's own list of
+    // off-the-record profiles can include itself.
+    if (profile_observations_.IsObservingSource(profile)) {
+      return;
     }
-    if (!notifiers_.contains(profile)) {
-      if (content::DownloadManager* manager = profile->GetDownloadManager()) {
-        notifiers_[profile] =
-            std::make_unique<download::AllDownloadItemNotifier>(manager,
-                                                                 this);
+    profile_observations_.AddObservation(profile);
+    if (content::DownloadManager* manager = profile->GetDownloadManager()) {
+      notifiers_[profile] =
+          std::make_unique<download::AllDownloadItemNotifier>(manager, this);
+    }
+    if (!profile->IsOffTheRecord()) {
+      for (Profile* off_the_record : profile->GetAllOffTheRecordProfiles()) {
+        Watch(off_the_record);
       }
-    }
-    for (Profile* off_the_record : profile->GetAllOffTheRecordProfiles()) {
-      Watch(off_the_record);
     }
   }
 
