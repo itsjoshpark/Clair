@@ -244,7 +244,11 @@ stage_update() {
   # Until the sync finishes, build/src is in an unknown state, and the next
   # update starts from fresh source.
   touch "$_updating_file"
-  python3 "$_sync_tree" sync "$_next_dir" "$_src_dir" "$_layer_file" "$_layer_file.new"
+  # Domain substitution keeps file times, so the layer lists don't name the
+  # files it changes. Its list goes in too, so a file that joins or leaves the
+  # substitution (utils/domain_substitution_exclude.list) is updated.
+  python3 "$_sync_tree" sync "$_next_dir" "$_src_dir" "$_layer_file" "$_layer_file.new" \
+    "$_main_repo/domain_substitution.list"
   mv "$_layer_file.new" "$_layer_file"
   rm -f "$_updating_file"
   rm -rf "$_next_dir"
