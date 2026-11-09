@@ -95,11 +95,11 @@ The URL field SHALL have a site-controls button, shown while the pointer is over
 - **THEN** page info opens attached to the button and shows that the connection is secure
 
 ### Requirement: Extension actions
-The sidebar SHALL show the actions of extensions the user has pinned as buttons with their icons and badges, and an extensions button that lists every extension with an action. Clicking an action SHALL run it as Chromium's toolbar would, opening its popup attached to the button. The row holding them SHALL show only while some extension has an action.
+The sidebar SHALL show the actions of extensions the user has pinned as buttons with their icons and badges, and an extensions button that lists every extension with an action. Clicking an action SHALL run it as Chromium's toolbar would, opening its popup window beside the button, as `extensions` defines. The row holding them SHALL show only while some extension has an action.
 
 #### Scenario: Pinned extension with a popup
 - **WHEN** the user clicks a pinned extension's button and its action has a popup
-- **THEN** the popup opens attached to that button and is interactive
+- **THEN** the popup window opens beside that button and is interactive
 
 #### Scenario: Badge text
 - **WHEN** an extension sets its action's badge text to "3"
@@ -107,7 +107,11 @@ The sidebar SHALL show the actions of extensions the user has pinned as buttons 
 
 #### Scenario: Extension without a pin
 - **WHEN** the user opens the extensions button's list and chooses an unpinned extension
-- **THEN** its action runs, and its popup opens attached to the extensions button
+- **THEN** its action runs, and its popup window opens beside the extensions button
+
+#### Scenario: Newly installed extension
+- **WHEN** the user installs an extension with an action
+- **THEN** its button appears among the pinned actions, and the row shows if it was hidden
 
 ### Requirement: Downloads indicator
 The sidebar SHALL always show a downloads button in its footer, where Arc has its library button. It SHALL mark finished downloads the user hasn't looked at. Clicking it SHALL open a list of recent downloads that can open, reveal in Finder, cancel or retry each one, and open `chrome://downloads`; with no downloads from this session, the list SHALL say so.

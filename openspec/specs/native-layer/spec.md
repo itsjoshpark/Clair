@@ -26,7 +26,7 @@ The native layer SHALL reach Chromium only through the Objective-C protocols dec
 
 #### Scenario: Contract contents
 - **WHEN** `native/ClairHost.h` is read
-- **THEN** it covers the graceful relaunch that restores the session, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), the Chromium and ungoogled-chromium versions, opening a URL in a browser tab, and, for the native window: creating and closing windows, each window's tabs and their state, the active page's view and its docked DevTools, navigation, find, autocomplete, downloads, extension actions, infobars, toasts and where Chromium's bubbles attach
+- **THEN** it covers the graceful relaunch that restores the session, whether a silent relaunch is safe (no download in progress, no incognito window, no audible or capturing tab), the Chromium and ungoogled-chromium versions, opening a URL in a browser tab, and, for the native window: creating and closing windows, each window's tabs and their state, the active page's view and its docked DevTools, navigation, find, autocomplete, downloads, extension actions, extension install and remove confirmations, extension context menus, infobars, toasts and where Chromium's bubbles attach
 
 #### Scenario: Relaunch from the native layer
 - **WHEN** the native layer asks the host to relaunch
@@ -43,6 +43,10 @@ The native layer SHALL reach Chromium only through the Objective-C protocols dec
 #### Scenario: Contract change
 - **WHEN** `native/ClairHost.h` changes
 - **THEN** the engine key changes, so a new engine is built for the new contract
+
+#### Scenario: Extension confirmation answered
+- **WHEN** Chromium asks the native layer to confirm an extension install or removal and the user answers
+- **THEN** the native layer reports the answer through the contract exactly once, and Chromium installs, removes or cancels accordingly; a window that closes first reports a cancel
 
 ### Requirement: Native layer builds without Chromium
 The native layer and its unit tests SHALL build and run with Xcode against `native/ClairHost.h` alone, with no Chromium source or engine present.
