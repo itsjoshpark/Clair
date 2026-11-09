@@ -38,7 +38,7 @@ Suggested order: 1 and 2 (one engine build), then 3 and 4 in `ClairUI` (they can
   Verify that `engine.yml` builds the engine for the branch's key.
 - [x] 2.3 Pin newly installed extensions from `ClairExtensions` (D5), including when the action is added after `OnInstallSuccess`. Make `ClairBrowserWindow::IsToolbarVisible()` return true (D7). Verify with the runtime test in 4.2 and by hand: installing a CRX through "Always prompt for install" pins its button, and updating an unpinned extension leaves it unpinned.
 
-- [ ] 2.4 Add `-[ClairBrowser contextMenuForExtension:anchor:]` to `native/ClairHost.h`, with `FakeBrowser` support, and build the menu in `ClairExtensions` (D9). Verify that `engine.yml` builds the engine for the branch's key.
+- [ ] 2.4 Add `-[ClairBrowser contextMenuForExtension:]` to `native/ClairHost.h`, with `FakeBrowser` support, and build the menu in `ClairExtensions` (D9). Verify that `engine.yml` builds the engine for the branch's key.
 - [ ] 2.5 Add `patches/clair/no-extension-uninstall-page.patch` (D10). Verify with 5.5.
 
 ## 3. Native confirmation sheets

@@ -515,8 +515,8 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   func extensionPopupDidClose() { record("popupClosed") }
 
-  func contextMenu(forExtension extensionID: String, anchor: AnchorKind) -> NSMenu? {
-    record("extensionMenu \(extensionID) \(anchor.rawValue)")
+  func contextMenu(forExtension extensionID: String) -> NSMenu? {
+    record("extensionMenu \(extensionID)")
     return nil
   }
 

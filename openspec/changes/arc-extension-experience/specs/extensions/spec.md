@@ -149,6 +149,10 @@ Right-clicking or Control-clicking a pinned extension's button, or a row in the 
 - **WHEN** the user chooses Unpin in a pinned extension's menu
 - **THEN** its button leaves the sidebar's pinned actions
 
+#### Scenario: Pinning from a list row
+- **WHEN** the user right-clicks an unpinned extension's row in the extensions list and chooses Pin
+- **THEN** its button appears among the sidebar's pinned actions
+
 ### Requirement: No uninstall pages
 When an extension is removed, Clair SHALL NOT open the page the extension set with `chrome.runtime.setUninstallURL`. The API call SHALL still succeed.
 

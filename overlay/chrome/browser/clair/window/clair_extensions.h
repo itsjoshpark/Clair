@@ -63,7 +63,7 @@ class ClairExtensions : public ExtensionsContainer,
   // The active tab changed, which changes icons and badges.
   void ActiveTabChanged();
   // The extension's right-click menu, or nil. Good until the next call.
-  NSMenu* ContextMenu(const std::string& extension_id, ClairAnchorKind anchor);
+  NSMenu* ContextMenu(const std::string& extension_id);
 
   // Asks ClairUI to confirm `prompt`, whose ID came from NewPromptID().
   // `answer` runs once: with the user's answer, or false if the window closes.

@@ -35,7 +35,7 @@ protocol SidebarActions: AnyObject {
   // Extensions and downloads.
   func runExtension(_ extensionID: String, pinned: Bool)
   func setExtension(_ extensionID: String, pinned: Bool)
-  func contextMenu(forExtension extensionID: String, pinned: Bool) -> NSMenu?
+  func contextMenu(forExtension extensionID: String) -> NSMenu?
   func openDownload(_ downloadID: String)
   func showDownloadInFinder(_ downloadID: String)
   func cancelDownload(_ downloadID: String)
@@ -438,7 +438,7 @@ struct ToolsRow: View {
       ForEach(model.pinnedExtensionActions, id: \.extensionID) { action in
         ExtensionButton(
           action: action,
-          contextMenu: { actions?.contextMenu(forExtension: action.extensionID, pinned: true) }
+          contextMenu: { actions?.contextMenu(forExtension: action.extensionID) }
         ) { actions?.runExtension(action.extensionID, pinned: true) }
           .anchorFrame(.extensionAction(action.extensionID))
       }
@@ -571,7 +571,7 @@ struct ExtensionsList: View {
         .overlay(
           RowClickCatcher(
             onMiddleClick: {}, menuItems: [],
-            menuProvider: { actions?.contextMenu(forExtension: action.extensionID, pinned: false) }))
+            menuProvider: { actions?.contextMenu(forExtension: action.extensionID) }))
       }
     }
     .padding(10)

@@ -1057,11 +1057,10 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   }
 }
 
-- (NSMenu*)contextMenuForExtension:(NSString*)extensionID
-                             anchor:(ClairAnchorKind)anchor {
+- (NSMenu*)contextMenuForExtension:(NSString*)extensionID {
   if (_browserWindow && _browserWindow->extensions()) {
     return _browserWindow->extensions()->ContextMenu(
-        base::SysNSStringToUTF8(extensionID), anchor);
+        base::SysNSStringToUTF8(extensionID));
   }
   return nil;
 }

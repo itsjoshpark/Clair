@@ -383,8 +383,7 @@ void ClairExtensions::ActiveTabChanged() {
   Changed();
 }
 
-NSMenu* ClairExtensions::ContextMenu(const std::string& extension_id,
-                                     ClairAnchorKind anchor) {
+NSMenu* ClairExtensions::ContextMenu(const std::string& extension_id) {
   Browser* browser = window_->browser();
   Profile* profile = browser->GetProfile();
   ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
@@ -395,13 +394,12 @@ NSMenu* ClairExtensions::ContextMenu(const std::string& extension_id,
     return nil;
   }
   // No PopupDelegate: Inspect Popup needs a popup that outlives losing focus.
+  // Always kToolbarAction, even for a list row: kMenuItem drops Pin/Unpin,
+  // because Chromium's own extensions menu has a separate pin button.
   auto menu_model = std::make_unique<extensions::ExtensionContextMenuModel>(
       extension, browser, model->IsActionPinned(extension_id),
       /*delegate=*/nullptr, /*can_show_icon_in_toolbar=*/true,
-      anchor == ClairAnchorKindExtensionAction
-          ? extensions::ExtensionContextMenuModel::ContextMenuSource::
-                kToolbarAction
-          : extensions::ExtensionContextMenuModel::ContextMenuSource::kMenuItem);
+      extensions::ExtensionContextMenuModel::ContextMenuSource::kToolbarAction);
   // The controller refers to its model, so it goes first.
   context_menu_controller_ =
       [[MenuControllerCocoa alloc] initWithModel:menu_model.get()

@@ -143,7 +143,7 @@ The restored `WebstoreInstaller` downloads through the download manager with `Do
 
 ### D9. Right-click menus come from Chromium's model, shown as an `NSMenu`
 
-`-[ClairBrowser contextMenuForExtension:anchor:]` returns an `NSMenu`. `ClairExtensions` builds it from `ExtensionContextMenuModel` with `MenuControllerCocoa`, which already handles submenus and enabled states, and keeps the model and controller until the next menu or until the window closes. ClairUI only catches the right-click, with the sidebar's existing `RowClickCatcher`. `anchor` picks the model's source: a pinned button or a list row.
+`-[ClairBrowser contextMenuForExtension:]` returns an `NSMenu`. `ClairExtensions` builds it from `ExtensionContextMenuModel` with `MenuControllerCocoa`, which already handles submenus and enabled states, and keeps the model and controller until the next menu or until the window closes. ClairUI only catches the right-click, with the sidebar's existing `RowClickCatcher`. A pinned button and a list row both use the model's `kToolbarAction` source, because `kMenuItem` leaves out Pin/Unpin, which Chromium's own extensions menu shows as a separate button.
 
 The model gets no `PopupDelegate`, which leaves out Inspect Popup: it needs the popup to stay open while DevTools has focus, and Clair's closes on any click outside it. The native window hosts no side panels, so the model's side panel item doesn't appear.
 
