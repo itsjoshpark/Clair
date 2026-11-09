@@ -12,7 +12,7 @@ Suggested order: 1 and 2 (one engine build), then 3 and 4 in `ClairUI` (they can
 
 ## 1. Restore the Web Store and updates
 
-- [ ] 1.1 Add `utils/domain_substitution_exclude.list` naming `extensions/common/extension_urls.cc` and `extensions/common/api/_api_features.json`. Add `scripts/filter-domain-substitution.sh`, which writes ungoogled-chromium's list without them and stops with an error naming any listed file that isn't in ungoogled-chromium's list (D1). Call it from `build.sh`'s `apply_layer`, and add it to `scripts/engine-key.sh`'s inputs. Verify:
+- [ ] 1.1 Add `utils/domain_substitution_exclude.list` naming `extensions/common/extension_urls.cc`, `extensions/common/api/_api_features.json` and `extensions/browser/updater/safe_manifest_parser.cc`. Add `scripts/filter-domain-substitution.sh`, which writes ungoogled-chromium's list without them and stops with an error naming any listed file that isn't in ungoogled-chromium's list (D1). Call it from `build.sh`'s `apply_layer`, and add it to `scripts/engine-key.sh`'s inputs. Verify:
   - `scripts/filter-domain-substitution.test.sh` covers filtering and the missing-file error, and passes in CI;
   - after `./build.sh fetch prepare` in the patch check, `build/src` has `https://chromewebstore.google.com/` in both files, and `qjz9zk` hosts everywhere else.
 - [ ] 1.2 Add `patches/clair/restore-web-store.patch` (D2), each hunk headed with the upstream patch and hunk it reverts:

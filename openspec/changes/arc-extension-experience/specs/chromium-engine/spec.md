@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Built from a pinned ungoogled-chromium release
-Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. That release's full patch series, binary pruning and domain substitution SHALL be applied, and the tag SHALL be recorded in the Clair source tree. The only exception is a list kept in Clair's source of files that domain substitution leaves out, which SHALL hold only files that name the Chrome Web Store's addresses for `extensions`.
+Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. That release's full patch series, binary pruning and domain substitution SHALL be applied, and the tag SHALL be recorded in the Clair source tree. The only exception is a list kept in Clair's source of files that domain substitution leaves out, which SHALL hold only files that name the Chrome Web Store's addresses, or the XML namespace of its update responses, for `extensions`.
 
 #### Scenario: Engine release is identifiable from source
 - **WHEN** the Clair source at a release tag is inspected
@@ -15,7 +15,7 @@ Each Clair build SHALL come from exactly one tagged ungoogled-chromium release. 
 
 #### Scenario: Files left out of domain substitution
 - **WHEN** the list of files that domain substitution leaves out is read
-- **THEN** every file on it is one that names the Chrome Web Store's addresses, and a file on it that no longer exists in ungoogled-chromium's substitution list stops the build with an error naming it
+- **THEN** every file on it is one that names the Chrome Web Store's addresses or the XML namespace of its update responses, and a file on it that no longer exists in ungoogled-chromium's substitution list stops the build with an error naming it
 
 ### Requirement: ungoogled-chromium privacy defaults preserved
 Clair SHALL ship ungoogled-chromium's default settings and Google-service removals unchanged, except for the password and autofill settings that Clair turns off, and the Chrome Web Store installs and extension update checks that `extensions` restores. Clair MUST NOT re-enable any other Google service integration that ungoogled-chromium removes or disables.

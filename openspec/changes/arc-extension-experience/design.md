@@ -8,7 +8,8 @@ See proposal.md, "Why". What stands in the way today, from reading the engine tr
   - `extensions/common/extension_urls.cc` holds the store's base URLs, the CRX update URL `https://clients2.google.com/service/update2/crx` and the store API URL.
   - `extensions/common/api/_api_features.json` holds the `webstorePrivate` and `management` matches for `https://chromewebstore.google.com/*`.
   - Substituted, the real store isn't the store: it gets no `webstorePrivate`, so its page disables "Add to Chrome".
-  - Both files hold nothing else that substitution affects, apart from the hosts `IsSafeBrowsingUrl()` matches, which is only a predicate.
+  - `extensions/browser/updater/safe_manifest_parser.cc` holds the XML namespace of update responses, `http://www.google.com/update2/response`. It isn't an address Clair contacts, but substituted, every update response fails to parse.
+  - These files hold nothing else that substitution affects, apart from the hosts `IsSafeBrowsingUrl()` matches, which is only a predicate.
 - **Installed store extensions update through `UpdateService`, not `ExtensionDownloader`.** `ExtensionUpdater::CanUseUpdateService` picks it for an installed extension whose update URL is the store's or empty. It posts to `update.googleapis.com`, which comes from `components/component_updater/component_updater_url_constants.cc` and stays substituted, so those checks can only fail.
 - **`disable-webstore-urls.patch` (ungoogled-chromium)** does four things:
   - `ExtensionDownloader::DoStartAllPending` no longer starts update checks.
@@ -42,7 +43,7 @@ See proposal.md, "Why". What stands in the way today, from reading the engine tr
 
 ### D1. A Clair list of files that domain substitution leaves out
 
-`utils/domain_substitution_exclude.list` names the two files. Before domain substitution, `build.sh` calls a new `scripts/filter-domain-substitution.sh`, which writes ungoogled-chromium's list without them to a temporary file. `build.sh` passes that file to `domain_substitution.py` with `-f`. A listed file that isn't in ungoogled-chromium's list stops the build with an error naming it, so a renamed file can't silently drop out. The script has its own `*.test.sh`, like the other build helpers. The list is under `utils/`, already an engine input; the script joins `scripts/engine-key.sh`'s inputs.
+`utils/domain_substitution_exclude.list` names the three files. Before domain substitution, `build.sh` calls a new `scripts/filter-domain-substitution.sh`, which writes ungoogled-chromium's list without them to a temporary file. `build.sh` passes that file to `domain_substitution.py` with `-f`. A listed file that isn't in ungoogled-chromium's list stops the build with an error naming it, so a renamed file can't silently drop out. The script has its own `*.test.sh`, like the other build helpers. The list is under `utils/`, already an engine input; the script joins `scripts/engine-key.sh`'s inputs.
 
 *Alternatives:*
 - **Splitting the hosts in Clair's patched C++** (`"chromewebstore.google" ".com"`) dodges the regex. But it doesn't work in JSON, and it hides the hosts from anyone reading the source.
