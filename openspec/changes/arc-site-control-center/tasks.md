@@ -44,6 +44,13 @@ Suggested order: 1, 2, 3, 4, then 5. Groups 2 and 3 can start in `ClairUI` again
 - [x] 6.3 Add a divider between "Add Extension…" and "All Site Settings…", size the URL field's glyphs to Arc's (the square 16 pt and the link 14.5 pt across, drawn, with the square at regular weight), and give the tiles' and pill's system focus rings their rounded corners. Verify by hand against Arc.
 - [x] 6.4 Make the runtime test move across the tile until its pin badge shows. Verify with a `quality.yml` run on the branch.
 
+## 7. Extensions menu
+
+- [x] 7.1 Add the requirement, D11 and these tasks. Verify with `openspec validate --all --strict`.
+- [ ] 7.2 Add `ExtensionsMenu` before Window, built on demand from the main browser window's actions (D11). Verify with unit tests in CI: titles in order, the fixed items, a disabled item for an action that's off, and that choosing an extension sends the site-controls anchor.
+- [ ] 7.3 Add a runtime test that opens the popup from the menu bar. Verify with a `quality.yml` run on the branch.
+- [ ] 7.4 Verify by hand: the menu's place, icons and order, the popup beside the site-controls button, and both items opening their pages.
+
 ## Workflow follow-up
 
 - Archive the change after it merges.

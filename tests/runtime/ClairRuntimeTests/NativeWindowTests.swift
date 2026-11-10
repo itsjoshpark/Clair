@@ -481,6 +481,34 @@ final class ExtensionActionTests: NativeWindowTestCase {
     XCTAssertTrue(closed, "The close button didn't close the popup")
   }
 
+  func testExtensionsMenuOpensThePopup() async throws {
+    let extensionPath = Fixture.directory.appending(path: "extensions/popup-badge").path
+    let (browser, tab) = try await startWithPage(arguments: ["--load-extension=\(extensionPath)"])
+    defer { tab.close() }
+    let menu = browser.ui.menuBars.menuBarItems["Extensions"]
+    try require(menu.waitForExistence(timeout: 30), "The menu bar has no Extensions menu")
+    // The menu lists what the window has when it opens, and the extension may
+    // still be loading: open it again until it's there.
+    let item = browser.ui.menuItems["Clair Test Action"]
+    var listed = false
+    for _ in 0..<5 where !listed {
+      menu.click()
+      listed = item.waitForExistence(timeout: 3)
+      if !listed {
+        browser.ui.typeKey(.escape, modifierFlags: [])
+      }
+    }
+    try require(listed, "The Extensions menu doesn't list the extension")
+    XCTAssertTrue(browser.ui.menuItems["Manage Extensions…"].exists, "The Extensions menu has no Manage Extensions…")
+    item.click()
+    let popup = browser.ui.dialogs["clair.extensionPopup"]
+    XCTAssertTrue(popup.waitForExistence(timeout: 15), "Choosing the extension didn't open its popup")
+    let close = popup.buttons[XCUIIdentifierCloseWindow]
+    if close.waitForExistence(timeout: 5) {
+      close.click()
+    }
+  }
+
   func testBackgroundScriptOpensItsPopup() async throws {
     let extensionPath = Fixture.directory.appending(path: "extensions/popup-badge").path
     let (browser, tab) = try await startWithPage(arguments: ["--load-extension=\(extensionPath)"])

@@ -28,6 +28,9 @@ final class NativeLayer {
   /// Clair.app.
   private(set) var settings: SettingsWindowController?
 
+  /// The menu bar's Extensions menu.
+  private(set) var extensionsMenu: ExtensionsMenu?
+
   init(host: any ClairHost) {
     self.host = host
   }
@@ -46,6 +49,9 @@ final class NativeLayer {
     self.settings = settings
     MainMenuTitles.apply(to: NSApp.mainMenu)
     MainMenuTitles.addCopyURL(to: NSApp.mainMenu)
+    let extensionsMenu = ExtensionsMenu()
+    extensionsMenu.install(in: NSApp.mainMenu)
+    self.extensionsMenu = extensionsMenu
 
     let updates = UpdateController(host: host, configuration: .current)
     updates.start()

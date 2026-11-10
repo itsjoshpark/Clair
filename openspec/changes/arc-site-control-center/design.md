@@ -110,6 +110,12 @@ ClairUI draws Clair's default when the extension sets no background: black text 
 
 *Alternative:* treating a transparent colour as unset in ClairUI alone. It would avoid an engine build, but would keep ignoring `setBadgeTextColor` and leave the bridge contradicting `ClairHost.h`.
 
+### D11. The Extensions menu
+
+`ExtensionsMenu` adds an "Extensions" item to the main menu at start-up, just before Chromium's Window menu, as `MainMenuTitles` adds Copy URL. Its items are built when it opens (`NSMenuDelegate.menuNeedsUpdate`) from the main browser window's `extensionActions`, found through a weak list of `BrowserWindowController`s, so the menu follows the window's profile. Items sort with `localizedStandardCompare` and show the action's icon at 16 pt.
+
+Choosing an extension calls `runExtension(_:pinned: false)`, so its popup opens beside the site-controls button, like a tile in the Site Control Center. Arc opens it at the window's top-leading corner; the owner preferred the same place as the Site Control Center's. "Add Extension…" and "Manage Extensions…" reuse `SiteControlCenterLink`. With no browser window, the menu shows only those two, unavailable.
+
 ## Risks / Trade-offs
 
 - **[The 29 pt minimum is inferred]** → It only moves the switch from 4 to 5 across by a few points of sidebar width. The value is one constant.
