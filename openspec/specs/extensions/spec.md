@@ -21,7 +21,7 @@ Clair SHALL keep the installation paths it had before, including CRX files with 
 
 #### Scenario: Installing an extension from a CRX file
 - **WHEN** a user enables "Always prompt for install" for extension MIME handling in `chrome://flags`, and then opens a link to an extension's CRX file
-- **THEN** Clair asks to confirm the install, and after installation the extension runs and its action is listed in the sidebar's extensions button
+- **THEN** Clair asks to confirm the install, and after installation the extension runs and its action is listed in the Site Control Center
 
 ### Requirement: Store wording names Clair
 On the Chrome Web Store's pages, the install button SHALL read "Add to Clair" and, for an installed extension, "Remove from Clair", and the store's prompts to switch to Chrome SHALL be removed. The rest of the store's text SHALL be left as the store wrote it.
@@ -127,17 +127,29 @@ The popup window SHALL close when the user clicks its close button, presses Esc,
 - **THEN** the popup closes, and Chromium treats it as closed by the user
 
 ### Requirement: Opening a popup from the extension API
-An extension SHALL be able to open its own popup with `chrome.action.openPopup()` in an active Clair window. The popup SHALL open as if its button had been clicked: beside its pinned button, or beside the extensions button when it isn't pinned.
+An extension SHALL be able to open its own popup with `chrome.action.openPopup()` in an active Clair window. The popup SHALL open as if its button had been clicked: beside its pinned tile, or beside the site-controls button when it isn't pinned.
 
 #### Scenario: openPopup from a background script
 - **WHEN** an extension with a popup calls `chrome.action.openPopup()` while a Clair window is active
-- **THEN** the call succeeds and the extension's popup window opens beside its button
+- **THEN** the call succeeds and the extension's popup window opens beside its tile
+
+#### Scenario: openPopup for an unpinned extension
+- **WHEN** an unpinned extension with a popup calls `chrome.action.openPopup()` while a Clair window is active
+- **THEN** the call succeeds and the extension's popup window opens beside the site-controls button
 
 ### Requirement: Extension context menu
-Right-clicking or Control-clicking a pinned extension's button, or a row in the extensions button's list, SHALL show a native menu built from Chromium's extension menu. It SHALL offer the items Chromium offers for that extension, including its name (which opens its home page), its own `chrome.contextMenus` action items, site access where it applies, Options, Pin or Unpin, Remove and Manage. It SHALL NOT offer a side panel item or Inspect Popup.
+Right-clicking or Control-clicking a pinned extension's tile, or a tile in the Site Control Center's grid, SHALL show a native menu built from Chromium's extension menu. It SHALL offer the items Chromium offers for that extension, including its name (which opens its home page), its own `chrome.contextMenus` action items, site access where it applies, Options, Pin or Unpin, Remove and Manage. It SHALL NOT offer a side panel item or Inspect Popup.
 
 #### Scenario: Right-clicking a pinned button
-- **WHEN** the user right-clicks a pinned extension's button
+- **WHEN** the user right-clicks a pinned extension's tile
+- **THEN** a native menu with that extension's items opens, and the extension's popup doesn't open
+
+#### Scenario: Pinning from a list row
+- **WHEN** the user right-clicks an unpinned extension's tile in the Site Control Center and chooses Pin
+- **THEN** its tile appears among the sidebar's pinned actions
+
+#### Scenario: Right-clicking a tile in the Site Control Center
+- **WHEN** the user right-clicks a tile in the Site Control Center's grid
 - **THEN** a native menu with that extension's items opens, and the extension's popup doesn't open
 
 #### Scenario: Removing from the menu
@@ -146,11 +158,7 @@ Right-clicking or Control-clicking a pinned extension's button, or a row in the 
 
 #### Scenario: Unpinning from the menu
 - **WHEN** the user chooses Unpin in a pinned extension's menu
-- **THEN** its button leaves the sidebar's pinned actions
-
-#### Scenario: Pinning from a list row
-- **WHEN** the user right-clicks an unpinned extension's row in the extensions list and chooses Pin
-- **THEN** its button appears among the sidebar's pinned actions
+- **THEN** its tile leaves the sidebar's pinned actions
 
 ### Requirement: No uninstall pages
 When an extension is removed, Clair SHALL NOT open the page the extension set with `chrome.runtime.setUninstallURL`. The API call SHALL still succeed.
@@ -158,3 +166,29 @@ When an extension is removed, Clair SHALL NOT open the page the extension set wi
 #### Scenario: Removing an extension with an uninstall page
 - **WHEN** the user removes an extension that has set an uninstall URL
 - **THEN** the extension is removed and no new tab opens
+
+### Requirement: Extensions menu
+The menu bar SHALL have an Extensions menu just left of Window. It SHALL list every extension with an action in the frontmost browser window's profile, with its icon, in alphabetical order, followed by a separator, "Add Extension…" and "Manage Extensions…".
+
+#### Scenario: Listing extensions
+- **WHEN** three extensions are installed and the user opens the Extensions menu
+- **THEN** it lists the three with their icons from A to Z, then a separator, "Add Extension…" and "Manage Extensions…"
+
+#### Scenario: Managing extensions
+- **WHEN** the user chooses "Manage Extensions…"
+- **THEN** `chrome://extensions` opens in a new tab
+
+#### Scenario: Adding an extension
+- **WHEN** the user chooses "Add Extension…"
+- **THEN** the Chrome Web Store opens in a new tab
+
+### Requirement: Running an extension from the Extensions menu
+Choosing an extension in the Extensions menu SHALL run its action as Chromium's toolbar would, with its popup opening beside the site-controls button. An extension whose action is off for the active tab SHALL be listed but unavailable.
+
+#### Scenario: Choosing an extension
+- **WHEN** the user chooses an extension with a popup from the Extensions menu
+- **THEN** its popup window opens beside the site-controls button
+
+#### Scenario: Extension off for the tab
+- **WHEN** an extension's action is off for the active tab and the user opens the Extensions menu
+- **THEN** the extension is listed but can't be chosen
