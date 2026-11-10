@@ -28,6 +28,9 @@ enum OverlayStyle {
 struct CommandBarView: View {
   let model: CommandBarModel
   @FocusState private var isFieldFocused: Bool
+  /// The row under the pointer. As in Arc, it only tints the row grey; the
+  /// selection stays where the keyboard put it.
+  @State private var hoveredSuggestionID: Int?
   @Environment(\.colorScheme) private var colorScheme
 
   static let width: CGFloat = 764
@@ -100,12 +103,22 @@ struct CommandBarView: View {
         ScrollView {
           VStack(spacing: 0) {
             ForEach(Array(model.suggestions.enumerated()), id: \.element.suggestionID) { index, suggestion in
-              SuggestionRow(suggestion: suggestion, isSelected: index == model.selection)
-                .onHover { if $0 { model.select(index) } }
-                .onTapGesture {
-                  model.select(index)
-                  model.submit()
+              SuggestionRow(
+                suggestion: suggestion,
+                isSelected: index == model.selection,
+                isHovered: hoveredSuggestionID == suggestion.suggestionID
+              )
+              .onHover { inside in
+                if inside {
+                  hoveredSuggestionID = suggestion.suggestionID
+                } else if hoveredSuggestionID == suggestion.suggestionID {
+                  hoveredSuggestionID = nil
                 }
+              }
+              .onTapGesture {
+                model.select(index)
+                model.submit()
+              }
             }
           }
           .padding(.horizontal, 10)
@@ -131,6 +144,10 @@ struct CommandBarView: View {
         RoundedRectangle(cornerRadius: 14).strokeBorder(Color(white: 0.65), lineWidth: 0.5)
       }
     }
+    // Flattened first, so only the panel casts the shadow: on its own, the
+    // shadow falls from every view inside too, the selected row's fill among
+    // them, which Arc's doesn't.
+    .compositingGroup()
     .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
     // The field can take focus only once it's laid out in the window, a
     // moment after it's added; keep asking until it has.
@@ -151,6 +168,8 @@ struct CommandBarView: View {
 struct SuggestionRow: View {
   let suggestion: any ClairSuggestion
   let isSelected: Bool
+  var isHovered = false
+  @Environment(\.colorScheme) private var colorScheme
 
   var symbol: String {
     switch suggestion.kind {
@@ -207,7 +226,13 @@ struct SuggestionRow: View {
     .foregroundStyle(isSelected ? .white : .primary)
     .padding(.horizontal, 11)
     .frame(height: CommandBarView.rowHeight - 4)
-    .background(isSelected ? Color.accentColor : .clear, in: .rect(cornerRadius: 8))
+    // Arc's hovered row measures (242) on its (251) panel in Light Mode, about
+    // 4% black, and (47) on (31) in Dark Mode, about 7% white.
+    .background(
+      isSelected
+        ? Color.accentColor
+        : isHovered ? Color.primary.opacity(colorScheme == .dark ? 0.07 : 0.04) : .clear,
+      in: .rect(cornerRadius: 8))
     .padding(.vertical, 2)
     .contentShape(Rectangle())
     .accessibilityElement(children: .ignore)

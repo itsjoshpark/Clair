@@ -1,0 +1,3 @@
+kind: Fixed
+body: Hovering a row in the command bar gives it a faint grey background, as in Arc, instead of selecting it in the accent colour, and the selected row no longer casts a shadow
+time: 2026-11-09T22:35:00.000000-05:00
