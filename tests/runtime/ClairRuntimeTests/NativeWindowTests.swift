@@ -438,11 +438,19 @@ final class ExtensionActionTests: NativeWindowTestCase {
     let extensionPath = Fixture.directory.appending(path: "extensions/popup-badge").path
     let (browser, tab) = try await startWithPage(arguments: ["--load-extension=\(extensionPath)"])
     defer { tab.close() }
-    let extensions = browser.element("clair.extensions")
-    try require(extensions.waitForExistence(timeout: 30), "The sidebar has no extensions button")
-    extensions.click()
+    // The site-controls button shows under the pointer, and a tile's pin badge
+    // only while the pointer is on the tile: hidden views have no element.
+    let urlField = browser.element("clair.urlField")
+    try require(urlField.waitForExistence(timeout: 30), "The sidebar has no URL field")
+    urlField.hover()
+    let siteControls = browser.element("clair.siteControls")
+    try require(siteControls.waitForExistence(timeout: 10), "Hovering the URL field shows no site controls")
+    siteControls.click()
+    let tile = browser.ui.descendants(matching: .any).matching(identifier: "clair.siteControlsExtension").firstMatch
+    try require(tile.waitForExistence(timeout: 30), "The Site Control Center doesn't list the extension")
+    tile.hover()
     let pin = browser.ui.buttons["Pin"].firstMatch
-    try require(pin.waitForExistence(timeout: 10), "The extensions list can't pin the action")
+    try require(pin.waitForExistence(timeout: 10), "Hovering a tile shows no pin badge")
     pin.click()
     browser.ui.typeKey(.escape, modifierFlags: [])
     let pinned = browser.element("clair.extensionAction")

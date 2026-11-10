@@ -14,6 +14,7 @@ final class FakeTab: NSObject, ClairTab {
   let urlText: String
   let displayHost: String?
   let isNewTabPage: Bool
+  let isNotSecure: Bool
   let favicon: NSImage? = nil
   let isLoading: Bool
   let loadProgress: Double
@@ -28,7 +29,7 @@ final class FakeTab: NSObject, ClairTab {
   init(
     id: TabID, title: String = "", url: String? = nil, isLoading: Bool = false, loadProgress: Double = 0,
     canGoBack: Bool = false, canGoForward: Bool = false, isAudible: Bool = false, isMuted: Bool = false, isCrashed: Bool = false,
-    indicators: TabIndicators = [], infobars: [any ClairInfobar] = []
+    indicators: TabIndicators = [], infobars: [any ClairInfobar] = [], isNotSecure: Bool = false
   ) {
     tabID = id
     self.title = title
@@ -36,6 +37,7 @@ final class FakeTab: NSObject, ClairTab {
     urlText = url ?? ""
     displayHost = self.url?.host()
     isNewTabPage = url == "chrome://newtab/"
+    self.isNotSecure = isNotSecure
     self.isLoading = isLoading
     self.loadProgress = loadProgress
     self.canGoBack = canGoBack
@@ -51,7 +53,7 @@ final class FakeTab: NSObject, ClairTab {
   func with(
     title: String? = nil, url: String? = nil, isLoading: Bool? = nil, loadProgress: Double? = nil,
     isAudible: Bool? = nil, isMuted: Bool? = nil, canGoBack: Bool? = nil, canGoForward: Bool? = nil,
-    isCrashed: Bool? = nil, indicators: TabIndicators? = nil
+    isCrashed: Bool? = nil, indicators: TabIndicators? = nil, isNotSecure: Bool? = nil
   ) -> FakeTab {
     FakeTab(
       id: tabID, title: title ?? self.title, url: url ?? (self.url?.absoluteString),
@@ -59,7 +61,7 @@ final class FakeTab: NSObject, ClairTab {
       canGoBack: canGoBack ?? self.canGoBack,
       canGoForward: canGoForward ?? self.canGoForward, isAudible: isAudible ?? self.isAudible,
       isMuted: isMuted ?? self.isMuted, isCrashed: isCrashed ?? self.isCrashed,
-      indicators: indicators ?? self.indicators, infobars: infobars)
+      indicators: indicators ?? self.indicators, infobars: infobars, isNotSecure: isNotSecure ?? self.isNotSecure)
   }
 }
 

@@ -11,6 +11,12 @@ import Foundation
 enum URLDisplay {
   static let placeholder = "Search or Enter URL…"
 
+  /// Whether the URL field shows the not-secure icon (arc-site-control-center
+  /// design D9). Chromium decides; ClairUI has no rules of its own.
+  static func showsNotSecure(for tab: (any ClairTab)?) -> Bool {
+    tab?.isNotSecure == true
+  }
+
   /// The text to show, or nil for the placeholder.
   static func text(for tab: (any ClairTab)?) -> String? {
     guard let tab, !tab.isNewTabPage else {

@@ -58,7 +58,6 @@ struct AnchorResolverTests {
   let siteControls = CGRect(x: 20, y: 700, width: 24, height: 24)
   let camera = CGRect(x: 160, y: 700, width: 20, height: 20)
   let pinned = CGRect(x: 40, y: 640, width: 28, height: 28)
-  let extensionsButton = CGRect(x: 180, y: 640, width: 28, height: 28)
   let card = CGRect(x: 228, y: 10, width: 962, height: 780)
 
   func resolver(inPlace: Bool) -> AnchorResolver {
@@ -68,7 +67,6 @@ struct AnchorResolverTests {
         .siteControls: siteControls,
         .indicator(TabIndicators.camera.rawValue): camera,
         .extensionAction("pinned"): pinned,
-        .extensionsButton: extensionsButton,
       ],
       card: card)
   }
@@ -85,10 +83,10 @@ struct AnchorResolverTests {
   @Test func missingControlsFallBackToTheirNeighbours() {
     let resolver = resolver(inPlace: true)
     #expect(resolver.anchor(for: .indicator, indicator: .location, extensionID: nil).rect == siteControls)
-    #expect(resolver.anchor(for: .extensionAction, indicator: [], extensionID: "unpinned").rect == extensionsButton)
+    #expect(resolver.anchor(for: .extensionAction, indicator: [], extensionID: "unpinned").rect == siteControls)
   }
 
-  @Test(arguments: [AnchorKind.siteControls, .indicator, .extensionAction, .extensionsButton, .downloads])
+  @Test(arguments: [AnchorKind.siteControls, .indicator, .extensionAction, .downloads])
   func sidebarHiddenAnchorsToTheCardCorner(kind: AnchorKind) {
     let anchor = resolver(inPlace: false).anchor(for: kind, indicator: .camera, extensionID: "pinned")
     #expect(anchor.edge == .bottom)

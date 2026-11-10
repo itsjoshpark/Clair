@@ -58,7 +58,7 @@ The tiles use `SidebarFill.field` as their fill, a corner radius of about 8 pt, 
 
 The popover is a `.popover(isPresented:attachmentAnchor:arrowEdge: .bottom)` attached to the invisible view the URL field already keeps where the button shows (`.anchorFrame(.siteControls)`). That's the same mechanism as the downloads list. Attaching it to the visible button would dismiss it when the button fades out.
 
-A click on the button while the popover is open reaches the button after the transient popover has already closed, which a plain `toggle()` would turn into a reopen. The button ignores a click that arrives within one run-loop turn of the popover closing.
+A click on the button while the popover is open also reaches the button once the transient popover has closed, which would open it again. The button stops taking clicks while the popover is open, so that click only closes it, with no timing to get wrong.
 
 *Alternative:* an `NSPopover` with its own controller, as Arc has. It gives the same result with more code.
 

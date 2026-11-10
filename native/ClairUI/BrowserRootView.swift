@@ -254,14 +254,26 @@ final class BrowserRootView: NSView {
       _ = model.notice.notice
       _ = model.isWindowFullscreen
       _ = model.commandBar
+      _ = model.isSidebarPopoverOpen
     } onChange: { [weak self] in
       Task { @MainActor in
         guard let self else { return }
+        self.sidebarPopoverStateChanged()
         self.updateSidebarTargets()
         self.needsLayout = true
         self.observeModel()
       }
     }
+  }
+
+  /// A popover that held a revealed sidebar has closed: conceal it if the
+  /// pointer has left (arc-site-control-center design D8).
+  private func sidebarPopoverStateChanged() {
+    let isOpen = model.isSidebarPopoverOpen
+    if sidebarPopoverWasOpen, !isOpen {
+      checkPointer()
+    }
+    sidebarPopoverWasOpen = isOpen
   }
 
   /// Moves the sidebar's springs to the model's state; in page full screen,
@@ -452,6 +464,7 @@ final class BrowserRootView: NSView {
   // MARK: Hover reveal (design D12)
 
   private var revealTrackingArea: NSTrackingArea?
+  private var sidebarPopoverWasOpen = false
 
   /// The area that reveals the hidden sidebar, or hides it again once the
   /// pointer leaves; nil while the sidebar shows.
@@ -670,6 +683,7 @@ final class BrowserRootView: NSView {
   }
 
   private func startConceal() {
+    guard !model.isSidebarPopoverOpen else { return }
     if revealTask != nil, !revealTaskReveals { return }
     revealTask?.cancel()
     revealTask = nil
@@ -679,6 +693,7 @@ final class BrowserRootView: NSView {
       try? await Task.sleep(for: Self.concealDelay)
       guard !Task.isCancelled, let self else { return }
       self.revealTask = nil
+      guard !self.model.isSidebarPopoverOpen else { return }
       self.model.sidebar.isRevealed = false
     }
   }

@@ -609,7 +609,11 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func runExtension(_ extensionID: String, pinned: Bool) {
-    browser?.runExtensionAction(extensionID, anchor: pinned ? .extensionAction : .extensionsButton)
+    browser?.runExtensionAction(extensionID, anchor: pinned ? .extensionAction : .siteControls)
+  }
+
+  func openInNewTab(_ url: URL) {
+    browser?.open(url, disposition: .newForegroundTab)
   }
 
   func contextMenu(forExtension extensionID: String) -> NSMenu? {
