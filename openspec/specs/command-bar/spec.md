@@ -83,11 +83,15 @@ With an empty query, the command bar SHALL list the window's other open tabs (no
 - **THEN** the results list the two tabs not shown with "Switch to Tab", the most recently used first, followed by most visited sites
 
 ### Requirement: Keyboard control
-Up and Down SHALL move the selection, Return SHALL choose the selected row, and Esc SHALL close the command bar. Shift+Return or Cmd+Return SHALL open the selected row in a new tab even when the command bar was opened with Cmd+L.
+Up and Down SHALL move the selection, Return SHALL choose the selected row, and Esc SHALL close the command bar. Shift+Return or Cmd+Return SHALL open the selected row in a new tab even when the command bar was opened with Cmd+L. As in Arc, the pointer SHALL NOT move the selection: the row under it SHALL show a faint grey background rather than the accent colour, and clicking a row SHALL choose it.
 
 #### Scenario: Choosing the second row
 - **WHEN** the user types a query, presses Down and then Return
 - **THEN** the second row's result opens
+
+#### Scenario: Hovering a row
+- **WHEN** the user types a query, rests the pointer on the third row and presses Down
+- **THEN** the third row shows a grey background, the second row is selected in the accent colour, and Return opens the second row's result
 
 ### Requirement: Site search keywords
 When the query starts with a search engine's keyword, the command bar SHALL show that engine's icon and offer "Search <engine>" with Tab. After Tab, the rest of the query SHALL search that engine.
