@@ -1,5 +1,33 @@
 # Spec Delta
 
+## ADDED Requirements
+
+### Requirement: Extensions menu
+The menu bar SHALL have an Extensions menu just left of Window. It SHALL list every extension with an action in the frontmost browser window's profile, with its icon, in alphabetical order, followed by a separator, "Add Extension…" and "Manage Extensions…".
+
+#### Scenario: Listing extensions
+- **WHEN** three extensions are installed and the user opens the Extensions menu
+- **THEN** it lists the three with their icons from A to Z, then a separator, "Add Extension…" and "Manage Extensions…"
+
+#### Scenario: Managing extensions
+- **WHEN** the user chooses "Manage Extensions…"
+- **THEN** `chrome://extensions` opens in a new tab
+
+#### Scenario: Adding an extension
+- **WHEN** the user chooses "Add Extension…"
+- **THEN** the Chrome Web Store opens in a new tab
+
+### Requirement: Running an extension from the Extensions menu
+Choosing an extension in the Extensions menu SHALL run its action as Chromium's toolbar would, with its popup opening beside the site-controls button. An extension whose action is off for the active tab SHALL be listed but unavailable.
+
+#### Scenario: Choosing an extension
+- **WHEN** the user chooses an extension with a popup from the Extensions menu
+- **THEN** its popup window opens beside the site-controls button
+
+#### Scenario: Extension off for the tab
+- **WHEN** an extension's action is off for the active tab and the user opens the Extensions menu
+- **THEN** the extension is listed but can't be chosen
+
 ## MODIFIED Requirements
 
 ### Requirement: Other installation paths kept

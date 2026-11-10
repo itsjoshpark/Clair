@@ -438,11 +438,25 @@ final class ExtensionActionTests: NativeWindowTestCase {
     let extensionPath = Fixture.directory.appending(path: "extensions/popup-badge").path
     let (browser, tab) = try await startWithPage(arguments: ["--load-extension=\(extensionPath)"])
     defer { tab.close() }
-    let extensions = browser.element("clair.extensions")
-    try require(extensions.waitForExistence(timeout: 30), "The sidebar has no extensions button")
-    extensions.click()
+    // The site-controls button shows under the pointer, and a tile's pin badge
+    // only while the pointer is on the tile: hidden views have no element.
+    let urlField = browser.element("clair.urlField")
+    try require(urlField.waitForExistence(timeout: 30), "The sidebar has no URL field")
+    urlField.hover()
+    let siteControls = browser.element("clair.siteControls")
+    try require(siteControls.waitForExistence(timeout: 10), "Hovering the URL field shows no site controls")
+    siteControls.click()
+    let tile = browser.ui.descendants(matching: .any).matching(identifier: "clair.siteControlsExtension").firstMatch
+    try require(tile.waitForExistence(timeout: 30), "The Site Control Center doesn't list the extension")
+    // A pointer that lands on the tile in one jump can miss its hover in a
+    // popover that has just opened, so move across it as a pointer would.
     let pin = browser.ui.buttons["Pin"].firstMatch
-    try require(pin.waitForExistence(timeout: 10), "The extensions list can't pin the action")
+    var hovered = false
+    for offset in [0.2, 0.5, 0.8] where !hovered {
+      tile.coordinate(withNormalizedOffset: CGVector(dx: offset, dy: 0.5)).hover()
+      hovered = pin.waitForExistence(timeout: 3)
+    }
+    try require(hovered, "Hovering a tile shows no pin badge")
     pin.click()
     browser.ui.typeKey(.escape, modifierFlags: [])
     let pinned = browser.element("clair.extensionAction")
@@ -465,6 +479,34 @@ final class ExtensionActionTests: NativeWindowTestCase {
     close.click()
     let closed = await Harness.wait(for: 15) { !popup.exists }
     XCTAssertTrue(closed, "The close button didn't close the popup")
+  }
+
+  func testExtensionsMenuOpensThePopup() async throws {
+    let extensionPath = Fixture.directory.appending(path: "extensions/popup-badge").path
+    let (browser, tab) = try await startWithPage(arguments: ["--load-extension=\(extensionPath)"])
+    defer { tab.close() }
+    let menu = browser.ui.menuBars.menuBarItems["Extensions"]
+    try require(menu.waitForExistence(timeout: 30), "The menu bar has no Extensions menu")
+    // The menu lists what the window has when it opens, and the extension may
+    // still be loading: open it again until it's there.
+    let item = browser.ui.menuItems["Clair Test Action"]
+    var listed = false
+    for _ in 0..<5 where !listed {
+      menu.click()
+      listed = item.waitForExistence(timeout: 3)
+      if !listed {
+        browser.ui.typeKey(.escape, modifierFlags: [])
+      }
+    }
+    try require(listed, "The Extensions menu doesn't list the extension")
+    XCTAssertTrue(browser.ui.menuItems["Manage Extensions…"].exists, "The Extensions menu has no Manage Extensions…")
+    item.click()
+    let popup = browser.ui.dialogs["clair.extensionPopup"]
+    XCTAssertTrue(popup.waitForExistence(timeout: 15), "Choosing the extension didn't open its popup")
+    let close = popup.buttons[XCUIIdentifierCloseWindow]
+    if close.waitForExistence(timeout: 5) {
+      close.click()
+    }
   }
 
   func testBackgroundScriptOpensItsPopup() async throws {

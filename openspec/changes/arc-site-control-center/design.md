@@ -58,7 +58,7 @@ The tiles use `SidebarFill.field` as their fill, a corner radius of about 8 pt, 
 
 The popover is a `.popover(isPresented:attachmentAnchor:arrowEdge: .bottom)` attached to the invisible view the URL field already keeps where the button shows (`.anchorFrame(.siteControls)`). That's the same mechanism as the downloads list. Attaching it to the visible button would dismiss it when the button fades out.
 
-A click on the button while the popover is open reaches the button after the transient popover has already closed, which a plain `toggle()` would turn into a reopen. The button ignores a click that arrives within one run-loop turn of the popover closing.
+A click on the button while the popover is open also reaches the button once the transient popover has closed, which would open it again. The button stops taking clicks while the popover is open, so that click only closes it, with no timing to get wrong.
 
 *Alternative:* an `NSPopover` with its own controller, as Arc has. It gives the same result with more code.
 
@@ -101,6 +101,20 @@ The pill's label is always "Site Info", at the owner's choice, rather than Arc's
 The icon is informational: a plain image with a tooltip, not a control.
 
 *Alternative:* deciding from the URL's scheme in ClairUI. It would miss certificate errors and mixed content, and would wrongly flag `http://localhost`.
+
+### D10. Badge colours
+
+Chromium reports a badge colour the extension didn't set as transparent and substitutes its own when it draws, picking black or white text for contrast. The bridge passed the transparent colour on, so the pinned tile drew white text with no background. The bridge now reports an unset background or text colour as nil, and a set background as opaque, as Chromium draws it. `ClairExtensionAction` gains `badgeTextColor` for `chrome.action.setBadgeTextColor`.
+
+ClairUI draws Clair's default when the extension sets no background: black text on white, or white on near-black in Dark Mode, which stands out from the tile in either. On a background the extension chose, it uses the extension's text colour, or else black or white, whichever has the higher WCAG contrast. This is a pure helper that unit tests cover.
+
+*Alternative:* treating a transparent colour as unset in ClairUI alone. It would avoid an engine build, but would keep ignoring `setBadgeTextColor` and leave the bridge contradicting `ClairHost.h`.
+
+### D11. The Extensions menu
+
+`ExtensionsMenu` adds an "Extensions" item to the main menu at start-up, just before Chromium's Window menu, as `MainMenuTitles` adds Copy URL. Its items are built when it opens (`NSMenuDelegate.menuNeedsUpdate`) from the main browser window's `extensionActions`, found through a weak list of `BrowserWindowController`s, so the menu follows the window's profile. Items sort with `localizedStandardCompare` and show the action's icon at 16 pt.
+
+Choosing an extension calls `runExtension(_:pinned: false)`, so its popup opens beside the site-controls button, like a tile in the Site Control Center. Arc opens it at the window's top-leading corner; the owner preferred the same place as the Site Control Center's. "Add Extension…" and "Manage Extensions…" reuse `SiteControlCenterLink`. With no browser window, the menu shows only those two, unavailable.
 
 ## Risks / Trade-offs
 

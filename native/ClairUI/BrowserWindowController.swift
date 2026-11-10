@@ -13,6 +13,15 @@ import os
 final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, OverlayActions {
   static let toastDuration: Duration = .seconds(3)
 
+  /// Every window's controller, for app-wide menus such as Extensions.
+  private static let all = NSHashTable<BrowserWindowController>.weakObjects()
+
+  /// The main window's controller, or else a visible window's.
+  static var main: BrowserWindowController? {
+    let open = all.allObjects.filter { $0.browser != nil }
+    return open.first { $0.window === NSApp.mainWindow } ?? open.first { $0.window.isVisible }
+  }
+
   /// The browser, until Chromium closes the window.
   private(set) var browser: (any ClairBrowser)?
   let window: NSWindow
@@ -57,6 +66,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     sidebarHost = NSHostingView.edgeToEdge(rootView: SidebarView(model: model, actions: nil))
     rootView = BrowserRootView(model: model, sidebar: sidebarHost)
     super.init()
+    Self.all.add(self)
     sidebarHost.rootView = SidebarView(model: model, actions: self)
     rootView.onScrimClick = { [weak self] in self?.model.commandBar?.cancel() }
     rootView.onCopyURL = { [weak self] in self?.copyURL() }
@@ -609,7 +619,11 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func runExtension(_ extensionID: String, pinned: Bool) {
-    browser?.runExtensionAction(extensionID, anchor: pinned ? .extensionAction : .extensionsButton)
+    browser?.runExtensionAction(extensionID, anchor: pinned ? .extensionAction : .siteControls)
+  }
+
+  func openInNewTab(_ url: URL) {
+    browser?.open(url, disposition: .newForegroundTab)
   }
 
   func contextMenu(forExtension extensionID: String) -> NSMenu? {

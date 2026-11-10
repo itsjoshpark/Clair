@@ -45,6 +45,7 @@
 #include "extensions/common/api/extension_action/action_info.h"
 #include "extensions/common/extension.h"
 #include "skia/ext/skia_utils_mac.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
 #import "ui/menus/cocoa/menu_controller.h"
@@ -57,6 +58,7 @@
 @property(nonatomic, nullable) NSImage* icon;
 @property(nonatomic, copy) NSString* badgeText;
 @property(nonatomic, nullable) NSColor* badgeBackgroundColor;
+@property(nonatomic, nullable) NSColor* badgeTextColor;
 @property(nonatomic) BOOL isPinned;
 @property(nonatomic) BOOL isEnabled;
 @property(nonatomic) BOOL hasPopup;
@@ -290,8 +292,19 @@ NSArray<id<ClairExtensionAction>>* ClairExtensions::Snapshot() {
     }
     item.icon = icon.IsEmpty() ? nil : icon.ToNSImage();
     item.badgeText = base::SysUTF8ToNSString(action->GetDisplayBadgeText(tab_id));
+    // Chromium leaves an unset colour transparent and substitutes its own;
+    // ClairUI picks the default for nil (arc-site-control-center design D10).
+    // A set background is drawn opaque, as Chromium draws it.
+    const SkColor background = action->GetBadgeBackgroundColor(tab_id);
     item.badgeBackgroundColor =
-        skia::SkColorToSRGBNSColor(action->GetBadgeBackgroundColor(tab_id));
+        SkColorGetA(background) == SK_AlphaTRANSPARENT
+            ? nil
+            : skia::SkColorToSRGBNSColor(
+                  SkColorSetA(background, SK_AlphaOPAQUE));
+    const SkColor text = action->GetBadgeTextColor(tab_id);
+    item.badgeTextColor = SkColorGetA(text) == SK_AlphaTRANSPARENT
+                              ? nil
+                              : skia::SkColorToSRGBNSColor(text);
     item.isPinned = model->IsActionPinned(id);
     item.isEnabled = action->GetIsVisible(tab_id);
     item.hasPopup = action->HasPopup(tab_id);
@@ -467,7 +480,7 @@ bool ClairExtensions::ShowToolbarActionPopupForAPICall(
       ToolbarActionsModel::Get(window_->browser()->GetProfile());
   const ClairAnchorKind anchor = model && model->IsActionPinned(action_id)
                                      ? ClairAnchorKindExtensionAction
-                                     : ClairAnchorKindExtensionsButton;
+                                     : ClairAnchorKindSiteControls;
   return OpenPopup(action_id, anchor, std::move(callback));
 }
 

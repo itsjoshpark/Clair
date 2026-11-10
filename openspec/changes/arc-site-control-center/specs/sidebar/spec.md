@@ -122,6 +122,14 @@ The sidebar SHALL show the actions of extensions the user has pinned as tiles wi
 - **WHEN** an extension sets its action's badge text to "3"
 - **THEN** its tile in the sidebar shows a "3" badge
 
+#### Scenario: Badge with the default colours
+- **WHEN** an extension sets badge text without setting its colours
+- **THEN** the badge shows black text on white in Light Mode, and white text on near-black in Dark Mode
+
+#### Scenario: Badge colours set by the extension
+- **WHEN** an extension sets its badge's background with `chrome.action.setBadgeBackgroundColor` and its text colour with `chrome.action.setBadgeTextColor`
+- **THEN** the badge uses both colours, and without a text colour it uses black or white, whichever contrasts more with the background
+
 #### Scenario: Extension without a pin
 - **WHEN** the user opens the Site Control Center and chooses an unpinned extension
 - **THEN** its action runs, and its popup window opens beside the site-controls button

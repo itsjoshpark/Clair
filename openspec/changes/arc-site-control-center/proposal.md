@@ -7,6 +7,7 @@ Clair shows pinned extensions as one row of fixed-size icons, with the full list
 ## What Changes
 
 - **Pinned extensions wrap, as in Arc.** They become tiles that stretch to share the width of the sidebar, spread over as many rows as they need, using Arc's rule for how many go on each row. Unlike Arc, a single pinned extension and very wide sidebars keep the same separate row, rather than moving into the URL field.
+- **An Extensions menu in the menu bar, as in Arc.** It sits left of Window and lists every extension with its icon, A to Z, then "Add Extension…" and "Manage Extensions…". Choosing an extension opens its popup beside the site-controls button.
 - **A native Site Control Center.** The site-controls button opens a native popover with Arc's look: a grid of every extension with a pin badge on each, a tile for adding extensions, a "Site Info" pill that opens Chromium's page info, and a "…" menu.
 - **The extensions button is removed.** Its list moves into the Site Control Center. Popups for unpinned extensions, and `chrome.action.openPopup()` for them, open beside the site-controls button. The pinned row shows only while something is pinned. **BREAKING (`ClairHost.h`):** the extensions button's anchor kind is removed.
 - **A revealed sidebar waits for its popovers.** It stays revealed while the Site Control Center or the downloads list is open.

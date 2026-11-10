@@ -58,6 +58,11 @@ final class BrowserWindowModel {
   /// The popup in the card's top-trailing corner (design D18).
   let notice = NoticeState()
   var isPageFullscreen = false
+  var isSiteControlCenterOpen = false
+  var isDownloadsListOpen = false
+  /// A revealed sidebar stays revealed while one of its popovers is open
+  /// (arc-site-control-center design D8).
+  var isSidebarPopoverOpen: Bool { isSiteControlCenterOpen || isDownloadsListOpen }
   var isWindowKey = true
   /// Whether the window is in macOS full screen, where the top row has no
   /// window controls to make room for.

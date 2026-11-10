@@ -182,17 +182,16 @@ typedef struct NS_SWIFT_NAME(FindResult) {
 
 // A surface in the window that Chromium's bubbles attach to.
 typedef NS_ENUM(NSInteger, ClairAnchorKind) {
-  // The URL field's site-controls button: page info and permission prompts.
+  // The URL field's site-controls button: page info, permission prompts and
+  // the popups of extensions that aren't pinned.
   ClairAnchorKindSiteControls = 0,
   // One of the URL field's indicators, named by the matching
   // ClairTabIndicators value.
   ClairAnchorKindIndicator = 1,
   // A pinned extension action's button, named by its extension ID.
   ClairAnchorKindExtensionAction = 2,
-  // The extensions button, for extensions that aren't pinned.
-  ClairAnchorKindExtensionsButton = 3,
   // The downloads button.
-  ClairAnchorKindDownloads = 4,
+  ClairAnchorKindDownloads = 3,
 } NS_SWIFT_NAME(AnchorKind);
 
 // The edge of an anchor rectangle that a bubble attaches to.
@@ -293,6 +292,9 @@ NS_SWIFT_NAME(ClairTab)
 @property(nonatomic, readonly, copy, nullable) NSString *displayHost;
 // Whether the tab shows the new tab page.
 @property(nonatomic, readonly) BOOL isNewTabPage;
+// Whether Chromium rates the page as not secure (its WARNING and DANGEROUS
+// security levels): plain HTTP, certificate errors, active mixed content.
+@property(nonatomic, readonly) BOOL isNotSecure;
 // The page's favicon, or nil while it has none, as on the new tab page.
 @property(nonatomic, readonly, nullable) NSImage *favicon;
 // Whether the tab is loading a new document in its main frame, the state in
@@ -388,8 +390,11 @@ NS_SWIFT_NAME(ClairExtensionAction)
 @property(nonatomic, readonly, nullable) NSImage *icon;
 // The badge text for the active tab, or empty.
 @property(nonatomic, readonly, copy) NSString *badgeText;
-// The badge's colour, or nil for the default.
+// The badge's colour, opaque, or nil for the default.
 @property(nonatomic, readonly, nullable) NSColor *badgeBackgroundColor;
+// The badge text's colour (chrome.action.setBadgeTextColor), or nil for one
+// that contrasts with the background.
+@property(nonatomic, readonly, nullable) NSColor *badgeTextColor;
 // Whether the user pinned it to the sidebar.
 @property(nonatomic, readonly) BOOL isPinned;
 // Whether it can run on the active tab.
@@ -643,7 +648,8 @@ NS_SWIFT_NAME(ClairBrowser)
 // --- Extensions ---
 // Runs the action as Chromium's toolbar would. Its popup, if any, comes back
 // through -[ClairWindow showExtensionPopup:...], attached to `anchor`, which is
-// ClairAnchorKindExtensionAction or ClairAnchorKindExtensionsButton.
+// ClairAnchorKindExtensionAction for a pinned action's tile, or
+// ClairAnchorKindSiteControls.
 - (void)runExtensionAction:(NSString *)extensionID anchor:(ClairAnchorKind)anchor
     NS_SWIFT_NAME(runExtensionAction(_:anchor:));
 // Pins the action to the sidebar, or unpins it.

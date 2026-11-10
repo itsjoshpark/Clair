@@ -11,7 +11,6 @@ enum AnchorControl: Hashable {
   /// An indicator, by its TabIndicators raw value.
   case indicator(UInt)
   case extensionAction(String)
-  case extensionsButton
   case downloads
 }
 
@@ -60,9 +59,7 @@ struct AnchorResolver {
       if let extensionID, let rect = controls[.extensionAction(extensionID)] {
         return rect
       }
-      return controls[.extensionsButton]
-    case .extensionsButton:
-      return controls[.extensionsButton]
+      return controls[.siteControls]
     case .downloads:
       return controls[.downloads]
     @unknown default:

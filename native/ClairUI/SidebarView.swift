@@ -32,6 +32,7 @@ protocol SidebarActions: AnyObject {
   func editURL()
   func copyURL()
   func showSiteControls(indicator: TabIndicators)
+  func openInNewTab(_ url: URL)
   // Extensions and downloads.
   func runExtension(_ extensionID: String, pinned: Bool)
   func setExtension(_ extensionID: String, pinned: Bool)
@@ -89,13 +90,15 @@ struct SidebarView: View {
       TopRow(model: model, actions: actions)
         // The row's empty space acts as the window's title bar.
         .background { TitleBarArea { actions?.titleBarDoubleClicked() } }
-      URLField(model: model, actions: actions, showsButtons: isHovered && model.isWindowKey)
+      URLField(
+        model: model, actions: actions,
+        showsButtons: (isHovered && model.isWindowKey) || model.isSiteControlCenterOpen)
         .padding(.horizontal, 8)
         .padding(.top, 6)
-      if !model.extensionActions.isEmpty {
+      if !model.pinnedExtensionActions.isEmpty {
         ToolsRow(model: model, actions: actions)
           .padding(.horizontal, 8)
-          .padding(.top, 6)
+          .padding(.top, 8)
       }
       if model.profileKind == .incognito {
         // Arc's row: 37 pt from 8 pt below the URL field.
@@ -122,7 +125,9 @@ struct SidebarView: View {
           }
         }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    // The explicit minimum keeps the sidebar at the width it's given; without
+    // one, a child too wide to shrink widens it and the host centres the excess.
+    .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     // The sidebar's empty areas move the window, as in Arc (design D18).
     .background {
       Color.clear
@@ -138,12 +143,9 @@ struct SidebarView: View {
     }
   }
 
-  /// 8 pt under the URL field. Under the tools row, whose buttons have no
-  /// visible edge, 4 pt, so the "New Tab" pill sits 6 pt below the row as the
-  /// row sits 6 pt below the URL field.
+  /// 8 pt under the URL field or the pinned extensions.
   private var tabListTopPadding: CGFloat {
-    if model.profileKind == .incognito { return 0 }
-    return model.extensionActions.isEmpty ? 8 : 4
+    model.profileKind == .incognito ? 0 : 8
   }
 }
 
@@ -307,7 +309,7 @@ struct TopRow: View {
 /// and site-controls buttons at its trailing end. A click opens the command
 /// bar on the current URL.
 struct URLField: View {
-  let model: BrowserWindowModel
+  @Bindable var model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
   /// Whether the copy and site-controls buttons show: while the pointer is
   /// over the key window's sidebar.
@@ -330,8 +332,18 @@ struct URLField: View {
   var body: some View {
     let tab = model.activeTab
     let display = URLDisplay.text(for: tab)
-    let hasSiteControls = tab != nil && tab?.isNewTabPage != true
+    let hasSiteControls = tab != nil
+    let showsNotSecure = URLDisplay.showsNotSecure(for: tab)
     HStack(spacing: 0) {
+      if showsNotSecure {
+        Image(systemName: "lock.slash.fill")
+          .font(.system(size: 11))
+          .foregroundStyle(Color.red)
+          .padding(.leading, 12)
+          .tooltip("Site is not secure")
+          .accessibilityLabel("Site is not secure")
+          .accessibilityIdentifier("clair.notSecure")
+      }
       if display == nil {
         Image(systemName: "magnifyingglass")
           .font(.system(size: 13, weight: .medium))
@@ -348,7 +360,7 @@ struct URLField: View {
         .lineLimit(1)
         .truncationMode(.tail)
         .foregroundStyle(display == nil ? Color.secondary : Color.primary.opacity(0.85))
-        .padding(.leading, display == nil ? 0 : 12)
+        .padding(.leading, display == nil ? 0 : (showsNotSecure ? 5 : 12))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture { actions?.editURL() }
@@ -376,29 +388,41 @@ struct URLField: View {
       }
 
       if showsButtons, display != nil {
-        URLFieldButton(systemImage: "link", help: "Copy URL", shortcut: ["⇧", "⌘", "C"]) { actions?.copyURL() }
+        URLFieldButton(
+          systemImage: "link", help: "Copy URL", shortcut: ["⇧", "⌘", "C"], glyphSize: URLFieldButton.linkGlyphSize
+        ) { actions?.copyURL() }
           .accessibilityIdentifier("clair.copyURL")
           .transition(.opacity)
       }
       if showsButtons, hasSiteControls {
-        URLFieldButton(systemImage: "slider.horizontal.3", help: "Site Control Center") {
-          actions?.showSiteControls(indicator: [])
+        URLFieldButton(
+          systemImage: "slider.horizontal.2.square", help: "Site Control Center",
+          glyphSize: URLFieldButton.siteControlsGlyphSize, glyphWeight: .regular
+        ) {
+          model.isSiteControlCenterOpen = true
         }
+        // A click while the popover is open only closes it: the transient
+        // popover takes the mouse-down, and the button must not then open it
+        // again (arc-site-control-center design D2).
+        .allowsHitTesting(!model.isSiteControlCenterOpen)
         .accessibilityIdentifier("clair.siteControls")
         .transition(.opacity)
       }
     }
     .padding(.trailing, showsButtons || tab?.indicators.isEmpty == false ? 5 : 12)
     .frame(height: Self.height)
-    // Chromium's page info attaches where the site-controls button shows on
-    // hover, whether or not it shows now.
+    // Chromium's page info and the Site Control Center attach where the
+    // site-controls button shows on hover, whether or not it shows now.
     .overlay(alignment: .trailing) {
       Color.clear
         .frame(width: Self.buttonSize, height: Self.buttonSize)
-        .padding(.trailing, 5)
-        .anchorFrame(.siteControls)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+        .popover(isPresented: $model.isSiteControlCenterOpen, arrowEdge: .bottom) {
+          SiteControlCenter(model: model, actions: actions) { model.isSiteControlCenterOpen = false }
+        }
+        .padding(.trailing, 5)
+        .anchorFrame(.siteControls)
     }
     // Arc's flat fill, darker under the pointer (design D18).
     .background(SidebarFill.field(colorScheme, hovered: isHovered), in: .rect(cornerRadius: 10, style: .continuous))
@@ -413,46 +437,42 @@ struct URLField: View {
 
 /// A button at the URL field's trailing end.
 struct URLFieldButton: View {
+  /// Point sizes that draw the glyphs as large as Arc's, as measured: the
+  /// link 14.5 pt across and the square 16 pt. The square draws smaller than
+  /// the link at the same size.
+  static let linkGlyphSize: CGFloat = 14
+  static let siteControlsGlyphSize: CGFloat = 18
+
   let systemImage: String
   let help: String
   var shortcut: [String] = []
+  var glyphSize: CGFloat = 13
+  /// The square draws heavier than the link at the same weight.
+  var glyphWeight: Font.Weight = .medium
   let action: () -> Void
 
   var body: some View {
     IconButton(
       systemImage: systemImage, help: help, shortcut: shortcut, size: URLField.buttonSize, cornerRadius: 7,
-      glyphSize: 13, action: action)
+      glyphSize: glyphSize, glyphWeight: glyphWeight, action: action)
   }
 }
 
-/// Pinned extension actions and the extensions button, shown while there are
-/// extensions with an action.
+/// The pinned extensions, shown while any is pinned.
 struct ToolsRow: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
-  @State private var showsExtensions = false
-
   var body: some View {
-    HStack(spacing: 2) {
+    PinnedExtensionsLayout {
       ForEach(model.pinnedExtensionActions, id: \.extensionID) { action in
-        ExtensionButton(
+        PinnedExtensionTile(
           action: action,
           contextMenu: { actions?.contextMenu(forExtension: action.extensionID) }
         ) { actions?.runExtension(action.extensionID, pinned: true) }
           .anchorFrame(.extensionAction(action.extensionID))
       }
-      IconButton(systemImage: "puzzlepiece.extension", help: "Extensions") {
-        showsExtensions.toggle()
-      }
-      .accessibilityIdentifier("clair.extensions")
-      .anchorFrame(.extensionsButton)
-      .popover(isPresented: $showsExtensions, arrowEdge: .trailing) {
-        ExtensionsList(model: model, actions: actions) { showsExtensions = false }
-      }
-      Spacer(minLength: 0)
     }
-    .frame(height: IconButtonSize.regular)
   }
 }
 
@@ -461,7 +481,7 @@ struct ToolsRow: View {
 /// plus menu at the other end, each 8 pt in from the side and 9 pt from the
 /// bottom.
 struct SidebarFooter: View {
-  let model: BrowserWindowModel
+  @Bindable var model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
   static let height: CGFloat = 50
@@ -471,16 +491,14 @@ struct SidebarFooter: View {
   static let glyphSize: CGFloat = 18
   static let glyphWeight: Font.Weight = .medium
 
-  @State private var showsDownloads = false
-
   var body: some View {
     HStack(spacing: 0) {
       DownloadsButton(progress: model.downloadProgress, hasUnseen: model.hasUnseenDownloads) {
-        showsDownloads.toggle()
-        if showsDownloads { actions?.downloadsListOpened() }
+        model.isDownloadsListOpen.toggle()
+        if model.isDownloadsListOpen { actions?.downloadsListOpened() }
       }
       .anchorFrame(.downloads)
-      .popover(isPresented: $showsDownloads, arrowEdge: .trailing) {
+      .popover(isPresented: $model.isDownloadsListOpen, arrowEdge: .trailing) {
         DownloadsList(model: model, actions: actions)
       }
       Spacer(minLength: 0)
@@ -499,83 +517,14 @@ struct SidebarFooter: View {
 
 struct ExtensionIcon: View {
   let action: any ClairExtensionAction
+  var size: CGFloat = 16
 
   var body: some View {
     if let icon = action.icon {
-      Image(nsImage: icon).resizable().interpolation(.high).frame(width: 16, height: 16)
+      Image(nsImage: icon).resizable().interpolation(.high).frame(width: size, height: size)
     } else {
-      Image(systemName: "puzzlepiece").frame(width: 16, height: 16)
+      Image(systemName: "puzzlepiece").frame(width: size, height: size)
     }
-  }
-}
-
-struct ExtensionButton: View {
-  let action: any ClairExtensionAction
-  let contextMenu: () -> NSMenu?
-  let run: () -> Void
-
-  var body: some View {
-    IconButton(help: action.name, size: IconButtonSize.regular, action: run) {
-      ExtensionIcon(action: action)
-        .frame(width: IconButtonSize.regular, height: IconButtonSize.regular)
-        .overlay(alignment: .bottomTrailing) {
-          if !action.badgeText.isEmpty {
-            Text(action.badgeText)
-              .font(.system(size: 8, weight: .bold))
-              .foregroundStyle(.white)
-              .padding(.horizontal, 3)
-              .background(Color(nsColor: action.badgeBackgroundColor ?? .systemRed), in: .capsule)
-              .accessibilityIdentifier("clair.extensionBadge")
-          }
-        }
-        .opacity(action.isEnabled ? 1 : 0.4)
-    }
-    .overlay(RowClickCatcher(onMiddleClick: {}, menuItems: [], menuProvider: contextMenu))
-    .accessibilityValue(action.badgeText)
-    .accessibilityIdentifier("clair.extensionAction")
-  }
-}
-
-/// The extensions button's list: every extension with an action.
-struct ExtensionsList: View {
-  let model: BrowserWindowModel
-  weak var actions: (any SidebarActions)?
-  let dismiss: () -> Void
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 2) {
-      ForEach(model.extensionActions, id: \.extensionID) { action in
-        HStack {
-          Button {
-            dismiss()
-            actions?.runExtension(action.extensionID, pinned: false)
-          } label: {
-            HStack {
-              ExtensionIcon(action: action)
-              Text(action.name).lineLimit(1)
-              Spacer()
-            }
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          Button {
-            actions?.setExtension(action.extensionID, pinned: !action.isPinned)
-          } label: {
-            Image(systemName: action.isPinned ? "pin.fill" : "pin")
-          }
-          .buttonStyle(.plain)
-          .tooltip(action.isPinned ? "Unpin" : "Pin")
-          .accessibilityLabel(action.isPinned ? "Unpin" : "Pin")
-        }
-        .padding(.vertical, 4)
-        .overlay(
-          RowClickCatcher(
-            onMiddleClick: {}, menuItems: [],
-            menuProvider: { actions?.contextMenu(forExtension: action.extensionID) }))
-      }
-    }
-    .padding(10)
-    .frame(width: 260)
   }
 }
 
