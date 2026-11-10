@@ -39,10 +39,10 @@ Suggested order: 1, 2, 3, 4, then 5. Groups 2 and 3 can start in `ClairUI` again
 
 ## 6. Badge colours and polish
 
-- [ ] 6.1 Report unset badge colours as nil and a set background as opaque in `clair_extensions.mm`, and add `badgeTextColor` to `ClairExtensionAction` (D10). Build the engine. Verify that `chromium-engine-<key>` is published and CI's engine check passes.
-- [ ] 6.2 Draw the badge with the default red and white, or the extension's colours with contrasting text, through a pure helper (D10). Verify with unit tests in CI, and by hand in Light and Dark Mode with the default colours, a light background and a set text colour.
-- [ ] 6.3 Add a divider between "Add Extension…" and "All Site Settings…", size the URL field's glyphs to Arc's (the square 16 pt and the link 14.5 pt across, drawn), and give the tiles' and pill's focus rings their rounded corners. Verify by hand against Arc.
-- [ ] 6.4 Make the runtime test move across the tile until its pin badge shows. Verify with a `quality.yml` run on the branch.
+- [x] 6.1 Report unset badge colours as nil and a set background as opaque in `clair_extensions.mm`, and add `badgeTextColor` to `ClairExtensionAction` (D10). Build the engine. Verify that `chromium-engine-<key>` is published and CI's engine check passes.
+- [x] 6.2 Draw the badge with the default black on white (white on near-black in Dark Mode), or the extension's colours with contrasting text, through a pure helper (D10). Verify with unit tests in CI, and by hand in Light and Dark Mode with the default colours, a light background and a set text colour.
+- [x] 6.3 Add a divider between "Add Extension…" and "All Site Settings…", size the URL field's glyphs to Arc's (the square 16 pt and the link 14.5 pt across, drawn, with the square at regular weight), and draw the tiles' and pill's focus rings 2 pt wide with their rounded corners. Verify by hand against Arc.
+- [x] 6.4 Make the runtime test move across the tile until its pin badge shows. Verify with a `quality.yml` run on the branch.
 
 ## Workflow follow-up
 

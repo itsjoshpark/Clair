@@ -42,18 +42,25 @@ nonisolated struct PinnedExtensionsGrid: Equatable {
 /// An extension badge's colours (arc-site-control-center design D10). Chromium
 /// reports nil for colours the extension didn't set.
 enum ExtensionBadgeColors {
-  /// Clair's badge, where Chromium has its own default.
-  static let defaultBackground = NSColor.systemRed
+  /// Clair's badge, where Chromium has its own default: black on white, or
+  /// white on near-black in Dark Mode, so it stands out from the tile.
+  static let defaultBackground = NSColor(name: "ClairBadgeBackground") { appearance in
+    appearance.isDark ? NSColor(srgbRed: 0.11, green: 0.11, blue: 0.12, alpha: 1) : .white
+  }
+  static let defaultText = NSColor(name: "ClairBadgeText") { appearance in
+    appearance.isDark ? .white : .black
+  }
 
   static func background(_ reported: NSColor?) -> NSColor {
     reported ?? defaultBackground
   }
 
-  /// The extension's text colour; else white on Clair's red, or black or white,
-  /// whichever contrasts more, on a colour the extension chose.
+  /// The extension's text colour; else Clair's default on Clair's background,
+  /// or black or white, whichever contrasts more, on a colour the extension
+  /// chose.
   static func text(_ reported: NSColor?, background: NSColor?) -> NSColor {
     if let reported { return reported }
-    guard let background else { return .white }
+    guard let background else { return defaultText }
     let luminance = relativeLuminance(background)
     // WCAG contrast ratios against white (luminance 1) and black (0).
     return (1.05 / (luminance + 0.05)) >= ((luminance + 0.05) / 0.05) ? .white : .black
@@ -127,9 +134,10 @@ struct PinnedExtensionTile: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SidebarFill.field(colorScheme, hovered: isHovered), in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
-        .contentShape(.focusEffect, .rect(cornerRadius: 8, style: .continuous))
+        .modifier(TileFocusRing(cornerRadius: 8))
     }
     .buttonStyle(.plain)
+    .focusEffectDisabled()
     .foregroundStyle(IconButtonStyle.grey(isWindowKey: isWindowKey))
     .overlay(RowClickCatcher(onMiddleClick: {}, menuItems: [], menuProvider: contextMenu))
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }

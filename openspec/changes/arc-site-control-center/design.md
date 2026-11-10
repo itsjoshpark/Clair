@@ -106,7 +106,7 @@ The icon is informational: a plain image with a tooltip, not a control.
 
 Chromium reports a badge colour the extension didn't set as transparent and substitutes its own when it draws, picking black or white text for contrast. The bridge passed the transparent colour on, so the pinned tile drew white text with no background. The bridge now reports an unset background or text colour as nil, and a set background as opaque, as Chromium draws it. `ClairExtensionAction` gains `badgeTextColor` for `chrome.action.setBadgeTextColor`.
 
-ClairUI draws Clair's default, white on the system red, when the extension sets no background. On a background the extension chose, it uses the extension's text colour, or else black or white, whichever has the higher WCAG contrast. This is a pure helper that unit tests cover.
+ClairUI draws Clair's default when the extension sets no background: black text on white, or white on near-black in Dark Mode, which stands out from the tile in either. On a background the extension chose, it uses the extension's text colour, or else black or white, whichever has the higher WCAG contrast. This is a pure helper that unit tests cover.
 
 *Alternative:* treating a transparent colour as unset in ClairUI alone. It would avoid an engine build, but would keep ignoring `setBadgeTextColor` and leave the bridge contradicting `ClairHost.h`.
 

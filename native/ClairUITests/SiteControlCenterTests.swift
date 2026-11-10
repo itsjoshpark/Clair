@@ -111,9 +111,24 @@ struct SiteControlCenterLogicTests {
     #expect(!URLDisplay.showsNotSecure(for: nil))
   }
 
-  @Test func theDefaultBadgeIsWhiteOnRed() {
-    #expect(ExtensionBadgeColors.background(nil) == .systemRed)
-    #expect(ExtensionBadgeColors.text(nil, background: nil) == .white)
+  /// A dynamic colour's sRGB components under an appearance.
+  func resolved(_ color: NSColor, _ name: NSAppearance.Name) -> [CGFloat] {
+    var components: [CGFloat] = []
+    NSAppearance(named: name)!.performAsCurrentDrawingAppearance {
+      let rgb = color.usingColorSpace(.sRGB)!
+      components = [rgb.redComponent, rgb.greenComponent, rgb.blueComponent]
+    }
+    return components
+  }
+
+  @Test func theDefaultBadgeIsBlackOnWhiteAndWhiteOnDark() {
+    let background = ExtensionBadgeColors.background(nil)
+    let text = ExtensionBadgeColors.text(nil, background: nil)
+    #expect(resolved(background, .aqua) == [1, 1, 1])
+    #expect(resolved(text, .aqua) == [0, 0, 0])
+    #expect(resolved(text, .darkAqua) == [1, 1, 1])
+    #expect(ExtensionBadgeColors.relativeLuminance(NSColor(srgbRed: 0.11, green: 0.11, blue: 0.12, alpha: 1)) < 0.02)
+    #expect(resolved(background, .darkAqua).allSatisfy { $0 < 0.15 })
   }
 
   @Test func aBadgeColourGetsTheTextThatContrastsMore() {

@@ -397,7 +397,7 @@ struct URLField: View {
       if showsButtons, hasSiteControls {
         URLFieldButton(
           systemImage: "slider.horizontal.2.square", help: "Site Control Center",
-          glyphSize: URLFieldButton.siteControlsGlyphSize
+          glyphSize: URLFieldButton.siteControlsGlyphSize, glyphWeight: .regular
         ) {
           model.isSiteControlCenterOpen = true
         }
@@ -447,12 +447,14 @@ struct URLFieldButton: View {
   let help: String
   var shortcut: [String] = []
   var glyphSize: CGFloat = 13
+  /// The square draws heavier than the link at the same weight.
+  var glyphWeight: Font.Weight = .medium
   let action: () -> Void
 
   var body: some View {
     IconButton(
       systemImage: systemImage, help: help, shortcut: shortcut, size: URLField.buttonSize, cornerRadius: 7,
-      glyphSize: glyphSize, action: action)
+      glyphSize: glyphSize, glyphWeight: glyphWeight, action: action)
   }
 }
 

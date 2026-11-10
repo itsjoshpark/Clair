@@ -124,7 +124,7 @@ The sidebar SHALL show the actions of extensions the user has pinned as tiles wi
 
 #### Scenario: Badge with the default colours
 - **WHEN** an extension sets badge text without setting its colours
-- **THEN** the badge shows white text on red, legible in Light and Dark Mode
+- **THEN** the badge shows black text on white in Light Mode, and white text on near-black in Dark Mode
 
 #### Scenario: Badge colours set by the extension
 - **WHEN** an extension sets its badge's background with `chrome.action.setBadgeBackgroundColor` and its text colour with `chrome.action.setBadgeTextColor`
