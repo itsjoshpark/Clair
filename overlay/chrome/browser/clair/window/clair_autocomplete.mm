@@ -17,6 +17,7 @@
 #include "chrome/browser/autocomplete/chrome_autocomplete_provider_client.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.h"
 #include "chrome/browser/clair/window/clair_browser_window.h"
+#include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/history/top_sites_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
@@ -29,7 +30,9 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
 #include "components/favicon/content/content_favicon_driver.h"
+#include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/top_sites.h"
+#include "components/keyed_service/core/service_access_type.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_controller_config.h"
@@ -47,6 +50,8 @@
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/gfx/image/image.h"
+#include "url/gurl.h"
+#include "url/url_constants.h"
 
 namespace {
 
@@ -389,6 +394,21 @@ ClairSuggestionKind KindOf(const AutocompleteMatch& match) {
   // A copy: Chromium sends the shorter list during the call, which replaces
   // _destinations. Providers find what to delete by its URL or contents.
   const AutocompleteMatch match = *found->second.match;
+  // A page typed without a scheme is in history twice, as http: and as the
+  // https: page it was upgraded to. The history index doesn't learn the
+  // first until later, so the match may not carry it as a duplicate, and
+  // deleting the match alone would let the page come back. Delete it too.
+  const GURL& url = match.destination_url;
+  if (match.deletable && !AutocompleteMatch::IsSearchType(match.type) &&
+      url.SchemeIsHTTPOrHTTPS()) {
+    GURL::Replacements other_scheme;
+    other_scheme.SetSchemeStr(url.SchemeIs(url::kHttpsScheme) ? url::kHttpScheme
+                                                              : url::kHttpsScheme);
+    if (history::HistoryService* history = HistoryServiceFactory::GetForProfile(
+            self.profile, ServiceAccessType::EXPLICIT_ACCESS)) {
+      history->DeleteURLs({url.ReplaceComponents(other_scheme)});
+    }
+  }
   _controller->DeleteMatch(match);
 }
 

@@ -79,17 +79,8 @@ struct CommandBarView: View {
           _ = model.acceptKeyword()
           return .handled
         }
-        .onKeyPress(.delete, phases: [.down, .repeat]) { press in
-          // Option+Command+Delete deletes the selected suggestion, as in Arc,
-          // and never edits the text. Held down, it deletes only one.
-          let modifiers = press.modifiers.intersection([.shift, .control, .option, .command])
-          if modifiers == [.option, .command] {
-            if press.phase == .down {
-              model.deleteSelected()
-            }
-            return .handled
-          }
-          return model.deleteBackwardInEmptyField() ? .handled : .ignored
+        .onKeyPress(.delete) {
+          model.deleteBackwardInEmptyField() ? .handled : .ignored
         }
         .onKeyPress(.escape) {
           model.cancel()
@@ -107,6 +98,17 @@ struct CommandBarView: View {
       }
       .padding(.horizontal, 20)
       .frame(height: Self.fieldHeight)
+      // Option+Command+Delete deletes the selected suggestion, as in Arc. A
+      // shortcut rather than onKeyPress, which never sees Command keys in the
+      // field, so the field never gets it either.
+      .background {
+        Button("Delete Suggestion") { model.deleteSelected() }
+          .keyboardShortcut(.delete, modifiers: [.option, .command])
+          .opacity(0)
+          .allowsHitTesting(false)
+          .focusable(false)
+          .accessibilityHidden(true)
+      }
       if !model.suggestions.isEmpty {
         Divider().padding(.horizontal, 12)
         ScrollView {

@@ -9,6 +9,10 @@ As in Arc, a suggestion that Chromium's autocomplete can delete, such as a page 
 - **WHEN** the user has visited `https://example.com/?probe`, types `probe`, rests the pointer on that page's row and clicks its ×
 - **THEN** the row leaves the list, the command bar stays open, and typing `probe` again no longer suggests that page
 
+#### Scenario: A page upgraded to HTTPS in this session
+- **WHEN** the user has just opened `example.com/?probe` by typing it, so history holds both its `http://` and `https://` addresses, and deletes its row with the ×
+- **THEN** typing `probe` again doesn't suggest the page under either address
+
 #### Scenario: Deleting a row that isn't selected
 - **WHEN** the first row is selected and the user clicks the × on the third row
 - **THEN** the third row leaves the list and the first row stays selected
