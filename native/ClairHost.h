@@ -390,8 +390,11 @@ NS_SWIFT_NAME(ClairExtensionAction)
 @property(nonatomic, readonly, nullable) NSImage *icon;
 // The badge text for the active tab, or empty.
 @property(nonatomic, readonly, copy) NSString *badgeText;
-// The badge's colour, or nil for the default.
+// The badge's colour, opaque, or nil for the default.
 @property(nonatomic, readonly, nullable) NSColor *badgeBackgroundColor;
+// The badge text's colour (chrome.action.setBadgeTextColor), or nil for one
+// that contrasts with the background.
+@property(nonatomic, readonly, nullable) NSColor *badgeTextColor;
 // Whether the user pinned it to the sidebar.
 @property(nonatomic, readonly) BOOL isPinned;
 // Whether it can run on the active tab.
