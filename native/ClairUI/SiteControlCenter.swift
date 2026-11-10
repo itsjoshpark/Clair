@@ -171,10 +171,9 @@ struct SiteControlCenterTile: View {
           .frame(width: SiteControlCenterLogic.tileWidth, height: SiteControlCenterLogic.tileHeight)
           .background(tileFill(colorScheme, isHovered), in: .rect(cornerRadius: 8, style: .continuous))
           .contentShape(Rectangle())
-          .modifier(TileFocusRing(cornerRadius: 8))
+          .contentShape(.focusEffect, .rect(cornerRadius: 8, style: .continuous))
       }
       .buttonStyle(.plain)
-      .focusEffectDisabled()
       .overlay(RowClickCatcher(onMiddleClick: {}, menuItems: [], menuProvider: contextMenu))
       .tooltip(action.name)
       .accessibilityLabel(action.name)
@@ -229,10 +228,9 @@ struct AddExtensionTile: View {
         .frame(width: SiteControlCenterLogic.tileWidth, height: SiteControlCenterLogic.tileHeight)
         .background(tileFill(colorScheme, isHovered), in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
-        .modifier(TileFocusRing(cornerRadius: 8))
+        .contentShape(.focusEffect, .rect(cornerRadius: 8, style: .continuous))
     }
     .buttonStyle(.plain)
-    .focusEffectDisabled()
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
     .tooltip("Add Extension")
     .accessibilityLabel("Add Extension")
@@ -256,33 +254,11 @@ struct SiteInfoPill: View {
         .frame(height: 32)
         .background(tileFill(colorScheme, isHovered), in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
-        .modifier(TileFocusRing(cornerRadius: 8))
+        .contentShape(.focusEffect, .rect(cornerRadius: 8, style: .continuous))
     }
     .buttonStyle(.plain)
-    .focusEffectDisabled()
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
     .accessibilityIdentifier("clair.siteInfo")
-  }
-}
-
-/// A keyboard focus ring thinner than the system's: 2 pt in the system's focus
-/// colour, just outside the tile and following its corners. The button turns
-/// the system's ring off with `focusEffectDisabled()`.
-struct TileFocusRing: ViewModifier {
-  let cornerRadius: CGFloat
-  static let width: CGFloat = 2
-
-  @Environment(\.isFocused) private var isFocused
-
-  func body(content: Content) -> some View {
-    content.overlay {
-      if isFocused {
-        RoundedRectangle(cornerRadius: cornerRadius + Self.width, style: .continuous)
-          .strokeBorder(Color(nsColor: .keyboardFocusIndicatorColor), lineWidth: Self.width)
-          .padding(-Self.width)
-          .allowsHitTesting(false)
-      }
-    }
   }
 }
 

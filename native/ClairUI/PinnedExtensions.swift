@@ -134,10 +134,9 @@ struct PinnedExtensionTile: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SidebarFill.field(colorScheme, hovered: isHovered), in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
-        .modifier(TileFocusRing(cornerRadius: 8))
+        .contentShape(.focusEffect, .rect(cornerRadius: 8, style: .continuous))
     }
     .buttonStyle(.plain)
-    .focusEffectDisabled()
     .foregroundStyle(IconButtonStyle.grey(isWindowKey: isWindowKey))
     .overlay(RowClickCatcher(onMiddleClick: {}, menuItems: [], menuProvider: contextMenu))
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
