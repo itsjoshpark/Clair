@@ -388,12 +388,17 @@ struct URLField: View {
       }
 
       if showsButtons, display != nil {
-        URLFieldButton(systemImage: "link", help: "Copy URL", shortcut: ["⇧", "⌘", "C"]) { actions?.copyURL() }
+        URLFieldButton(
+          systemImage: "link", help: "Copy URL", shortcut: ["⇧", "⌘", "C"], glyphSize: URLFieldButton.linkGlyphSize
+        ) { actions?.copyURL() }
           .accessibilityIdentifier("clair.copyURL")
           .transition(.opacity)
       }
       if showsButtons, hasSiteControls {
-        URLFieldButton(systemImage: "slider.horizontal.2.square", help: "Site Control Center") {
+        URLFieldButton(
+          systemImage: "slider.horizontal.2.square", help: "Site Control Center",
+          glyphSize: URLFieldButton.siteControlsGlyphSize
+        ) {
           model.isSiteControlCenterOpen = true
         }
         // A click while the popover is open only closes it: the transient
@@ -432,15 +437,22 @@ struct URLField: View {
 
 /// A button at the URL field's trailing end.
 struct URLFieldButton: View {
+  /// Point sizes that draw the glyphs as large as Arc's, as measured: the
+  /// link 14.5 pt across and the square 16 pt. The square draws smaller than
+  /// the link at the same size.
+  static let linkGlyphSize: CGFloat = 14
+  static let siteControlsGlyphSize: CGFloat = 18
+
   let systemImage: String
   let help: String
   var shortcut: [String] = []
+  var glyphSize: CGFloat = 13
   let action: () -> Void
 
   var body: some View {
     IconButton(
       systemImage: systemImage, help: help, shortcut: shortcut, size: URLField.buttonSize, cornerRadius: 7,
-      glyphSize: 13, action: action)
+      glyphSize: glyphSize, action: action)
   }
 }
 

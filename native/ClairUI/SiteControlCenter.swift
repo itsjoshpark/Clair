@@ -126,6 +126,7 @@ struct SiteControlCenter: View {
       IconMenu(help: "More options", cornerRadius: IconButtonSize.regular / 2) {
         Button("Manage Extensions…") { open(SiteControlCenterLink.extensions) }
         Button("Add Extension…") { open(SiteControlCenterLink.webStore) }
+        Divider()
         Button("All Site Settings…") { open(SiteControlCenterLink.siteSettings) }
       } label: {
         SymbolGlyph(systemImage: "ellipsis")
@@ -170,6 +171,7 @@ struct SiteControlCenterTile: View {
           .frame(width: SiteControlCenterLogic.tileWidth, height: SiteControlCenterLogic.tileHeight)
           .background(tileFill(colorScheme, isHovered), in: .rect(cornerRadius: 8, style: .continuous))
           .contentShape(Rectangle())
+          .contentShape(.focusEffect, .rect(cornerRadius: 8, style: .continuous))
       }
       .buttonStyle(.plain)
       .overlay(RowClickCatcher(onMiddleClick: {}, menuItems: [], menuProvider: contextMenu))
@@ -226,6 +228,7 @@ struct AddExtensionTile: View {
         .frame(width: SiteControlCenterLogic.tileWidth, height: SiteControlCenterLogic.tileHeight)
         .background(tileFill(colorScheme, isHovered), in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
+        .contentShape(.focusEffect, .rect(cornerRadius: 8, style: .continuous))
     }
     .buttonStyle(.plain)
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
@@ -251,6 +254,7 @@ struct SiteInfoPill: View {
         .frame(height: 32)
         .background(tileFill(colorScheme, isHovered), in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
+        .contentShape(.focusEffect, .rect(cornerRadius: 8, style: .continuous))
     }
     .buttonStyle(.plain)
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }

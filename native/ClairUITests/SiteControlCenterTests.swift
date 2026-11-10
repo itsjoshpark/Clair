@@ -111,6 +111,22 @@ struct SiteControlCenterLogicTests {
     #expect(!URLDisplay.showsNotSecure(for: nil))
   }
 
+  @Test func theDefaultBadgeIsWhiteOnRed() {
+    #expect(ExtensionBadgeColors.background(nil) == .systemRed)
+    #expect(ExtensionBadgeColors.text(nil, background: nil) == .white)
+  }
+
+  @Test func aBadgeColourGetsTheTextThatContrastsMore() {
+    #expect(ExtensionBadgeColors.text(nil, background: .yellow) == .black)
+    #expect(ExtensionBadgeColors.text(nil, background: NSColor(srgbRed: 0, green: 0, blue: 0.5, alpha: 1)) == .white)
+  }
+
+  @Test func theExtensionsTextColourWins() {
+    let blue = NSColor(srgbRed: 0, green: 0, blue: 1, alpha: 1)
+    #expect(ExtensionBadgeColors.text(blue, background: .yellow) == blue)
+    #expect(ExtensionBadgeColors.background(blue) == blue)
+  }
+
   @Test func anUnpinnedActionOpensFromTheSiteControls() {
     let browser = FakeBrowser()
     let controller = BrowserWindowController(

@@ -448,9 +448,15 @@ final class ExtensionActionTests: NativeWindowTestCase {
     siteControls.click()
     let tile = browser.ui.descendants(matching: .any).matching(identifier: "clair.siteControlsExtension").firstMatch
     try require(tile.waitForExistence(timeout: 30), "The Site Control Center doesn't list the extension")
-    tile.hover()
+    // A pointer that lands on the tile in one jump can miss its hover in a
+    // popover that has just opened, so move across it as a pointer would.
     let pin = browser.ui.buttons["Pin"].firstMatch
-    try require(pin.waitForExistence(timeout: 10), "Hovering a tile shows no pin badge")
+    var hovered = false
+    for offset in [0.2, 0.5, 0.8] where !hovered {
+      tile.coordinate(withNormalizedOffset: CGVector(dx: offset, dy: 0.5)).hover()
+      hovered = pin.waitForExistence(timeout: 3)
+    }
+    try require(hovered, "Hovering a tile shows no pin badge")
     pin.click()
     browser.ui.typeKey(.escape, modifierFlags: [])
     let pinned = browser.element("clair.extensionAction")

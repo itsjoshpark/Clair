@@ -143,15 +143,21 @@ final class FakeExtensionAction: NSObject, ClairExtensionAction {
   let name: String
   let icon: NSImage? = nil
   let badgeText: String
-  let badgeBackgroundColor: NSColor? = nil
+  let badgeBackgroundColor: NSColor?
+  let badgeTextColor: NSColor?
   let isPinned: Bool
   let isEnabled: Bool
   let hasPopup: Bool
 
-  init(id: String, name: String, badge: String = "", pinned: Bool = true, enabled: Bool = true, popup: Bool = true) {
+  init(
+    id: String, name: String, badge: String = "", badgeBackground: NSColor? = nil, badgeTextColor: NSColor? = nil,
+    pinned: Bool = true, enabled: Bool = true, popup: Bool = true
+  ) {
     extensionID = id
     self.name = name
     badgeText = badge
+    badgeBackgroundColor = badgeBackground
+    self.badgeTextColor = badgeTextColor
     isPinned = pinned
     isEnabled = enabled
     hasPopup = popup
