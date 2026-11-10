@@ -57,8 +57,9 @@ struct CommandBarView: View {
             .background(Color.accentColor.opacity(0.18), in: .capsule)
             .accessibilityIdentifier("clair.commandBarKeyword")
         }
+        // In keyword mode the field only searches that engine.
         TextField(
-          "Search or Enter URL…",
+          model.keywordName == nil ? "Search or Enter URL…" : "Search…",
           text: Binding(get: { model.text }, set: { model.setText($0) })
         )
         .textFieldStyle(.plain)
@@ -79,9 +80,6 @@ struct CommandBarView: View {
           _ = model.acceptKeyword()
           return .handled
         }
-        .onKeyPress(.delete) {
-          model.deleteBackwardInEmptyField() ? .handled : .ignored
-        }
         .onKeyPress(.escape) {
           model.cancel()
           return .handled
@@ -100,7 +98,8 @@ struct CommandBarView: View {
       .frame(height: Self.fieldHeight)
       // Option+Command+Delete deletes the selected suggestion, as in Arc. A
       // shortcut rather than onKeyPress, which never sees Command keys in the
-      // field, so the field never gets it either.
+      // field, so the field never gets it either. (Delete in an empty field
+      // in keyword mode is caught by BrowserWindowController.)
       .background {
         Button("Delete Suggestion") { model.deleteSelected() }
           .keyboardShortcut(.delete, modifiers: [.option, .command])

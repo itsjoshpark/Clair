@@ -39,7 +39,7 @@ A window that opens on a single new tab page SHALL open with the command bar sho
 - **THEN** the new window's tab navigates to `https://example.org/`
 
 ### Requirement: Command bar appearance
-The command bar SHALL float over the window, horizontally centered on the whole window and about a third of the way down, above the sidebar and the page, without dimming the page. It SHALL have a search icon, the placeholder "Search or Enter URL…", and the results below the field.
+The command bar SHALL float over the window, horizontally centered on the whole window and about a third of the way down, above the sidebar and the page, without dimming the page. It SHALL have a search icon, the placeholder "Search or Enter URL…" (or "Search…" while searching a site by its keyword), and the results below the field.
 
 #### Scenario: Position
 - **WHEN** the command bar opens in a window that is wider than the command bar
@@ -94,11 +94,15 @@ Up and Down SHALL move the selection, Return SHALL choose the selected row, and 
 - **THEN** the third row shows a grey background, the second row is selected in the accent colour, and Return opens the second row's result
 
 ### Requirement: Site search keywords
-When the query starts with a search engine's keyword, the command bar SHALL show that engine's icon and offer "Search <engine>" with Tab. After Tab, the rest of the query SHALL search that engine.
+When the query starts with a search engine's keyword, the command bar SHALL show that engine's icon and offer "Search <engine>" with Tab. After Tab, the rest of the query SHALL search that engine. Delete in the empty field SHALL leave keyword mode and put the keyword back as text, as the omnibox does.
 
 #### Scenario: Searching a site
 - **WHEN** a search engine with keyword `wiki` is configured, and the user types `wiki`, presses Tab, types `Arc` and presses Return
 - **THEN** that engine's results page for "Arc" opens
+
+#### Scenario: Leaving keyword mode
+- **WHEN** the user types `wiki`, presses Tab and then Delete
+- **THEN** the engine's name leaves the field, the field reads `wiki`, and its placeholder is "Search or Enter URL…" again
 
 ### Requirement: Deleting a suggestion with the pointer
 As in Arc, a suggestion that Chromium's autocomplete can delete, such as a page from history or an earlier search, SHALL show an × at its trailing end while the pointer is over its row, with the tooltip "Delete Suggestion ⌥⌘⌫". Clicking the × SHALL delete the suggestion without confirmation and without choosing the row. Other rows, and every row listed with an empty query, SHALL show no ×.
