@@ -28,6 +28,7 @@
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ssl/chrome_security_state_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/bubble_anchor_util.h"
@@ -49,6 +50,7 @@
 #include "components/infobars/core/confirm_infobar_delegate.h"
 #include "components/infobars/core/infobar.h"
 #include "components/infobars/core/infobar_manager.h"
+#include "components/security_state/core/security_state.h"
 #include "components/tabs/public/tab_context_menu_command.h"
 #include "components/tabs/public/tab_interface.h"
 #include "components/url_formatter/url_formatter.h"
@@ -179,6 +181,7 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
 @synthesize urlText = _urlText;
 @synthesize displayHost = _displayHost;
 @synthesize isNewTabPage = _isNewTabPage;
+@synthesize isNotSecure = _isNotSecure;
 @synthesize favicon = _favicon;
 @synthesize isLoading = _isLoading;
 @synthesize loadProgress = _loadProgress;
@@ -204,6 +207,10 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
     _isNewTabPage = url.SchemeIs(content::kChromeUIScheme) &&
                     (url.host() == chrome::kChromeUINewTabHost ||
                      url.host() == chrome::kChromeUINewTabPageHost);
+    const security_state::SecurityLevel security_level =
+        chrome_security_state::GetSecurityLevel(contents);
+    _isNotSecure = security_level == security_state::WARNING ||
+                   security_level == security_state::DANGEROUS;
     std::u16string title = contents->GetTitle();
     _title = base::SysUTF16ToNSString(title.empty() ? url_formatter::FormatUrl(url)
                                                     : title);
@@ -247,8 +254,8 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
 
 namespace {
 
-// Tells the bridge when a tab's load progress changes (design D4), so it rides
-// the tab's coalesced push.
+// Tells the bridge when a tab's load progress or security state changes (design
+// D4), so it rides the tab's coalesced push.
 class ProgressObserver : public content::WebContentsObserver {
  public:
   ProgressObserver(ClairChromiumBrowser* bridge, content::WebContents* contents)
@@ -256,6 +263,10 @@ class ProgressObserver : public content::WebContentsObserver {
 
   // content::WebContentsObserver:
   void LoadProgressChanged(double progress) override {
+    [bridge_ tabChanged:web_contents()];
+  }
+  // Mixed content can be found after a load has finished.
+  void DidChangeVisibleSecurityState() override {
     [bridge_ tabChanged:web_contents()];
   }
 

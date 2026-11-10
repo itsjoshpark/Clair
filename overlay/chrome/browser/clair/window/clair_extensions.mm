@@ -467,7 +467,7 @@ bool ClairExtensions::ShowToolbarActionPopupForAPICall(
       ToolbarActionsModel::Get(window_->browser()->GetProfile());
   const ClairAnchorKind anchor = model && model->IsActionPinned(action_id)
                                      ? ClairAnchorKindExtensionAction
-                                     : ClairAnchorKindExtensionsButton;
+                                     : ClairAnchorKindSiteControls;
   return OpenPopup(action_id, anchor, std::move(callback));
 }
 
