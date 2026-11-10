@@ -346,6 +346,9 @@ NS_SWIFT_NAME(ClairSuggestion)
 @property(nonatomic, readonly, copy, nullable) NSString *keyword;
 // That engine's name, such as "Wikipedia", or nil.
 @property(nonatomic, readonly, copy, nullable) NSString *keywordName;
+// Whether -deleteSuggestion: can delete it, such as a page from history or
+// an earlier search. Always NO in the empty-query list.
+@property(nonatomic, readonly) BOOL canDelete;
 @end
 
 // What a ClairExtensionPrompt asks.
@@ -469,6 +472,11 @@ NS_SWIFT_NAME(ClairAutocomplete)
 // switches to that tab instead, in its window.
 - (void)openSuggestion:(NSInteger)suggestionID disposition:(ClairOpenDisposition)disposition
     NS_SWIFT_NAME(open(suggestion:disposition:));
+
+// Deletes a suggestion from the latest results wherever Chromium keeps it,
+// as the omnibox does, then sends the updated list. Ignored for a suggestion
+// that can't be deleted.
+- (void)deleteSuggestion:(NSInteger)suggestionID NS_SWIFT_NAME(delete(suggestion:));
 
 // Ends the session. It sends nothing more, and ignores every later call.
 - (void)stop;

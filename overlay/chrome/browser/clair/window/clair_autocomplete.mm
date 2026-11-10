@@ -59,6 +59,9 @@ struct Destination {
   ui::PageTransition transition = ui::PAGE_TRANSITION_TYPED;
   // The tab it switches to instead, if any.
   base::WeakPtr<content::WebContents> tab;
+  // The match it shows, for -deleteSuggestion:. Empty for the empty-query
+  // rows, which don't come from the controller.
+  std::optional<AutocompleteMatch> match;
 };
 
 }  // namespace
@@ -73,6 +76,7 @@ struct Destination {
 @property(nonatomic) BOOL hasTabMatch;
 @property(nonatomic, copy, nullable) NSString* keyword;
 @property(nonatomic, copy, nullable) NSString* keywordName;
+@property(nonatomic) BOOL canDelete;
 @end
 
 @implementation ClairChromiumSuggestion
@@ -363,12 +367,29 @@ ClairSuggestionKind KindOf(const AutocompleteMatch& match) {
           engine ? base::SysUTF16ToNSString(engine->short_name())
                  : suggestion.keyword;
     }
+    suggestion.canDelete = match.SupportsDeletion();
     suggestion.suggestionID = [self
         rememberDestination:Destination{match.destination_url, match.transition,
-                                        nullptr}];
+                                        nullptr, match}];
     [suggestions addObject:suggestion];
   }
   [self publish:suggestions finished:_controller->done()];
+}
+
+- (void)deleteSuggestion:(NSInteger)suggestionID {
+  if (_stopped || !_controller) {
+    return;
+  }
+  auto found = std::ranges::find_if(
+      _destinations, [&](const auto& entry) { return entry.first == suggestionID; });
+  if (found == _destinations.end() || !found->second.match ||
+      !found->second.match->SupportsDeletion()) {
+    return;
+  }
+  // A copy: Chromium sends the shorter list during the call, which replaces
+  // _destinations. Providers find what to delete by its URL or contents.
+  const AutocompleteMatch match = *found->second.match;
+  _controller->DeleteMatch(match);
 }
 
 - (void)publish:(NSArray<id<ClairSuggestion>>*)suggestions finished:(BOOL)finished {
