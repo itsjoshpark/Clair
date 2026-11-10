@@ -57,8 +57,9 @@ struct CommandBarView: View {
             .background(Color.accentColor.opacity(0.18), in: .capsule)
             .accessibilityIdentifier("clair.commandBarKeyword")
         }
+        // In keyword mode the field only searches that engine.
         TextField(
-          "Search or Enter URL…",
+          model.keywordName == nil ? "Search or Enter URL…" : "Search…",
           text: Binding(get: { model.text }, set: { model.setText($0) })
         )
         .textFieldStyle(.plain)
@@ -79,9 +80,6 @@ struct CommandBarView: View {
           _ = model.acceptKeyword()
           return .handled
         }
-        .onKeyPress(.delete) {
-          model.deleteBackwardInEmptyField() ? .handled : .ignored
-        }
         .onKeyPress(.escape) {
           model.cancel()
           return .handled
@@ -91,16 +89,24 @@ struct CommandBarView: View {
           return .handled
         }
         if let offered = model.offeredKeywordName {
-          Text("Search \(offered) ⇥")
-            .font(.caption)
-            .foregroundStyle(OverlayStyle.secondary)
+          // Arc's hint, measured: 13 pt text, (182) on (251) in Light Mode and
+          // (119) on (31) in Dark, 9 pt before a flat "Tab" key.
+          HStack(spacing: 7) {
+            Text("Search \(offered)")
+              .font(.system(size: 13))
+              .foregroundStyle(Color.primary.opacity(0.39))
+            KeyHint(key: "Tab")
+          }
+          .lineLimit(1)
+          .accessibilityElement(children: .combine)
         }
       }
       .padding(.horizontal, 20)
       .frame(height: Self.fieldHeight)
       // Option+Command+Delete deletes the selected suggestion, as in Arc. A
       // shortcut rather than onKeyPress, which never sees Command keys in the
-      // field, so the field never gets it either.
+      // field, so the field never gets it either. (Delete in an empty field
+      // in keyword mode is caught by BrowserWindowController.)
       .background {
         Button("Delete Suggestion") { model.deleteSelected() }
           .keyboardShortcut(.delete, modifiers: [.option, .command])
@@ -265,6 +271,26 @@ struct SuggestionRow: View {
         Button("Delete Suggestion", action: onDelete)
       }
     }
+  }
+}
+
+/// A key in the command bar's keyword hint, flat as Arc's: 30 × 24 pt, filled
+/// like a hovered row, its label (137) on (242) in Light Mode and (193) on
+/// (46) in Dark. Not the tooltip's KeyCap, which is tinted and raised.
+private struct KeyHint: View {
+  let key: String
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    let isDark = colorScheme == .dark
+    Text(key)
+      .font(.system(size: 13))
+      .foregroundStyle(Color.primary.opacity(isDark ? 0.77 : 0.6))
+      .padding(.horizontal, 5)
+      .frame(minWidth: 30, minHeight: 24)
+      .background(
+        Color.primary.opacity(isDark ? 0.07 : 0.04),
+        in: .rect(cornerRadius: 6, style: .continuous))
   }
 }
 

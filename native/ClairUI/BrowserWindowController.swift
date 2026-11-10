@@ -49,6 +49,8 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   /// Watches the rest of a press once the window server has its window drag.
   private var safetyNetMonitor: Any?
   private var safetyNet = WindowDragSafetyNet()
+  /// Watches for Delete while the command bar is open.
+  private var commandBarKeyMonitor: Any?
   /// When the link status capsule shows and hides.
   private var statusState = StatusCapsuleState()
   private var statusTimer: Task<Void, Never>?
@@ -152,6 +154,12 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       }
     } else if rootView.commandBarHost != nil {
       rootView.commandBarHost = nil
+    }
+    // Only keyword mode needs Delete watched (see leavesKeywordMode).
+    if model.commandBar?.keywordName != nil {
+      startCommandBarKeyMonitor()
+    } else {
+      stopCommandBarKeyMonitor()
     }
     // Find.
     if model.find != nil {
@@ -292,6 +300,41 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       removeSafetyNet()
       return false
     }
+  }
+
+  /// Delete in the command bar's empty field leaves keyword mode, as in the
+  /// omnibox. The field editor takes Delete before SwiftUI's key handlers
+  /// and shortcuts see it, so it's caught here, before the window sends it.
+  private func startCommandBarKeyMonitor() {
+    guard commandBarKeyMonitor == nil else { return }
+    commandBarKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      let handled = MainActor.assumeIsolated { self?.leavesKeywordMode(event) ?? false }
+      return handled ? nil : event
+    }
+  }
+
+  private func stopCommandBarKeyMonitor() {
+    if let commandBarKeyMonitor {
+      NSEvent.removeMonitor(commandBarKeyMonitor)
+    }
+    commandBarKeyMonitor = nil
+  }
+
+  private func leavesKeywordMode(_ event: NSEvent) -> Bool {
+    // A fresh press of Delete (kVK_Delete, 51) without modifiers: holding
+    // Delete to clear the query stops at the empty field.
+    guard event.window === window, event.keyCode == 51, !event.isARepeat,
+      event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]),
+      let commandBar = model.commandBar, let host = rootView.commandBarHost,
+      // In the command bar's own field, not another one such as Find, and
+      // not while an input method is composing text there.
+      let editor = window.firstResponder as? NSTextView,
+      (editor.delegate as? NSView)?.isDescendant(of: host) == true,
+      !editor.hasMarkedText(), editor.string.isEmpty
+    else {
+      return false
+    }
+    return commandBar.deleteBackwardInEmptyField()
   }
 
   private func removeSafetyNet() {
@@ -526,6 +569,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     extensionPrompts.cancelAll()
     rootView.card.show(page: nil)
     removeSafetyNet()
+    stopCommandBarKeyMonitor()
     rootView.card.show(devTools: nil, layout: DevToolsLayout(dockSide: .none, pageBounds: .zero, hidesPage: false))
     browser = nil
   }

@@ -13,7 +13,7 @@ Suggested order: 1, 2, 3, then 4. Groups 2 and 3 can start in `ClairUI` against 
 ## 2. Deleting in the model and with ⌥⌘⌫
 
 - [x] 2.1 Add `delete(_:)` and `deleteSelected()` to `CommandBarModel`, keeping the deleted row's index selected on the next update and clearing it when the text changes (D3). Verify with unit tests in CI: a deletion reaches the session; nothing happens for a suggestion that can't be deleted; after the shorter list arrives the same index is selected, or the last row when the last was deleted; deleting another row keeps the selected row selected; typing afterwards selects the first row.
-- [x] 2.2 Handle ⌥⌘⌫ with a hidden button's keyboard shortcut (D4). Verify by hand: ⌥⌘⌫ deletes a selected history row and selects the row that moved up, does nothing on a search row, and never changes the field's text; Delete alone still edits text, and behaves as on `main` in keyword mode (where Delete in an empty field doesn't leave it: a bug that predates this change).
+- [x] 2.2 Handle ⌥⌘⌫ with a hidden button's keyboard shortcut (D4). Verify by hand: ⌥⌘⌫ deletes a selected history row and selects the row that moved up, does nothing on a search row, and never changes the field's text; Delete alone still edits text.
 
 ## 3. The × on the row
 
@@ -29,4 +29,3 @@ Suggested order: 1, 2, 3, then 4. Groups 2 and 3 can start in `ClairUI` against 
 ## Workflow follow-up
 
 - Archive the change once it's merged, in its own PR, as earlier changes were.
-- Fix separately: two keyword-mode bugs found while testing, both already on `main`. Delete in the empty field doesn't leave keyword mode (see 2.2), and with the engine pill showing, the field's hint should read "Search…" rather than "Search or Enter URL…", which also needs the `command-bar` spec's "Command bar appearance" requirement updated.
