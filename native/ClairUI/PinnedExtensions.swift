@@ -120,7 +120,7 @@ struct PinnedExtensionTile: View {
           if !action.badgeText.isEmpty {
             let background = ExtensionBadgeColors.background(action.badgeBackgroundColor)
             Text(action.badgeText)
-              .font(.system(size: 8, weight: .bold))
+              .font(.system(size: 8, weight: .regular))
               .foregroundStyle(
                 Color(
                   nsColor: ExtensionBadgeColors.text(
