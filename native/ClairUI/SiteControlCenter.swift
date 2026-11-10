@@ -31,14 +31,15 @@ enum SiteControlCenterLogic {
     return !["chrome", "devtools", "view-source", "file"].contains(scheme)
   }
 
-  static func rows(tileCount: Int) -> Int {
-    (tileCount + columns - 1) / columns
+  /// Whether this many tiles need more rows than the grid shows at once.
+  static func scrolls(tileCount: Int) -> Bool {
+    (tileCount + columns - 1) / columns > maximumVisibleRows
   }
 
-  /// The height the grid takes for this many tiles.
-  static func gridHeight(tileCount: Int) -> CGFloat {
-    let rows = CGFloat(min(rows(tileCount: tileCount), maximumVisibleRows))
-    return rows * tileHeight + max(rows - 1, 0) * spacing
+  /// The height of the rows the grid shows at once.
+  static var scrollingGridHeight: CGFloat {
+    let rows = CGFloat(maximumVisibleRows)
+    return rows * tileHeight + (rows - 1) * spacing
   }
 }
 
@@ -75,35 +76,40 @@ struct SiteControlCenter: View {
     .frame(width: 236)
   }
 
+  @ViewBuilder
   private func grid(_ extensions: [any ClairExtensionAction]) -> some View {
-    let tileCount = extensions.count + 1
-    let scrolls = SiteControlCenterLogic.rows(tileCount: tileCount) > SiteControlCenterLogic.maximumVisibleRows
+    if SiteControlCenterLogic.scrolls(tileCount: extensions.count + 1) {
+      // The overhang is inside the scroll view, or it would clip the badges.
+      ScrollView(.vertical) {
+        tiles(extensions).padding(Self.badgeOverhang)
+      }
+      .frame(height: SiteControlCenterLogic.scrollingGridHeight + 2 * Self.badgeOverhang)
+      .padding(-Self.badgeOverhang)
+    } else {
+      tiles(extensions)
+    }
+  }
+
+  private func tiles(_ extensions: [any ClairExtensionAction]) -> some View {
     let columns = Array(
       repeating: GridItem(.fixed(SiteControlCenterLogic.tileWidth), spacing: SiteControlCenterLogic.spacing),
       count: SiteControlCenterLogic.columns)
-    return ScrollView(.vertical) {
-      LazyVGrid(columns: columns, alignment: .leading, spacing: SiteControlCenterLogic.spacing) {
-        ForEach(extensions, id: \.extensionID) { action in
-          SiteControlCenterTile(
-            action: action,
-            contextMenu: { actions?.contextMenu(forExtension: action.extensionID) },
-            run: {
-              dismiss()
-              actions?.runExtension(action.extensionID, pinned: false)
-            },
-            setPinned: { actions?.setExtension(action.extensionID, pinned: $0) })
-        }
-        AddExtensionTile {
-          dismiss()
-          actions?.openInNewTab(SiteControlCenterLink.webStore)
-        }
+    return LazyVGrid(columns: columns, alignment: .leading, spacing: SiteControlCenterLogic.spacing) {
+      ForEach(extensions, id: \.extensionID) { action in
+        SiteControlCenterTile(
+          action: action,
+          contextMenu: { actions?.contextMenu(forExtension: action.extensionID) },
+          run: {
+            dismiss()
+            actions?.runExtension(action.extensionID, pinned: false)
+          },
+          setPinned: { actions?.setExtension(action.extensionID, pinned: $0) })
       }
-      .padding(Self.badgeOverhang)
+      AddExtensionTile {
+        dismiss()
+        actions?.openInNewTab(SiteControlCenterLink.webStore)
+      }
     }
-    .scrollDisabled(!scrolls)
-    .scrollIndicators(scrolls ? .automatic : .hidden)
-    .frame(height: SiteControlCenterLogic.gridHeight(tileCount: tileCount) + 2 * Self.badgeOverhang)
-    .padding(-Self.badgeOverhang)
   }
 
   private var footer: some View {

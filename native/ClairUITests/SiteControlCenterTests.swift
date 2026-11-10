@@ -98,11 +98,11 @@ struct SiteControlCenterLogicTests {
     #expect(SiteControlCenterLogic.showsSiteInfo(url: URL(string: url)))
   }
 
-  @Test func theGridStopsGrowingAfterEightRows() {
-    #expect(SiteControlCenterLogic.gridHeight(tileCount: 1) == 32)
-    #expect(SiteControlCenterLogic.gridHeight(tileCount: 5) == 72)
-    #expect(SiteControlCenterLogic.gridHeight(tileCount: 32) == 312)
-    #expect(SiteControlCenterLogic.gridHeight(tileCount: 60) == 312)
+  @Test func theGridScrollsBeyondEightRows() {
+    #expect(!SiteControlCenterLogic.scrolls(tileCount: 1))
+    #expect(!SiteControlCenterLogic.scrolls(tileCount: 32))
+    #expect(SiteControlCenterLogic.scrolls(tileCount: 33))
+    #expect(SiteControlCenterLogic.scrollingGridHeight == 312)
   }
 
   @Test func theNotSecureIconFollowsChromium() {
