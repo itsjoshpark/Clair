@@ -152,11 +152,13 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
         rootView.commandBarHost = host
         window.makeFirstResponder(host)
       }
-      startCommandBarKeyMonitor()
     } else if rootView.commandBarHost != nil {
       rootView.commandBarHost = nil
     }
-    if model.commandBar == nil {
+    // Only keyword mode needs Delete watched (see leavesKeywordMode).
+    if model.commandBar?.keywordName != nil {
+      startCommandBarKeyMonitor()
+    } else {
       stopCommandBarKeyMonitor()
     }
     // Find.
@@ -319,10 +321,16 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   private func leavesKeywordMode(_ event: NSEvent) -> Bool {
-    // 51 is the Delete key (kVK_Delete), here without modifiers.
-    guard event.window === window, event.keyCode == 51,
+    // A fresh press of Delete (kVK_Delete, 51) without modifiers: holding
+    // Delete to clear the query stops at the empty field.
+    guard event.window === window, event.keyCode == 51, !event.isARepeat,
       event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]),
-      let commandBar = model.commandBar
+      let commandBar = model.commandBar, let host = rootView.commandBarHost,
+      // In the command bar's own field, not another one such as Find, and
+      // not while an input method is composing text there.
+      let editor = window.firstResponder as? NSTextView,
+      (editor.delegate as? NSView)?.isDescendant(of: host) == true,
+      !editor.hasMarkedText(), editor.string.isEmpty
     else {
       return false
     }
