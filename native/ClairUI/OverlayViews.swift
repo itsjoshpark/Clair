@@ -98,6 +98,17 @@ struct CommandBarView: View {
       }
       .padding(.horizontal, 20)
       .frame(height: Self.fieldHeight)
+      // Option+Command+Delete deletes the selected suggestion, as in Arc. A
+      // shortcut rather than onKeyPress, which never sees Command keys in the
+      // field, so the field never gets it either.
+      .background {
+        Button("Delete Suggestion") { model.deleteSelected() }
+          .keyboardShortcut(.delete, modifiers: [.option, .command])
+          .opacity(0)
+          .allowsHitTesting(false)
+          .focusable(false)
+          .accessibilityHidden(true)
+      }
       if !model.suggestions.isEmpty {
         Divider().padding(.horizontal, 12)
         ScrollView {
@@ -106,7 +117,8 @@ struct CommandBarView: View {
               SuggestionRow(
                 suggestion: suggestion,
                 isSelected: index == model.selection,
-                isHovered: hoveredSuggestionID == suggestion.suggestionID
+                isHovered: hoveredSuggestionID == suggestion.suggestionID,
+                onDelete: suggestion.canDelete ? { model.delete(suggestion) } : nil
               )
               .onHover { inside in
                 if inside {
@@ -169,6 +181,9 @@ struct SuggestionRow: View {
   let suggestion: any ClairSuggestion
   let isSelected: Bool
   var isHovered = false
+  /// Deletes the suggestion, for one that can be deleted; its × shows while
+  /// the row is hovered.
+  var onDelete: (() -> Void)?
   @Environment(\.colorScheme) private var colorScheme
 
   var symbol: String {
@@ -222,6 +237,11 @@ struct SuggestionRow: View {
           .padding(.vertical, 2)
           .background((isSelected ? Color.white : Color.primary).opacity(0.15), in: .capsule)
       }
+      if isHovered, let onDelete {
+        DeleteSuggestionButton(isOnSelectedRow: isSelected, action: onDelete)
+          // Arc's ends 15 pt inside the row.
+          .padding(.trailing, 4)
+      }
     }
     .foregroundStyle(isSelected ? .white : .primary)
     .padding(.horizontal, 11)
@@ -239,6 +259,40 @@ struct SuggestionRow: View {
     .accessibilityLabel(accessibilityText)
     .accessibilityIdentifier("clair.suggestion")
     .accessibilityAddTraits(isSelected ? .isSelected : [])
+    // The row reads as one element, so its × is offered as an action.
+    .accessibilityActions {
+      if let onDelete {
+        Button("Delete Suggestion", action: onDelete)
+      }
+    }
+  }
+}
+
+/// The × on a suggestion that can be deleted (design D5), measured on Arc's.
+private struct DeleteSuggestionButton: View {
+  let isOnSelectedRow: Bool
+  let action: () -> Void
+  @State private var isHovered = false
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: "xmark")
+        .font(.system(size: 12, weight: .regular))
+        .foregroundStyle(isOnSelectedRow ? Color.white : OverlayStyle.secondary)
+        .frame(width: 24, height: 24)
+        // Arc's darkens the selected row by about 6% in Light Mode and
+        // lightens it by about 7% in Dark Mode.
+        .background(
+          isHovered ? Color.primary.opacity(colorScheme == .dark ? 0.07 : 0.06) : .clear,
+          in: .rect(cornerRadius: 6)
+        )
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .focusable(false)
+    .onHover { isHovered = $0 }
+    .tooltip("Delete Suggestion", shortcut: ["⌥", "⌘", "⌫"])
   }
 }
 

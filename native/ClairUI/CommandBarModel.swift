@@ -16,7 +16,8 @@ final class CommandBarModel: NSObject, ClairAutocompleteDelegate {
   private(set) var text: String
   /// The suggestions, best first.
   private(set) var suggestions: [any ClairSuggestion] = []
-  /// The selected row; the first is selected whenever results change.
+  /// The selected row; the first is selected whenever results change, except
+  /// after a deletion.
   private(set) var selection = 0
   /// The search engine in keyword mode, as its name.
   private(set) var keywordName: String?
@@ -24,6 +25,8 @@ final class CommandBarModel: NSObject, ClairAutocompleteDelegate {
   private(set) var isClosed = false
 
   @ObservationIgnored private var keyword: String?
+  /// The row to select on the update after a deletion, instead of the first.
+  @ObservationIgnored private var selectionAfterDeletion: Int?
   @ObservationIgnored private var session: (any ClairAutocomplete)?
   @ObservationIgnored private let onClose: (Bool) -> Void
 
@@ -58,6 +61,7 @@ final class CommandBarModel: NSObject, ClairAutocompleteDelegate {
   func setText(_ newText: String) {
     guard !isClosed, newText != text else { return }
     text = newText
+    selectionAfterDeletion = nil
     session?.query(newText)
   }
 
@@ -105,8 +109,32 @@ final class CommandBarModel: NSObject, ClairAutocompleteDelegate {
     keyword = offered
     keywordName = suggestion.keywordName ?? offered
     text = rest
+    selectionAfterDeletion = nil
     session?.acceptKeyword(ofSuggestion: suggestion.suggestionID, text: rest)
     return true
+  }
+
+  /// The ×: deletes a suggestion wherever Chromium keeps it, such as history.
+  /// The selected row stays selected, or, if it's the one deleted, the row
+  /// that takes its place. Returns whether it asked to.
+  @discardableResult
+  func delete(_ suggestion: any ClairSuggestion) -> Bool {
+    guard !isClosed, suggestion.canDelete,
+      let index = suggestions.firstIndex(where: { $0.suggestionID == suggestion.suggestionID })
+    else {
+      return false
+    }
+    // Set first: Chromium sends the shorter list during the call.
+    selectionAfterDeletion = index < selection ? selection - 1 : selection
+    session?.delete(suggestion: suggestion.suggestionID)
+    return true
+  }
+
+  /// Option+Command+Delete: deletes the selected suggestion if it can be.
+  @discardableResult
+  func deleteSelected() -> Bool {
+    guard let suggestion = selectedSuggestion else { return false }
+    return delete(suggestion)
   }
 
   /// Delete with an empty field: leaves keyword mode, putting the keyword
@@ -119,6 +147,7 @@ final class CommandBarModel: NSObject, ClairAutocompleteDelegate {
     self.keyword = nil
     keywordName = nil
     text = keyword
+    selectionAfterDeletion = nil
     session?.clearKeyword(text: keyword)
     return true
   }
@@ -141,6 +170,7 @@ final class CommandBarModel: NSObject, ClairAutocompleteDelegate {
   func autocomplete(_ session: any ClairAutocomplete, didUpdate suggestions: [any ClairSuggestion], finished: Bool) {
     guard !isClosed else { return }
     self.suggestions = suggestions
-    selection = 0
+    selection = min(selectionAfterDeletion ?? 0, max(suggestions.count - 1, 0))
+    selectionAfterDeletion = nil
   }
 }

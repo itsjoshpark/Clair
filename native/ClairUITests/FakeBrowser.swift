@@ -94,11 +94,14 @@ final class FakeSuggestion: NSObject, ClairSuggestion {
   let hasTabMatch: Bool
   let keyword: String?
   let keywordName: String?
+  let canDelete: Bool
 
   init(
     id: Int, kind: SuggestionKind = .history, contents: String, description: String = "",
-    destination: String? = nil, hasTabMatch: Bool = false, keyword: String? = nil, keywordName: String? = nil
+    destination: String? = nil, hasTabMatch: Bool = false, keyword: String? = nil, keywordName: String? = nil,
+    canDelete: Bool = false
   ) {
+    self.canDelete = canDelete
     suggestionID = id
     self.kind = kind
     self.contents = contents
@@ -203,6 +206,10 @@ final class FakeAutocomplete: NSObject, ClairAutocomplete {
 
   private(set) var queries: [String] = []
   private(set) var opened: [(suggestionID: Int, disposition: OpenDisposition)] = []
+  /// The IDs passed to `delete(suggestion:)` for deletable suggestions.
+  private(set) var deleted: [Int] = []
+  /// Runs on each deletion, as Chromium sends the shorter list during the call.
+  var onDelete: ((Int) -> Void)?
   private(set) var isStopped = false
   /// The suggestions most recently posted.
   private(set) var suggestions: [FakeSuggestion] = []
@@ -236,6 +243,14 @@ final class FakeAutocomplete: NSObject, ClairAutocomplete {
   func open(suggestion suggestionID: Int, disposition: OpenDisposition) {
     guard !isStopped else { return }
     opened.append((suggestionID, disposition))
+  }
+
+  func delete(suggestion suggestionID: Int) {
+    guard !isStopped, suggestions.contains(where: { $0.suggestionID == suggestionID && $0.canDelete }) else {
+      return
+    }
+    deleted.append(suggestionID)
+    onDelete?(suggestionID)
   }
 
   func stop() {

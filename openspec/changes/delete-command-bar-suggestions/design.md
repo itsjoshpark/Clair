@@ -15,7 +15,7 @@ See proposal.md, "Why". What's there today:
 | | Measured |
 |---|---|
 | Which rows | Hovered history pages, including the selected row. Not search suggestions from the engine, open tabs or Arc's own rows |
-| Button | 26 × 22.5 pt, its trailing edge 14 pt inside the row's; accessibility label "Close" |
+| Button | Drawn about 24.5 × 23 pt, its trailing edge 15 pt inside the row's (its accessibility frame is 26 × 22.5 pt); accessibility label "Close" |
 | Glyph | A thin ×, about 9.5 pt square |
 | Glyph colour | Grey on a hovered row: (137) on (242) in Light, (193) on (46) in Dark. White on the selected row in both |
 | Button hover | A rounded background about 6% black in Light ((160) → (151) on the selected row) and 7% white in Dark ((81) → (97)) |
@@ -26,7 +26,7 @@ See proposal.md, "Why". What's there today:
 ## Goals / Non-Goals
 
 **Goals:**
-- Use Chromium's own deletion, so whatever the omnibox would delete is deleted, and nothing more.
+- Use Chromium's own deletion, so whatever the omnibox would delete is deleted, plus a page's other `http:`/`https:` address (D1).
 - Keep the contract change additive.
 
 **Non-Goals:**
@@ -42,6 +42,8 @@ See proposal.md, "Why". What's there today:
 `deleteSuggestion:` finds the destination by ID and, if the session isn't stopped and its match supports deletion, calls `_controller->DeleteMatch(*match)`. Chromium then notifies the observer, `resultChanged` publishes the list without the row, and the IDs are reissued as on any update. An unknown ID or a match that can't be deleted does nothing.
 
 A copy is safe to pass: providers delete by the match's URL or contents, not by its address, and the copy's `provider` pointer stays valid while the controller lives, which it does for the whole session.
+
+For a deletable page (not a search), the engine also deletes the same URL with the other of `http:` and `https:` through the profile's `HistoryService`. A page typed without a scheme is saved twice, as `http:` and as the `https:` page it was upgraded to, and the history index only learns the `http:` entry later. Until then the match doesn't carry it as a duplicate, so `DeleteMatch` alone left it, and the page came back on the next query (found by hand: after a restart both went together). The history service tells the index, so the other entry leaves the suggestions too.
 
 *Alternatives:* looking the match up in `_controller->result()` by URL when deleting. The result may have changed since the row was shown, so it could find nothing or the wrong match. Keeping the suggestion's own match is what the row showed.
 
@@ -64,21 +66,21 @@ Both are additions, so nothing existing changes. `FakeSuggestion` and `FakeAutoc
 
 ### D3. The model deletes and keeps the selection in place
 
-`CommandBarModel.delete(_ suggestion:)` asks the session to delete it, and `deleteSelected()` does the same for the selected row when it `canDelete`, returning whether it did. Before calling the session, the model remembers the deleted row's index. On the next update it selects that index, clamped to the list, instead of the first row, then forgets it. Typing clears it, so a new query still selects the first row.
+`CommandBarModel.delete(_ suggestion:)` asks the session to delete it, and `deleteSelected()` does the same for the selected row when it `canDelete`, returning whether it did. Before calling the session, the model works out which index to select next: the selected row's, one less when the deleted row was above it. The same index then holds the row that took the selected row's place when that was the one deleted. On the next update it selects that index, clamped to the list, instead of the first row, then forgets it. Typing or changing keyword mode clears it, so a new query still selects the first row.
 
 The index is remembered before the call because Chromium's update arrives inside it, synchronously.
 
-### D4. ⌥⌘⌫ in the field's delete handler
+### D4. ⌥⌘⌫ as a hidden button's shortcut
 
-The field's existing `.onKeyPress(.delete)` handles ⌥⌘⌫ first: when the modifiers are exactly Option and Command, it calls `deleteSelected()` and returns `.handled` whatever happened, so the shortcut never deletes text. Other modifiers keep today's behaviour (leaving keyword mode in an empty field).
+An invisible `Button` behind the field carries `.keyboardShortcut(.delete, modifiers: [.option, .command])` and calls `deleteSelected()`. Key equivalents are handled before the field editor sees the key, so the shortcut never deletes text, and it exists only while the command bar does. No menu item uses ⌥⌘⌫; "Delete Browsing Data…" is ⇧⌘⌫.
 
-*Alternatives:* a menu item with the key equivalent, as Chromium's menus do. It would show in the Edit menu for a feature that only works in the command bar, and need enabling and disabling with it. If the field editor takes ⌥⌘⌫ before `onKeyPress` sees it, the fallback is a hidden `Button` with `.keyboardShortcut(.delete, modifiers: [.option, .command])` inside the command bar, which takes priority over the field editor.
+*Alternatives:* the field's `.onKeyPress(.delete)`, which the first build tried: it never receives keys with Command held, so ⌥⌘⌫ did nothing. A menu item with the key equivalent, as Chromium's menus do, would show in the Edit menu for a feature that only works in the command bar, and need enabling and disabling with it.
 
 ### D5. The × on the row
 
 `SuggestionRow` shows a `Button` with `xmark` at the trailing end while `isHovered && suggestion.canDelete`, after "Switch to Tab" when both show:
 
-- 26 × 22 pt, its trailing edge 14 pt inside the row's, which moves the row's trailing padding from 11 to 14 pt while the button shows;
+- 24 pt square, its trailing edge 15 pt inside the row's, 4 pt more than the row's padding;
 - the glyph at about 10 pt, regular weight, in the row's secondary colour, or white on the selected row;
 - under the pointer, a rounded background of `Color.primary` at 6% in Light Mode and 7% in Dark;
 - `.tooltip("Delete Suggestion", shortcut: ["⌥", "⌘", "⌫"])`, with the existing tooltip view;
@@ -96,7 +98,6 @@ Unit tests with `FakeAutocomplete`: deleting a deletable suggestion reaches the 
 - [Deleting a search suggestion keeps no blocklist] → `BaseSearchProvider::DeleteMatch` deletes that engine's searches for those words from history, which is what makes an earlier search come back, so it stays gone. For a personalized suggestion the engine sent with a deletion URL, Chromium also sends that request to the engine, and whether it comes back is up to the engine. The engine's other suggestions aren't deletable and get no ×.
 - [In an incognito window, history suggestions come from the regular profile's history, so deleting one deletes it there] → Chromium's omnibox does the same, and the spec doesn't promise otherwise.
 - [After a deletion the next row moves under a still pointer, and SwiftUI may not report the hover until the pointer moves] → The grey and the × may appear a moment late. Checked by hand; acceptable if they appear on the next move.
-- [The field editor may take ⌥⌘⌫ before `onKeyPress`] → D4's fallback.
 
 ## Migration Plan
 
