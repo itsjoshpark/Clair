@@ -48,7 +48,9 @@ To compare Clair with Arc, or check a UI change by hand, drive both apps with XC
 - Work on a branch and open a PR. Never push to `main`.
 - A user-facing change adds a Changie fragment in the same PR (`changie new`). CI, refactors and docs don't.
 - **Every push to a PR that changes the engine key cancels the patch check in progress** and, unless that key's engine is published by then, starts it again, including docs-only pushes, because the check compares the whole PR's key with its base's. To avoid the wait, build the engine first and push docs afterwards. A push never affects an `engine.yml` run, which checks out its branch when it starts.
-- Once a PR's checks pass (CI, plus Build when it ran), squash-merge it with `gh pr merge --squash --delete-branch`. Then switch to `main`, pull, and delete the local branch.
+- A PR that changes `ClairUI` views the runtime suite drives also runs the quality checks on its branch before merging (`gh workflow run quality.yml --ref <branch>`): a view hidden in #92 left the accessibility tree and broke `main`'s suite. Start them together with CI on the last push, with every note in that push, and don't push again while checks run, since every push re-runs CI.
+- Once a PR's checks pass (CI, plus Build and quality when they ran), squash-merge it with `gh pr merge --squash --delete-branch`. Then switch to `main`, pull, and delete the local branch.
+- Archive an OpenSpec change in a follow-up docs-only PR after its implementation merges. Tick there the tasks verified by the implementation PR's last checks, such as its quality run, then sync and archive.
 
 ## Repository layout
 
