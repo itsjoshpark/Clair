@@ -6,19 +6,19 @@ Suggested order: 1, 2, 3, 4, then 5. Groups 2 and 3 can start in `ClairUI` again
 
 ## 1. Contract and engine
 
-- [ ] 1.1 Remove `ClairAnchorKindExtensionsButton` from `native/ClairHost.h`, renumber `ClairAnchorKindDownloads` to 3, and correct the comment on `runExtensionAction:anchor:` (D3). Make `ClairExtensions::ShowToolbarActionPopupForAPICall` in `overlay/chrome/browser/clair/window/clair_extensions.mm` request `ClairAnchorKindSiteControls` for an unpinned action. In ClairUI, pass `.siteControls` for an unpinned extension, remove `AnchorControl.extensionsButton` and its `AnchorResolver` cases, and update `FakeBrowser` and `SidebarLogicTests`. Verify in CI that ClairUI's unit tests pass and that an unpinned action resolves to the site controls.
-- [ ] 1.2 Add `isNotSecure` to `ClairTab` in `native/ClairHost.h` and set it in `clair_browser_bridge.mm`'s tab snapshot, adding any build dependency it needs. Override `DidChangeVisibleSecurityState` in `ProgressObserver` to refresh the tab (D9). Update `FakeBrowser`. Verify in CI that ClairUI's unit tests pass, and by the engine build in 1.3.
-- [ ] 1.3 Build the engine with `gh workflow run engine.yml -f ref=<branch>`. Verify that `chromium-engine-<key>` is published and CI's engine check passes.
+- [x] 1.1 Remove `ClairAnchorKindExtensionsButton` from `native/ClairHost.h`, renumber `ClairAnchorKindDownloads` to 3, and correct the comment on `runExtensionAction:anchor:` (D3). Make `ClairExtensions::ShowToolbarActionPopupForAPICall` in `overlay/chrome/browser/clair/window/clair_extensions.mm` request `ClairAnchorKindSiteControls` for an unpinned action. In ClairUI, pass `.siteControls` for an unpinned extension, remove `AnchorControl.extensionsButton` and its `AnchorResolver` cases, and update `FakeBrowser` and `SidebarLogicTests`. Verify in CI that ClairUI's unit tests pass and that an unpinned action resolves to the site controls.
+- [x] 1.2 Add `isNotSecure` to `ClairTab` in `native/ClairHost.h` and set it in `clair_browser_bridge.mm`'s tab snapshot, adding any build dependency it needs. Override `DidChangeVisibleSecurityState` in `ProgressObserver` to refresh the tab (D9). Update `FakeBrowser`. Verify in CI that ClairUI's unit tests pass, and by the engine build in 1.3.
+- [x] 1.3 Build the engine with `gh workflow run engine.yml -f ref=<branch>`. Verify that `chromium-engine-<key>` is published and CI's engine check passes.
 
 ## 2. Pinned extensions wrap
 
-- [ ] 2.1 Add the pure helper for columns, rows and tile width (D1). Verify with unit tests in CI, covering the counts 1–10 at 4 across, 10 at 5 across, a row too narrow for one tile, and the cap of five at a very wide row.
+- [x] 2.1 Add the pure helper for columns, rows and tile width (D1). Verify with unit tests in CI, covering the counts 1–10 at 4 across, 10 at 5 across, a row too narrow for one tile, and the cap of five at a very wide row.
 - [ ] 2.2 Add `PinnedExtensionsLayout` and the pinned tile (D1): 28 pt tall, 18 pt icon, 8 pt gaps, the field fill, the highlight under the pointer and the badge, with each tile's `.extensionAction` anchor frame. A dimmed tile ignores a left click (D4). Replace `ToolsRow`'s `HStack` with it and remove the extensions button. Show the row only while something is pinned, and set the 8 pt spacing above and below it. Verify with a unit test of the `Layout`'s reported height, passing in CI, and by hand: 1, 5 and 10 pinned, resizing the sidebar across the 4-to-5 switch, and the tab list moving down.
 - [x] 2.3 Drop "Extensions" from the sidebar's tooltips, leaving nothing that refers to the removed button. Verify by searching `ClairUI` for `clair.extensions` and `showsExtensions`, with no matches.
 
 ## 3. The Site Control Center
 
-- [ ] 3.1 Add the pure helpers for tile order (D4) and for when "Site Info" shows (D5). Verify with unit tests in CI: pinned first in their order, then A–Z; hidden for `chrome:`, `devtools:`, `view-source:` and `file:`, shown for `http:` and `https:`.
+- [x] 3.1 Add the pure helpers for tile order (D4) and for when "Site Info" shows (D5). Verify with unit tests in CI: pinned first in their order, then A–Z; hidden for `chrome:`, `devtools:`, `view-source:` and `file:`, shown for `http:` and `https:`.
 - [ ] 3.2 Add the popover's view: the "Extensions" heading, the grid of 48×32 pt tiles with name tooltips and dimming, the pin badges, the plus tile and scrolling beyond 8 rows (D4), with the footer's "Site Info" pill and "…" menu (D5, D6). Verify by hand against Arc side by side: layout, a pinned and an unpinned badge, a dimmed tile.
 - [ ] 3.3 Open it from the site-controls button on the always-present anchor view (D2), and change the button to `slider.horizontal.2.square`. Make a click on the button while open close it. Verify by hand: opening, clicking the button again, Esc and clicking outside.
 - [ ] 3.4 Show the button on the new tab page and keep it shown while the popover is open (D7). Verify by hand on the new tab page: the button shows, the popover opens, and "Site Info" is hidden.
@@ -29,13 +29,13 @@ Suggested order: 1, 2, 3, 4, then 5. Groups 2 and 3 can start in `ClairUI` again
 ## 4. Popups, menus and tests
 
 - [ ] 4.1 Wire the tile's click, the pin badge and the `RowClickCatcher` context menu to the existing `SidebarActions`, and "Site Info" and the "…" menu's items to `showPageInfo` and `open`. Verify by hand: a popup from a tile opens beside the site-controls button, clicking that button then closes only the popup, right-clicking a tile shows the extension's menu, "Site Info" opens Chromium's page info, and each menu item opens its page.
-- [ ] 4.2 Update `ExtensionActionTests` to pin through the Site Control Center: hover the URL field, open `clair.siteControls`, hover the tile and click its "Pin" badge. Verify with a `quality.yml` run on the branch.
-- [ ] 4.3 Add a Changie fragment (`changie new`) for the wrapped pinned extensions and the new Site Control Center. Verify that it's in the PR.
+- [x] 4.2 Update `ExtensionActionTests` to pin through the Site Control Center: hover the URL field, open `clair.siteControls`, hover the tile and click its "Pin" badge. Verify with a `quality.yml` run on the branch.
+- [x] 4.3 Add a Changie fragment (`changie new`) for the wrapped pinned extensions and the new Site Control Center. Verify that it's in the PR.
 
 ## 5. Integration
 
-- [ ] 5.1 Run `openspec validate --all --strict` and the merge gate, and verify that CI passes.
-- [ ] 5.2 Run `quality.yml` on the branch and verify that it passes before merging.
+- [x] 5.1 Run `openspec validate --all --strict` and the merge gate, and verify that CI passes.
+- [x] 5.2 Run `quality.yml` on the branch and verify that it passes before merging.
 
 ## Workflow follow-up
 
