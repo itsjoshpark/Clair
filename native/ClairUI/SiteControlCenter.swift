@@ -57,6 +57,8 @@ struct SiteControlCenter: View {
   weak var actions: (any SidebarActions)?
   let dismiss: () -> Void
 
+  @Environment(\.colorScheme) private var colorScheme
+
   /// A pin badge overhangs its tile by this much, inside the scroll view.
   private static let badgeOverhang: CGFloat = 3
 
@@ -64,8 +66,7 @@ struct SiteControlCenter: View {
     let extensions = SiteControlCenterLogic.ordered(model.extensionActions)
     VStack(alignment: .leading, spacing: 0) {
       Text("Extensions")
-        .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(.secondary)
+        .font(.system(size: 13.5, weight: .bold))
         .frame(height: 17)
         .padding(.bottom, 10)
       grid(extensions)
@@ -121,12 +122,15 @@ struct SiteControlCenter: View {
         }
       }
       Spacer(minLength: 0)
+      // Arc's round button, filled like the tiles.
       IconMenu(help: "More options", cornerRadius: IconButtonSize.regular / 2) {
         Button("Manage Extensions…") { open(SiteControlCenterLink.extensions) }
         Button("Add Extension…") { open(SiteControlCenterLink.webStore) }
         Button("All Site Settings…") { open(SiteControlCenterLink.siteSettings) }
       } label: {
         SymbolGlyph(systemImage: "ellipsis")
+          .frame(width: IconButtonSize.regular, height: IconButtonSize.regular)
+          .background(tileFill(colorScheme, false), in: .circle)
       }
       .accessibilityIdentifier("clair.siteControlsMore")
     }
@@ -192,8 +196,10 @@ struct SiteControlCenterTile: View {
     return Button {
       setPinned(!action.isPinned)
     } label: {
+      // Arc's pin leans, head up and to the right.
       Image(systemName: "pin.fill")
         .font(.system(size: 8, weight: .semibold))
+        .rotationEffect(.degrees(45))
         .foregroundStyle(action.isPinned ? Color.white : Color.secondary)
         .frame(width: Self.badgeSize, height: Self.badgeSize)
         .background(action.isPinned ? Color.accentColor : Color.primary.opacity(0.12), in: .circle)
@@ -243,8 +249,8 @@ struct SiteInfoPill: View {
         .foregroundStyle(Color.primary.opacity(0.85))
         .padding(.horizontal, 12)
         .frame(height: 32)
-        .background(tileFill(colorScheme, isHovered), in: .capsule)
-        .contentShape(Capsule())
+        .background(tileFill(colorScheme, isHovered), in: .rect(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .onHover { hovering in withAnimation(sidebarHoverFade) { isHovered = hovering } }
