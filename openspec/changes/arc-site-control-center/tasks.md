@@ -14,7 +14,7 @@ Suggested order: 1, 2, 3, 4, then 5. Groups 2 and 3 can start in `ClairUI` again
 
 - [ ] 2.1 Add the pure helper for columns, rows and tile width (D1). Verify with unit tests in CI, covering the counts 1–10 at 4 across, 10 at 5 across, a row too narrow for one tile, and the cap of five at a very wide row.
 - [ ] 2.2 Add `PinnedExtensionsLayout` and the pinned tile (D1): 28 pt tall, 18 pt icon, 8 pt gaps, the field fill, the highlight under the pointer and the badge, with each tile's `.extensionAction` anchor frame. A dimmed tile ignores a left click (D4). Replace `ToolsRow`'s `HStack` with it and remove the extensions button. Show the row only while something is pinned, and set the 8 pt spacing above and below it. Verify with a unit test of the `Layout`'s reported height, passing in CI, and by hand: 1, 5 and 10 pinned, resizing the sidebar across the 4-to-5 switch, and the tab list moving down.
-- [ ] 2.3 Drop "Extensions" from the sidebar's tooltips, leaving nothing that refers to the removed button. Verify by searching `ClairUI` for `clair.extensions` and `showsExtensions`, with no matches.
+- [x] 2.3 Drop "Extensions" from the sidebar's tooltips, leaving nothing that refers to the removed button. Verify by searching `ClairUI` for `clair.extensions` and `showsExtensions`, with no matches.
 
 ## 3. The Site Control Center
 
