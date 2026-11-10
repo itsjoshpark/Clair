@@ -64,7 +64,7 @@ Both are additions, so nothing existing changes. `FakeSuggestion` and `FakeAutoc
 
 ### D3. The model deletes and keeps the selection in place
 
-`CommandBarModel.delete(_ suggestion:)` asks the session to delete it, and `deleteSelected()` does the same for the selected row when it `canDelete`, returning whether it did. Before calling the session, the model remembers the deleted row's index. On the next update it selects that index, clamped to the list, instead of the first row, then forgets it. Typing clears it, so a new query still selects the first row.
+`CommandBarModel.delete(_ suggestion:)` asks the session to delete it, and `deleteSelected()` does the same for the selected row when it `canDelete`, returning whether it did. Before calling the session, the model works out which index to select next: the selected row's, one less when the deleted row was above it. The same index then holds the row that took the selected row's place when that was the one deleted. On the next update it selects that index, clamped to the list, instead of the first row, then forgets it. Typing or changing keyword mode clears it, so a new query still selects the first row.
 
 The index is remembered before the call because Chromium's update arrives inside it, synchronously.
 

@@ -12,7 +12,7 @@ Suggested order: 1, 2, 3, then 4. Groups 2 and 3 can start in `ClairUI` against 
 
 ## 2. Deleting in the model and with ⌥⌘⌫
 
-- [ ] 2.1 Add `delete(_:)` and `deleteSelected()` to `CommandBarModel`, keeping the deleted row's index selected on the next update and clearing it when the text changes (D3). Verify with unit tests in CI: a deletion reaches the session; nothing happens for a suggestion that can't be deleted; after the shorter list arrives the same index is selected, or the last row when the last was deleted; typing afterwards selects the first row.
+- [ ] 2.1 Add `delete(_:)` and `deleteSelected()` to `CommandBarModel`, keeping the deleted row's index selected on the next update and clearing it when the text changes (D3). Verify with unit tests in CI: a deletion reaches the session; nothing happens for a suggestion that can't be deleted; after the shorter list arrives the same index is selected, or the last row when the last was deleted; deleting another row keeps the selected row selected; typing afterwards selects the first row.
 - [ ] 2.2 Handle ⌥⌘⌫ in the field's `.onKeyPress(.delete)` (D4), falling back to the hidden-button shortcut if the field editor takes the key first. Verify by hand: ⌥⌘⌫ deletes a selected history row and selects the row that moved up, does nothing on a search row, and never changes the field's text; Delete alone still edits text and leaves keyword mode in an empty field.
 
 ## 3. The × on the row

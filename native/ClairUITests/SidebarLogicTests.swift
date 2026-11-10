@@ -255,6 +255,84 @@ struct CommandBarTests {
   }
 }
 
+/// Deleting suggestions with the × and Option+Command+Delete (command-bar
+/// spec, "Deleting a suggestion"; design D3).
+@MainActor
+struct CommandBarDeletionTests {
+  let rows = [
+    FakeSuggestion(id: 1, kind: .search, contents: "probe"),
+    FakeSuggestion(id: 2, contents: "Probe One", canDelete: true),
+    FakeSuggestion(id: 3, contents: "Probe Two", canDelete: true),
+    FakeSuggestion(id: 4, contents: "Probe Three", canDelete: true),
+  ]
+
+  /// A command bar showing `rows`, whose fake session sends the list without
+  /// the deleted row during the call, as Chromium does.
+  func open() -> (FakeAutocomplete, CommandBarModel) {
+    let browser = FakeBrowser()
+    let model = CommandBarModel(mode: .newTab, browser: browser) { _ in }
+    let session = browser.autocomplete!
+    session.onDelete = { [unowned session] id in
+      session.post(session.suggestions.filter { $0.suggestionID != id })
+    }
+    session.post(rows)
+    return (session, model)
+  }
+
+  @Test func deletingReachesTheSession() {
+    let (session, model) = open()
+    #expect(model.delete(rows[2]))
+    #expect(session.deleted == [3])
+    #expect(model.suggestions.map(\.suggestionID) == [1, 2, 4])
+  }
+
+  @Test func aRowThatCantBeDeletedIsLeftAlone() {
+    let (session, model) = open()
+    #expect(!model.delete(rows[0]))
+    #expect(!model.deleteSelected())
+    #expect(session.deleted.isEmpty)
+    #expect(model.suggestions.count == 4)
+  }
+
+  @Test func deletingTheSelectedRowSelectsTheOneInItsPlace() {
+    let (_, model) = open()
+    model.moveSelection(by: 2)
+    #expect(model.deleteSelected())
+    #expect(model.selection == 2)
+    #expect(model.selectedSuggestion?.suggestionID == 4)
+  }
+
+  @Test func deletingTheLastRowSelectsTheNewLast() {
+    let (_, model) = open()
+    model.moveSelection(by: 3)
+    #expect(model.deleteSelected())
+    #expect(model.selection == 2)
+    #expect(model.selectedSuggestion?.suggestionID == 3)
+  }
+
+  @Test func deletingAnotherRowKeepsTheSelection() {
+    let (_, model) = open()
+    model.moveSelection(by: 2)
+    #expect(model.delete(rows[1]))
+    #expect(model.selectedSuggestion?.suggestionID == 3)
+    #expect(model.delete(rows[3]))
+    #expect(model.selectedSuggestion?.suggestionID == 3)
+  }
+
+  @Test func typingAfterADeletionSelectsTheFirstRow() {
+    let browser = FakeBrowser()
+    let model = CommandBarModel(mode: .newTab, browser: browser) { _ in }
+    let session = browser.autocomplete!
+    session.post(rows)
+    model.moveSelection(by: 2)
+    // Chromium hasn't answered yet when the user types.
+    #expect(model.deleteSelected())
+    model.setText("probe t")
+    session.post(Array(rows.prefix(3)))
+    #expect(model.selection == 0)
+  }
+}
+
 /// The line between a scrolling tab list and the footer follows the tabs as
 /// well as the list's height.
 struct TabListOverflowTests {

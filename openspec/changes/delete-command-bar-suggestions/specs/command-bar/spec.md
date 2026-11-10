@@ -9,6 +9,10 @@ As in Arc, a suggestion that Chromium's autocomplete can delete, such as a page 
 - **WHEN** the user has visited `https://example.com/?probe`, types `probe`, rests the pointer on that page's row and clicks its ×
 - **THEN** the row leaves the list, the command bar stays open, and typing `probe` again no longer suggests that page
 
+#### Scenario: Deleting a row that isn't selected
+- **WHEN** the first row is selected and the user clicks the × on the third row
+- **THEN** the third row leaves the list and the first row stays selected
+
 #### Scenario: A row that can't be deleted
 - **WHEN** the pointer rests on the row searching the default engine for what was typed
 - **THEN** the row shows no ×
@@ -18,7 +22,7 @@ As in Arc, a suggestion that Chromium's autocomplete can delete, such as a page 
 - **THEN** the row shows no ×
 
 ### Requirement: Deleting a suggestion with the keyboard
-Option+Command+Delete SHALL delete the selected suggestion when it can be deleted, as clicking its × does, and SHALL do nothing otherwise; it SHALL never edit the field's text. After a deletion the row that takes the deleted row's place SHALL be selected, or the last row when the deleted row was last.
+Option+Command+Delete SHALL delete the selected suggestion when it can be deleted, as clicking its × does, and SHALL do nothing otherwise; it SHALL never edit the field's text. After any deletion the selected row SHALL stay selected; when it was the row deleted, the row that takes its place SHALL be selected, or the last row when it was last.
 
 #### Scenario: Deleting the selected row
 - **WHEN** the selected row is a page from history and the user presses Option+Command+Delete
