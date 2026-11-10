@@ -47,9 +47,9 @@ Suggested order: 1, 2, 3, 4, then 5. Groups 2 and 3 can start in `ClairUI` again
 ## 7. Extensions menu
 
 - [x] 7.1 Add the requirement, D11 and these tasks. Verify with `openspec validate --all --strict`.
-- [ ] 7.2 Add `ExtensionsMenu` before Window, built on demand from the main browser window's actions (D11). Verify with unit tests in CI: titles in order, the fixed items, a disabled item for an action that's off, and that choosing an extension sends the site-controls anchor.
-- [ ] 7.3 Add a runtime test that opens the popup from the menu bar. Verify with a `quality.yml` run on the branch.
-- [ ] 7.4 Verify by hand: the menu's place, icons and order, the popup beside the site-controls button, and both items opening their pages.
+- [x] 7.2 Add `ExtensionsMenu` before Window, built on demand from the main browser window's actions (D11). Verify with unit tests in CI: titles in order, the fixed items, a disabled item for an action that's off, and that choosing an extension sends the site-controls anchor.
+- [x] 7.3 Add a runtime test that opens the popup from the menu bar. Verify with a `quality.yml` run on the branch.
+- [x] 7.4 Verify by hand: the menu's place, icons and order, the popup beside the site-controls button, and both items opening their pages.
 
 ## Workflow follow-up
 
