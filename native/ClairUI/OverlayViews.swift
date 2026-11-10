@@ -239,8 +239,8 @@ struct SuggestionRow: View {
       }
       if isHovered, let onDelete {
         DeleteSuggestionButton(isOnSelectedRow: isSelected, action: onDelete)
-          // Arc's button ends 14 pt inside the row.
-          .padding(.trailing, 3)
+          // Arc's ends 15 pt inside the row.
+          .padding(.trailing, 4)
       }
     }
     .foregroundStyle(isSelected ? .white : .primary)
@@ -280,7 +280,7 @@ private struct DeleteSuggestionButton: View {
       Image(systemName: "xmark")
         .font(.system(size: 12, weight: .regular))
         .foregroundStyle(isOnSelectedRow ? Color.white : OverlayStyle.secondary)
-        .frame(width: 26, height: 22)
+        .frame(width: 24, height: 24)
         // Arc's darkens the selected row by about 6% in Light Mode and
         // lightens it by about 7% in Dark Mode.
         .background(

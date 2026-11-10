@@ -15,7 +15,7 @@ See proposal.md, "Why". What's there today:
 | | Measured |
 |---|---|
 | Which rows | Hovered history pages, including the selected row. Not search suggestions from the engine, open tabs or Arc's own rows |
-| Button | 26 × 22.5 pt, its trailing edge 14 pt inside the row's; accessibility label "Close" |
+| Button | Drawn about 24.5 × 23 pt, its trailing edge 15 pt inside the row's (its accessibility frame is 26 × 22.5 pt); accessibility label "Close" |
 | Glyph | A thin ×, about 9.5 pt square |
 | Glyph colour | Grey on a hovered row: (137) on (242) in Light, (193) on (46) in Dark. White on the selected row in both |
 | Button hover | A rounded background about 6% black in Light ((160) → (151) on the selected row) and 7% white in Dark ((81) → (97)) |
@@ -80,7 +80,7 @@ An invisible `Button` behind the field carries `.keyboardShortcut(.delete, modif
 
 `SuggestionRow` shows a `Button` with `xmark` at the trailing end while `isHovered && suggestion.canDelete`, after "Switch to Tab" when both show:
 
-- 26 × 22 pt, its trailing edge 14 pt inside the row's, which moves the row's trailing padding from 11 to 14 pt while the button shows;
+- 24 pt square, its trailing edge 15 pt inside the row's, 4 pt more than the row's padding;
 - the glyph at about 10 pt, regular weight, in the row's secondary colour, or white on the selected row;
 - under the pointer, a rounded background of `Color.primary` at 6% in Light Mode and 7% in Dark;
 - `.tooltip("Delete Suggestion", shortcut: ["⌥", "⌘", "⌫"])`, with the existing tooltip view;
