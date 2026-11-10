@@ -89,9 +89,16 @@ struct CommandBarView: View {
           return .handled
         }
         if let offered = model.offeredKeywordName {
-          Text("Search \(offered) ⇥")
-            .font(.caption)
-            .foregroundStyle(OverlayStyle.secondary)
+          // Arc's hint, measured: 13 pt text, (182) on (251) in Light Mode and
+          // (119) on (31) in Dark, 9 pt before a flat "Tab" key.
+          HStack(spacing: 7) {
+            Text("Search \(offered)")
+              .font(.system(size: 13))
+              .foregroundStyle(Color.primary.opacity(0.39))
+            KeyHint(key: "Tab")
+          }
+          .lineLimit(1)
+          .accessibilityElement(children: .combine)
         }
       }
       .padding(.horizontal, 20)
@@ -264,6 +271,26 @@ struct SuggestionRow: View {
         Button("Delete Suggestion", action: onDelete)
       }
     }
+  }
+}
+
+/// A key in the command bar's keyword hint, flat as Arc's: 30 × 24 pt, filled
+/// like a hovered row, its label (137) on (242) in Light Mode and (193) on
+/// (46) in Dark. Not the tooltip's KeyCap, which is tinted and raised.
+private struct KeyHint: View {
+  let key: String
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    let isDark = colorScheme == .dark
+    Text(key)
+      .font(.system(size: 13))
+      .foregroundStyle(Color.primary.opacity(isDark ? 0.77 : 0.6))
+      .padding(.horizontal, 5)
+      .frame(minWidth: 30, minHeight: 24)
+      .background(
+        Color.primary.opacity(isDark ? 0.07 : 0.04),
+        in: .rect(cornerRadius: 6, style: .continuous))
   }
 }
 
