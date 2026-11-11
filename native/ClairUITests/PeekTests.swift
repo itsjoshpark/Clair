@@ -202,15 +202,24 @@ struct PeekWindowTests {
     #expect(NSPasteboard.general.string(forType: .string) == "https://two.example/")
   }
 
-  @Test func confirmShowsWhileThePageKeptEsc() async throws {
+  @Test func confirmShowsWhileThePageKeptEsc() async {
     _ = openPeek()
-    browser.keepEscape(for: 0.05)
-    #expect(controller.model.peekConfirm.isShowing)
-    // Other tests share the main actor, so allow for a late timer.
-    let deadline = ContinuousClock.now + .seconds(3)
-    while controller.model.peekConfirm.isShowing, ContinuousClock.now < deadline {
-      try await Task.sleep(for: .milliseconds(20))
+    var waited: [TimeInterval] = []
+    let (elapsed, done) = AsyncStream.makeStream(of: Void.self)
+    controller.model.peekConfirm.wait = { duration in
+      waited.append(duration)
+      for await _ in elapsed { return }
     }
+    browser.keepEscape(for: 1)
+    #expect(controller.model.peekConfirm.isShowing)
+    // Confirm stays until its time is up, then goes.
+    await Task.yield()
+    #expect(controller.model.peekConfirm.isShowing)
+    done.yield()
+    for _ in 0..<100 where controller.model.peekConfirm.isShowing {
+      await Task.yield()
+    }
+    #expect(waited == [1])
     #expect(!controller.model.peekConfirm.isShowing)
   }
 

@@ -64,6 +64,15 @@ final class PeekTests: NativeWindowTestCase {
   static let links = "Clair Peek links"
   static let target = "Clair Peek target"
 
+  /// Whether a switch or checkbox is on, whichever way it reports its value.
+  static func isOn(_ toggle: XCUIElement) -> Bool? {
+    switch toggle.value {
+    case let number as NSNumber: number.boolValue
+    case let text as String: text == "1" || text.lowercased() == "on"
+    default: nil
+    }
+  }
+
   /// Starts Clair with another tab and then the page of links, which is
   /// active and first in the sidebar.
   func startWithLinks() async throws -> (Browser, DevToolsSession, DevToolsSession) {
@@ -254,9 +263,12 @@ final class PeekTests: NativeWindowTestCase {
     let linksPage = browser.ui.toolbars.buttons["Links"]
     try require(linksPage.waitForExistence(timeout: 15), "Settings has no Links page")
     linksPage.click()
-    let toggle = browser.ui.checkBoxes["Open a Peek window when clicking on links with Shift held"]
+    // A form draws the toggle as a switch.
+    let toggle = browser.ui.descendants(matching: .any)
+      .matching(NSPredicate(format: "label == %@", "Open a Peek window when clicking on links with Shift held"))
+      .firstMatch
     try require(toggle.waitForExistence(timeout: 10), "The Links page has no Peek toggle")
-    XCTAssertEqual(toggle.value as? Int, 1, "The Peek toggle isn't on by default")
+    XCTAssertEqual(Self.isOn(toggle), true, "The Peek toggle isn't on by default")
     toggle.click()
     try await links.shiftClick("window")
     let window = await Harness.wait(for: 15) { try await browser.windowCount() == 2 }
@@ -268,7 +280,7 @@ final class PeekTests: NativeWindowTestCase {
       session.close()
     }
     toggle.click()
-    XCTAssertEqual(toggle.value as? Int, 1, "The Peek toggle didn't turn back on")
+    XCTAssertEqual(Self.isOn(toggle), true, "The Peek toggle didn't turn back on")
     browser.ui.typeKey("w", modifierFlags: .command)
 
     // A Peek open at quit doesn't come back with its tab.

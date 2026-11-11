@@ -389,6 +389,20 @@ void ClairPeeks::Close(tabs::TabInterface* tab) {
   }
 }
 
+void ClairPeeks::CloseSoon(tabs::TabInterface* peek) {
+  if (!peek) {
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(
+                     [](base::WeakPtr<ClairPeeks> peeks, tabs::TabHandle handle) {
+                       if (peeks) {
+                         peeks->Close(handle.Get());
+                       }
+                     },
+                     weak_factory_.GetWeakPtr(), peek->GetHandle()));
+}
+
 void ClairPeeks::Expand(tabs::TabInterface* tab) {
   auto pair = FindByParent(tab);
   if (pair == pairs_.end()) {
@@ -585,9 +599,10 @@ content::KeyboardEventProcessingResult ClairPeeks::PreHandleKeyboardEvent(
   if (!IsEscapeDown(event) || !IsConfirmArmed(peek)) {
     return content::KeyboardEventProcessingResult::NOT_HANDLED;
   }
-  // The second Esc closes the Peek before the page sees it.
+  // The second Esc closes the Peek before the page sees it, once the Peek's
+  // WebContents has finished with the key.
   confirm_peek_.reset();
-  Close(peek);
+  CloseSoon(peek);
   return content::KeyboardEventProcessingResult::HANDLED;
 }
 
@@ -603,7 +618,7 @@ bool ClairPeeks::HandleKeyboardEvent(
     EscapeKept(peek->GetContents());
     return true;
   }
-  Close(peek);
+  CloseSoon(peek);
   return true;
 }
 

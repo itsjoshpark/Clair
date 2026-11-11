@@ -83,6 +83,9 @@ class ClairPeeks : public TabStripModelObserver {
   // Closes the Peek of `tab` (its parent or the Peek itself), with its
   // leave-page confirmation, after making the parent active.
   void Close(tabs::TabInterface* tab);
+  // Closes the Peek after the current task, as from a key event the Peek's
+  // own WebContents is still handling.
+  void CloseSoon(tabs::TabInterface* peek);
   // Turns the Peek of `tab` into a normal, active tab (D8).
   void Expand(tabs::TabInterface* tab);
   // Closes every Peek in the window, as before it closes or Clair quits (D9).

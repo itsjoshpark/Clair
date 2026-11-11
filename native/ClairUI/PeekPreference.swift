@@ -29,12 +29,18 @@ struct PeekPreference {
 final class PeekConfirmState {
   private(set) var isShowing = false
   private var hideTask: Task<Void, Never>?
+  /// Waits out Confirm's time; tests replace it so they don't depend on the
+  /// clock.
+  @ObservationIgnored var wait: (TimeInterval) async -> Void = { duration in
+    try? await Task.sleep(for: .seconds(duration))
+  }
 
   func show(for duration: TimeInterval) {
     isShowing = true
     hideTask?.cancel()
+    let wait = self.wait
     hideTask = Task { [weak self] in
-      try? await Task.sleep(for: .seconds(duration))
+      await wait(duration)
       guard !Task.isCancelled else { return }
       self?.isShowing = false
     }
