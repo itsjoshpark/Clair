@@ -22,7 +22,7 @@ While the Peek preference is on, Shift+clicking a link in a page in a native bro
 - **THEN** the link opens in a new window
 
 ### Requirement: Peek layout
-The Peek SHALL be a card with rounded corners centred over the page card, about 80% of the page card's width and its full height less about 2 points at the top and bottom. Behind it, the parent page SHALL shrink by about 5 points on each side and be washed out toward the window's background colour, in Light and Dark Mode.
+The Peek SHALL be a card with rounded corners centred over the page card, about 80% of the page card's width and its full height less about 2 points at the top and bottom. Behind it, the parent page SHALL shrink by about 9 points on each side and be washed out toward the window's background colour, in Light and Dark Mode.
 
 #### Scenario: Peek open
 - **WHEN** a Peek is open in a window whose page card is 1723 by 1030 points
@@ -40,11 +40,11 @@ A column of round buttons SHALL sit outside the Peek's top-trailing corner, besi
 - **THEN** Close and Expand show in a column beside its top-trailing corner, outside the card
 
 ### Requirement: Peek animation
-Opening a Peek SHALL grow the card from the point the user clicked to its full size in about 130 ms, while the parent page shrinks and washes out. Closing it SHALL reverse this toward the same point. With Reduce Motion on, the Peek SHALL fade in and out instead.
+Opening a Peek SHALL grow the card from the point the user clicked to its full size in about 190 ms, fast at first and then settling, while the parent page shrinks and washes out and the buttons move with the card's corner. Closing it SHALL reverse this toward the same point. With Reduce Motion on, the Peek SHALL fade in and out instead.
 
 #### Scenario: Opening
 - **WHEN** the user Shift+clicks a link near the top-leading corner of the page
-- **THEN** the Peek grows from that point to full size in about 130 ms
+- **THEN** the Peek grows from that point to full size in about 190 ms, most of the way in the first 50 ms
 
 #### Scenario: Closing
 - **WHEN** the user closes the Peek

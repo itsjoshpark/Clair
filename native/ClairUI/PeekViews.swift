@@ -12,8 +12,9 @@ enum PeekLayout {
   static let widthFraction: CGFloat = 1386.0 / 1723.0
   /// Between the Peek and the card's top and bottom edges.
   static let verticalInset: CGFloat = 2
-  /// How far the parent page shrinks on each side behind the Peek.
-  static let parentInset: CGFloat = 5
+  /// How far the parent page shrinks on each side behind the Peek: 9 pt in
+  /// Arc at any window size.
+  static let parentInset: CGFloat = 9
   static let cornerRadius: CGFloat = 10
   /// The round buttons beside the Peek's top-trailing corner.
   static let buttonSize = CGSize(width: 34.5, height: 33.5)
@@ -73,14 +74,33 @@ enum PeekLayout {
     return CATransform3DConcat(CATransform3DMakeScale(scale, scale, 1), CATransform3DMakeTranslation(dx, dy, 0))
   }
 
-  /// How long the Peek takes to grow or shrink, as in Arc.
-  static let animationDuration: TimeInterval = 0.13
-  /// The fades that replace it with Reduce Motion on.
+  // The animations, from 60 fps recordings of Arc (add-peek design D5).
+  /// How long the Peek takes to grow: it covers two thirds of the way in the
+  /// first quarter, then settles.
+  static let openDuration: TimeInterval = 0.19
+  static let openTiming = (0.3, 1.0, 0.75, 1.0)
+  /// How long the parent page and the wash take to shrink and fade in, or
+  /// back.
+  static let parentDuration: TimeInterval = 0.16
+  static let parentTiming = (0.25, 0.8, 0.5, 1.0)
+  /// How long the closing Peek takes to shrink back; it fades out in the
+  /// middle of it.
+  static let closeDuration: TimeInterval = 0.15
+  /// The fades that replace them with Reduce Motion on.
   static let reducedMotionDuration: TimeInterval = 0.15
   /// Room the Confirm pill grows into beside the column.
   static let confirmWidth: CGFloat = 110
-  /// How small the Peek starts.
-  static let startScale: CGFloat = 0.02
+  /// How small the Peek starts: about a link's size in Arc, which grows it
+  /// from the link.
+  static let startScale: CGFloat = 0.1
+  /// The glyphs' point sizes: 12 pt and 14 pt across in Arc.
+  static let closeGlyphSize: CGFloat = 15
+  static let expandGlyphSize: CGFloat = 14.5
+
+  static func timing(_ points: (Double, Double, Double, Double)) -> CAMediaTimingFunction {
+    CAMediaTimingFunction(
+      controlPoints: Float(points.0), Float(points.1), Float(points.2), Float(points.3))
+  }
 }
 
 /// What the Peek's buttons do.
@@ -108,7 +128,8 @@ struct PeekControlsView: View {
           width: PeekLayout.buttonSize.width, height: PeekLayout.buttonSize.height,
           alignment: towardPeek ? .trailing : .leading)
       PeekRoundButton(
-        systemImage: "arrow.up.left.and.arrow.down.right", tooltip: "Expand", shortcut: ["⌘", "O"],
+        systemImage: "arrow.up.left.and.arrow.down.right", glyphSize: PeekLayout.expandGlyphSize, tooltip: "Expand",
+        shortcut: ["⌘", "O"],
         label: "Expand Peek into a tab",
         identifier: "clair.peekExpand"
       ) { actions?.expandPeek() }
@@ -122,6 +143,7 @@ struct PeekControlsView: View {
 /// under the pointer.
 struct PeekRoundButton: View {
   let systemImage: String
+  let glyphSize: CGFloat
   /// Arc's tooltip, read by hovering its buttons.
   let tooltip: String
   var shortcut: [String] = []
@@ -136,7 +158,7 @@ struct PeekRoundButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 13, weight: .semibold))
+        .font(.system(size: glyphSize, weight: .semibold))
         .foregroundStyle(PeekButtonBackground.glyph)
         .frame(width: PeekLayout.buttonSize.width, height: PeekLayout.buttonSize.height)
         .background(PeekButtonBackground(isHovered: isHovered, colorScheme: colorScheme))
@@ -166,7 +188,7 @@ struct PeekCloseButton: View {
     Button(action: action) {
       HStack(spacing: 5) {
         Image(systemName: "xmark")
-          .font(.system(size: 13, weight: .semibold))
+          .font(.system(size: PeekLayout.closeGlyphSize, weight: .semibold))
         if isConfirming {
           Text("Confirm")
             .font(.system(size: 13, weight: .semibold))

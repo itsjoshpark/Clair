@@ -208,6 +208,8 @@ struct TopRow: View {
   let model: BrowserWindowModel
   weak var actions: (any SidebarActions)?
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
   /// The trailing margin, and the gap between back, forward and reload.
   static let trailing: CGFloat = 6
   static let gap: CGFloat = 2
@@ -287,11 +289,17 @@ struct TopRow: View {
           back
           forward
           IconButton(
-            systemImage: isLoading ? "xmark" : "arrow.clockwise",
             help: isLoading ? "Stop loading this page" : "Reload this page",
             shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: tab != nil && reloadStop.isEnabled
           ) {
             actions?.reloadOrStop()
+          } label: {
+            // Arc crossfades the two glyphs in about 100 ms.
+            ZStack {
+              SymbolGlyph(systemImage: "arrow.clockwise").opacity(isLoading ? 0 : 1)
+              SymbolGlyph(systemImage: "xmark").opacity(isLoading ? 1 : 0)
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.1), value: isLoading)
           }
           .onHover { actions?.reloadButtonHovered($0) }
           .accessibilityIdentifier("clair.reload")

@@ -144,6 +144,7 @@ final class PageCardView: NSView {
     addSubview(peekCard)
     updatePeekVisibility()
     updateAppearance()
+    updatePeekBacking()
   }
 
   @available(*, unavailable)
@@ -158,6 +159,20 @@ final class PageCardView: NSView {
   }
 
   override var isFlipped: Bool { true }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    updatePeekBacking()
+  }
+
+  /// The Peek's card is the page's background colour under the page, so in
+  /// the frames between Chromium taking a closing Peek's page away and the
+  /// card animating it out, it shows a card, not its bare shadow.
+  private func updatePeekBacking() {
+    effectiveAppearance.performAsCurrentDrawingAppearance {
+      peekContainer.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+    }
+  }
 
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
@@ -402,31 +417,48 @@ final class PageCardView: NSView {
   private func animateOpening() {
     let origin = growOrigin()
     peekOrigin = origin
-    let duration = reduceMotion ? PeekLayout.reducedMotionDuration : PeekLayout.animationDuration
-    let timing = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
     let views = [peekCard, peekControls].compactMap { $0 }
     if reduceMotion {
-      for view in views { fadeIn(view.layer, duration: duration) }
-    } else if let layer = peekCard.layer {
+      for view in views { fade(view.layer, from: 0, to: 1, duration: PeekLayout.reducedMotionDuration) }
+      fade(wash.layer, from: 0, to: 1, duration: PeekLayout.reducedMotionDuration)
+      return
+    }
+    // The Peek grows from the click with Arc's ease-out: most of the way at
+    // once, then settling; it's opaque within a few frames.
+    if let layer = peekCard.layer {
       let grow = CABasicAnimation(keyPath: "transform")
       grow.fromValue = PeekLayout.growTransform(
         from: layerPoint(origin), position: layer.position, scale: PeekLayout.startScale)
       grow.toValue = CATransform3DIdentity
-      grow.duration = duration
-      grow.timingFunction = timing
+      grow.duration = PeekLayout.openDuration
+      grow.timingFunction = PeekLayout.timing(PeekLayout.openTiming)
       layer.add(grow, forKey: "peekGrow")
-      fadeIn(layer, duration: duration * 0.5)
-      fadeIn(peekControls?.layer, duration: duration)
+      fade(layer, from: 0, to: 1, duration: 0.05)
     }
-    fadeIn(wash.layer, duration: duration)
-    if !reduceMotion, let scaler = cardScaler.layer {
+    // The buttons ride the Peek's top-trailing corner out, as in Arc.
+    if let controls = peekControls?.layer {
+      let corner = CGPoint(x: peekCard.frame.maxX, y: peekCard.frame.minY)
+      let point = layerPoint(origin)
+      let shift = 1 - PeekLayout.startScale
+      let ride = CABasicAnimation(keyPath: "transform")
+      ride.fromValue = CATransform3DMakeTranslation(shift * (point.x - corner.x), shift * (point.y - corner.y), 0)
+      ride.toValue = CATransform3DIdentity
+      ride.duration = PeekLayout.openDuration
+      ride.timingFunction = PeekLayout.timing(PeekLayout.openTiming)
+      controls.add(ride, forKey: "peekRide")
+      fade(controls, from: 0, to: 1, duration: PeekLayout.openDuration * 0.6)
+    }
+    // The parent page shrinks and washes out alongside.
+    let parentTiming = PeekLayout.timing(PeekLayout.parentTiming)
+    fade(wash.layer, from: 0, to: 1, duration: PeekLayout.parentDuration, timing: parentTiming)
+    if let scaler = cardScaler.layer {
       let shrink = CABasicAnimation(keyPath: "sublayerTransform")
       shrink.fromValue = CATransform3DIdentity
       shrink.toValue = scaler.sublayerTransform
-      shrink.duration = duration
-      shrink.timingFunction = timing
+      shrink.duration = PeekLayout.parentDuration
+      shrink.timingFunction = parentTiming
       scaler.add(shrink, forKey: "peekParentOpen")
-      animateShadow(from: cardShadowPath(peeking: false), duration: duration, timing: timing)
+      animateShadow(from: cardShadowPath(peeking: false), duration: PeekLayout.parentDuration, timing: parentTiming)
     }
   }
 
@@ -441,22 +473,26 @@ final class PageCardView: NSView {
     layer.add(move, forKey: "peekShadow")
   }
 
-  private func fadeIn(_ layer: CALayer?, duration: TimeInterval) {
+  private func fade(
+    _ layer: CALayer?, from: Float, to: Float, duration: TimeInterval,
+    timing: CAMediaTimingFunction = CAMediaTimingFunction(name: .linear)
+  ) {
     guard let layer else { return }
     let fade = CABasicAnimation(keyPath: "opacity")
-    fade.fromValue = 0
-    fade.toValue = 1
+    fade.fromValue = from
+    fade.toValue = to
     fade.duration = duration
-    layer.add(fade, forKey: "peekFadeIn")
+    fade.timingFunction = timing
+    layer.add(fade, forKey: "peekFade")
   }
 
   /// The Peek's page has gone with its tab, so a plain card in its place
-  /// shrinks back toward where it grew from while the parent page returns.
+  /// shrinks back toward where it grew from, fading out on the way, while the
+  /// parent page returns, as in Arc.
   private func animateClosing(from frame: CGRect) {
     let origin = peekOrigin ?? CGPoint(x: frame.midX, y: frame.midY)
     peekOrigin = nil
     guard !frame.isEmpty else { return }
-    let duration = reduceMotion ? PeekLayout.reducedMotionDuration : PeekLayout.animationDuration
     let ghost = NSView(frame: frame)
     ghost.wantsLayer = true
     ghost.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
@@ -469,7 +505,8 @@ final class PageCardView: NSView {
     let wash = DynamicFillView(color: PeekWash.color)
     wash.frame = bounds
     addSubview(wash, positioned: .below, relativeTo: ghost)
-    let timing = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.8, 0.4)
+    let parentDuration = reduceMotion ? PeekLayout.reducedMotionDuration : PeekLayout.parentDuration
+    let parentTiming = PeekLayout.timing(PeekLayout.parentTiming)
     CATransaction.begin()
     CATransaction.setCompletionBlock { [weak ghost, weak wash] in
       MainActor.assumeIsolated {
@@ -479,41 +516,39 @@ final class PageCardView: NSView {
     }
     if let layer = ghost.layer {
       layer.opacity = 0
-      let fade = CABasicAnimation(keyPath: "opacity")
-      fade.fromValue = 1
-      fade.toValue = 0
-      fade.duration = duration
-      fade.timingFunction = CAMediaTimingFunction(name: reduceMotion ? .linear : .easeIn)
-      layer.add(fade, forKey: "peekFadeOut")
-      if !reduceMotion {
+      if reduceMotion {
+        fade(layer, from: 1, to: 0, duration: PeekLayout.reducedMotionDuration)
+      } else {
+        // Opaque for the first third, gone by two thirds of the way.
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [1, 1, 0]
+        fade.keyTimes = [0, 0.33, 0.66]
+        fade.duration = PeekLayout.closeDuration
+        layer.add(fade, forKey: "peekFade")
         let shrink = CABasicAnimation(keyPath: "transform")
         shrink.fromValue = CATransform3DIdentity
         shrink.toValue = PeekLayout.growTransform(
           from: layerPoint(origin), position: layer.position, scale: PeekLayout.startScale)
-        shrink.duration = duration
-        shrink.timingFunction = timing
+        shrink.duration = PeekLayout.closeDuration
+        shrink.timingFunction = PeekLayout.timing(PeekLayout.openTiming)
         layer.transform = shrink.toValue as? CATransform3D ?? CATransform3DIdentity
         layer.add(shrink, forKey: "peekShrink")
       }
     }
     if let layer = wash.layer {
       layer.opacity = 0
-      let fade = CABasicAnimation(keyPath: "opacity")
-      fade.fromValue = 1
-      fade.toValue = 0
-      fade.duration = duration
-      layer.add(fade, forKey: "peekWashOut")
+      fade(layer, from: 1, to: 0, duration: parentDuration, timing: parentTiming)
     }
     if !reduceMotion, let scaler = cardScaler.layer {
       // The card grows back to its size.
       let grow = CABasicAnimation(keyPath: "sublayerTransform")
       grow.fromValue = PeekLayout.parentTransform(size: cardScaler.bounds.size, anchor: scaler.anchorPoint)
       grow.toValue = CATransform3DIdentity
-      grow.duration = duration
-      grow.timingFunction = timing
+      grow.duration = parentDuration
+      grow.timingFunction = parentTiming
       scaler.add(grow, forKey: "peekParentClose")
       if !isBare {
-        animateShadow(from: cardShadowPath(peeking: true), duration: duration, timing: timing)
+        animateShadow(from: cardShadowPath(peeking: true), duration: parentDuration, timing: parentTiming)
       }
     }
     CATransaction.commit()

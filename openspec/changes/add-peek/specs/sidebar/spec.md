@@ -58,3 +58,22 @@ Hovering a tab row SHALL show a close button, as large as Arc's, which highlight
 #### Scenario: Copy Link on a tab with a Peek
 - **WHEN** the user chooses Copy Link on the row of a tab with a Peek
 - **THEN** the tab's own URL is copied, not the Peek's
+
+### Requirement: Reload and stop follow the page's own loading
+Reload SHALL become stop only while the active tab loads a new document in its main frame, as Chromium's toolbar decides, and only once that load has run about 750 ms, as in Arc, so a page that loads quickly, or a Peek opening on one, never flashes stop. A tab that becomes active while it loads SHALL count from then, unless stop shows already. A frame inside the page loading on its own, or a same-document navigation, SHALL leave reload in place. The button SHALL crossfade between reload and stop. A tab row's loading spinner SHALL follow the tab's loading state.
+
+#### Scenario: Frames loading after the page
+- **WHEN** a page finishes loading and then an iframe in it reloads every second for ten seconds
+- **THEN** the button shows reload throughout, and the tab row shows no spinner
+
+#### Scenario: Same-document navigation
+- **WHEN** the page calls `history.pushState` or changes the URL's fragment
+- **THEN** the button keeps showing reload
+
+#### Scenario: A quick load
+- **WHEN** the user opens a Peek, or follows a link, to a page that loads in 300 ms
+- **THEN** the button shows reload throughout
+
+#### Scenario: A slow load
+- **WHEN** a page takes two seconds to load
+- **THEN** the button turns into stop about 750 ms after the load starts, and back into reload when it ends

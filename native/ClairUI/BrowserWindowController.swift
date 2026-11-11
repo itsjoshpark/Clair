@@ -96,8 +96,12 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     }
     // The Peek's buttons, and a click beside it, close or expand it
     // (add-peek design D4).
-    rootView.card.peekControls = NSHostingView(
-      rootView: PeekControlsView(confirm: model.peekConfirm, actions: self))
+    let peekControls = NSHostingView(rootView: PeekControlsView(confirm: model.peekConfirm, actions: self))
+    // Near the window's top edge the title bar's safe area pushed the
+    // buttons about 10 pt down from Arc's place.
+    peekControls.safeAreaRegions = []
+    peekControls.sizingOptions = []
+    rootView.card.peekControls = peekControls
     rootView.card.peekClickCatcher.onClick = { [weak self] in self?.closePeek() }
     rootView.card.onConfirmDirectionChange = { [weak model] towardPeek in
       model?.peekConfirm.growsTowardPeek = towardPeek

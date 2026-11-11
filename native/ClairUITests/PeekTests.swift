@@ -4,6 +4,7 @@
 
 import AppKit
 import ClairHost
+import SwiftUI
 import Testing
 
 @testable import ClairUI
@@ -80,13 +81,13 @@ struct PeekLayoutTests {
     #expect(peek.minX == 98)
   }
 
-  @Test func theParentShrinksFivePointsPerSide() {
-    #expect(PeekLayout.parentFrame(in: card) == CGRect(x: 5, y: 5, width: 1713, height: 1020))
+  @Test func theParentShrinksNinePointsPerSide() {
+    #expect(PeekLayout.parentFrame(in: card) == CGRect(x: 9, y: 9, width: 1705, height: 1012))
     let transform = PeekLayout.parentTransform(size: card.size, anchor: .zero)
     let corner = CGPoint(x: 0, y: 0).applying(CATransform3DGetAffineTransform(transform))
     let far = CGPoint(x: card.width, y: card.height).applying(CATransform3DGetAffineTransform(transform))
-    #expect(abs(corner.x - 5) < 0.001 && abs(corner.y - 5) < 0.001)
-    #expect(abs(far.x - (card.width - 5)) < 0.001 && abs(far.y - (card.height - 5)) < 0.001)
+    #expect(abs(corner.x - 9) < 0.001 && abs(corner.y - 9) < 0.001)
+    #expect(abs(far.x - (card.width - 9)) < 0.001 && abs(far.y - (card.height - 9)) < 0.001)
   }
 
   @Test func theParentTransformAllowsForTheAnchor() {
@@ -100,7 +101,7 @@ struct PeekLayoutTests {
       let moved = CGPoint(x: point.x - centre.x, y: point.y - centre.y).applying(affine)
       return CGPoint(x: moved.x + centre.x, y: moved.y + centre.y)
     }
-    #expect(abs(apply(corner).x - 5) < 0.001 && abs(apply(corner).y - 5) < 0.001)
+    #expect(abs(apply(corner).x - 9) < 0.001 && abs(apply(corner).y - 9) < 0.001)
   }
 
   @Test func theButtonsSitBesideTheTopTrailingCorner() {
@@ -161,6 +162,13 @@ struct PeekWindowTests {
     #expect(controller.pageContainerView === card.peekContainer)
     // The URL field shows the Peek's page.
     #expect(URLDisplay.text(for: controller.model.activeTab) == "peek.example")
+  }
+
+  @Test func theButtonsIgnoreTheTitleBarsSafeArea() throws {
+    // Beside the top of the Peek they sit under the title bar, whose safe
+    // area pushed them about 10 pt below Arc's place.
+    let host = try #require(controller.rootView.card.peekControls as? NSHostingView<PeekControlsView>)
+    #expect(host.safeAreaRegions.isEmpty)
   }
 
   @Test func theParentPageStaysPutWhenAPeekOpensAndCloses() {

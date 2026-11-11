@@ -20,10 +20,10 @@ See proposal.md, "Why". What shapes the approach:
 |---|---|
 | Page card | 1723×1030 pt, at x 187 |
 | Peek card | 1386×1026 pt (80.4% of the card's width), centred on the card, 2 pt inset at top and bottom |
-| Parent page | inset about 5 pt per side, washed out toward the window background (light grey in Light Mode, dark grey in Dark Mode) |
-| Buttons | 34.5×33.5 pt circles, 13 pt right of the card, top at +7.5 pt, centres 43.5 pt apart: Close, Expand, Split |
-| Opening | parent washes out, then a card grows from the link's rectangle to full size in about 130 ms and settles by about 170 ms |
-| Closing | the reverse, about 130 ms, toward the link |
+| Parent page | inset 9 pt per side at any window size (measured at 738 and 1678 pt cards on a coloured page), washed out toward the window background (light grey in Light Mode, dark grey in Dark Mode) |
+| Buttons | 34.5×33.5 pt circles, 13.5 pt right of the card, top at +7.5 pt, centres 43.5 pt apart: Close, Expand, Split; glyphs 12 pt (×) and 14 pt (expand) across. They ride the card's top-trailing corner as it grows |
+| Opening | the parent shrinks and washes out over about 150 ms with an ease-out; the card grows from the link's rectangle, covering two thirds of the way in the first 50 ms and settling by about 170–190 ms (a fitted curve of cubic-bezier(0.3, 1, 0.75, 1) over 190 ms) |
+| Closing | the card shrinks toward the link with the same ease-out and is gone in about 85 ms; the parent returns and the wash fades over about 150 ms |
 | Confirm pill | red capsule "× Confirm", grows from the × in about 100 ms, holds about 1 s, fades back in about 100 ms |
 | Esc | page `preventDefault()` → Confirm; focused text field → Confirm; native `<dialog>` open → Peek closed at once |
 
@@ -78,13 +78,13 @@ For `OpenURLFromTab`, the hook navigates with `NavigateParams` at the forced ind
 
 - **Activation:** selecting the parent's row activates its Peek when it has one. The sidebar highlights the parent row while either the parent or its Peek is active. Closing a Peek activates its parent explicitly, rather than leaving the choice to Chromium's opener logic. The card shows a Peek only while the Peek is active, so it starts closing as soon as the parent becomes active, without waiting about 350 ms for Chromium to unload the Peek's page.
 - **Visibility:** `ActiveTabChanged` reports both the Peek and its parent as visible while the Peek is active, and both as hidden when another tab becomes active (spec "Page shown in the card").
-- **Parent behind the card:** `PageCardView` shows the parent's page view. A layer transform scales it down by about 5 pt per side, which avoids resizing the page and a reflow. A wash view and a click catcher cover it; a click there closes the Peek.
+- **Parent behind the card:** `PageCardView` shows the parent's page view. A layer transform scales it down by 9 pt per side, which avoids resizing the page and a reflow. A wash view and a click catcher cover it; a click there closes the Peek.
 - **The Peek card:** the Peek's page view sits in a rounded, shadowed container at 80% of the card's width and the card's height less 2 pt at top and bottom. The page view gets its final frame at once; only the container's layer animates.
 - **Tab-modal dialogs:** `pageContainerView` returns the Peek's container while a Peek shows, so the Peek's dialogs centre on the Peek.
 
 ### D5. Animation
 
-ClairUI records where the last left mouse-down in the card happened, through a local event monitor; a Peek opened from the keyboard grows from the card's centre. When a Peek appears, the container's layer starts scaled down to that point at near-zero size and springs to identity in about 130 ms. The wash fades in alongside. Closing runs the reverse on a plain card in the Peek's place: by the time ClairUI hears that the Peek closed, its page view has gone with its tab, and the page's GPU content can't be snapshotted without the screen-recording permission. With Reduce Motion on, both are 150 ms fades. Expand drops the wash and the parent's scale, and moves the Peek's view into the full card without a grow animation.
+ClairUI records where the last left mouse-down in the card happened, through a local event monitor; a Peek opened from the keyboard grows from the card's centre. When a Peek appears, the card starts at a tenth of its size at that point (about a link's size; Clair doesn't grow it from the link's own rectangle, as Arc does) and grows to identity over 190 ms on Arc's fitted ease-out, opaque within 50 ms, with the buttons riding its top-trailing corner. The parent's shrink, its shadow and the wash run over 160 ms on a gentler ease-out. Closing runs the reverse on a plain card in the Peek's place, shrinking over 150 ms on the same ease-out and fading out between a third and two thirds of the way: by the time ClairUI hears that the Peek closed, its page view has gone with its tab, and the page's GPU content can't be snapshotted without the screen-recording permission. With Reduce Motion on, both are 150 ms fades. Expand drops the wash and the parent's scale, and moves the Peek's view into the full card without a grow animation.
 
 ### D6. Esc and Confirm
 
@@ -127,6 +127,10 @@ A runtime test checks that relaunching restores the parent alone.
 ### D10. Preference and Settings
 
 `ClairPeekOnShiftClick` in `UserDefaults` defaults to on. The new Links page in `SettingsWindow.swift`, between General and Advanced, shows the toggle with the same row style as Advanced's. `opensPeekOnShiftClick` reads the preference live, so a change applies to open windows at once.
+
+### D12. Reload turns into stop only for a slow load
+
+Arc doesn't show stop while a Peek opens on a page that loads quickly. Recorded at 60 fps against a local server that delays its response, a Peek's reload turned into stop about 770 ms after the Shift+click whatever the page's delay (400 ms to 3 s), never for a 200 ms page, and crossfaded each way in about 100 ms. Clair's `ReloadStopMode` keeps Chromium's rules (arc-navigation-feedback design D2) and adds one: reload turns into stop only once the active tab's load has run 750 ms. A tab switch to a loading tab counts from the switch, since the snapshot doesn't say when its load began, except that stop stays when it shows already. Stop turns back into reload when the load ends, as before. The button crossfades its glyphs over 100 ms.
 
 ### D11. Link status
 
