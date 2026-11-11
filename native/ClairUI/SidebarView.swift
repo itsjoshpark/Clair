@@ -932,10 +932,12 @@ struct TabRow: View {
 struct PeekBadge: View {
   let peek: any ClairTab
 
-  static let size: CGFloat = 20
+  // Arc's, measured: a 24 pt tile holding a 14 pt favicon, 6 pt from the
+  // pill's end.
+  static let size: CGFloat = 24
   static let faviconSize: CGFloat = 14
   /// From the badge to the pill's end while the close button is hidden.
-  static let trailing: CGFloat = 8
+  static let trailing: CGFloat = 6
 
   @Environment(\.colorScheme) private var colorScheme
 
@@ -951,7 +953,7 @@ struct PeekBadge: View {
     .frame(width: Self.size, height: Self.size)
     .background(
       Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.07),
-      in: .rect(cornerRadius: 5, style: .continuous))
+      in: .rect(cornerRadius: 7, style: .continuous))
     .accessibilityElement()
     .accessibilityLabel(peek.title.isEmpty ? "Peek" : "Peek: \(peek.title)")
     .accessibilityIdentifier("clair.peekBadge")
