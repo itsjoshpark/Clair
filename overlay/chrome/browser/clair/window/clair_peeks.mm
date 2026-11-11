@@ -19,11 +19,13 @@
 #include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
+#include "chrome/browser/ui/unload_controller.h"
 #include "components/input/native_web_keyboard_event.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_handle.h"
@@ -135,11 +137,12 @@ ClairPeeks::ClairPeeks(ClairBrowserWindow* window)
     : window_(window), model_(window->browser()->tab_strip_model()) {
   model_->AddObserver(this);
   // D9: Peeks close before quitting writes the session, so it never holds
-  // them.
+  // them; but only when no leave-page confirmation can still cancel the
+  // quit, which would otherwise lose them.
   closing_all_subscription_ = chrome::AddClosingAllBrowsersCallback(
       base::BindRepeating(
           [](base::WeakPtr<ClairPeeks> peeks, bool closing) {
-            if (peeks && closing) {
+            if (peeks && closing && NoBeforeUnloadPending()) {
               peeks->CloseAll();
             }
           },
@@ -188,6 +191,12 @@ tabs::TabInterface* ClairPeeks::PeekOf(const tabs::TabInterface* parent) const {
   return it == pairs_.end() ? nullptr : it->peek.Get();
 }
 
+tabs::TabInterface* ClairPeeks::ShownPeekOf(
+    const tabs::TabInterface* parent) const {
+  auto it = FindByParent(parent);
+  return it == pairs_.end() || it->closing ? nullptr : it->peek.Get();
+}
+
 tabs::TabInterface* ClairPeeks::ParentOf(const tabs::TabInterface* peek) const {
   auto it = FindByPeek(peek);
   return it == pairs_.end() ? nullptr : it->parent.Get();
@@ -220,8 +229,9 @@ std::set<content::WebContents*> ClairPeeks::PagesShownWith(
     return pages;
   }
   pages.insert(active);
-  if (content::WebContents* peek = PeekOf(active)) {
-    pages.insert(peek);
+  tabs::TabInterface* active_tab = tabs::TabInterface::MaybeGetFromContents(active);
+  if (tabs::TabInterface* peek = active_tab ? ShownPeekOf(active_tab) : nullptr) {
+    pages.insert(peek->GetContents());
   }
   if (content::WebContents* parent = ParentOf(active)) {
     pages.insert(parent);
@@ -233,9 +243,16 @@ void ClairPeeks::Link(tabs::TabInterface* parent, tabs::TabInterface* peek) {
   if (!parent || !peek || parent == peek) {
     return;
   }
-  // A tab has at most one Peek, and a Peek has no Peek of its own.
-  if (FindByParent(parent) != pairs_.end() || FindByPeek(parent) != pairs_.end() ||
-      FindByPeek(peek) != pairs_.end()) {
+  // A tab has at most one Peek, and a Peek has no Peek of its own. Navigate
+  // may also have put the tab somewhere else, as in another window or an
+  // existing tab: only a tab right after its parent in this window is linked.
+  const int parent_index =
+      model_ ? strip()->GetIndexOfTab(parent) : TabStripModel::kNoTab;
+  const int peek_index =
+      model_ ? strip()->GetIndexOfTab(peek) : TabStripModel::kNoTab;
+  if (parent_index == TabStripModel::kNoTab ||
+      peek_index != parent_index + 1 || FindByParent(parent) != pairs_.end() ||
+      FindByPeek(parent) != pairs_.end() || FindByPeek(peek) != pairs_.end()) {
     ActivateTab(peek);
     return;
   }
@@ -256,6 +273,44 @@ void ClairPeeks::Unlink(std::vector<Pair>::iterator pair) {
   }
   pairs_.erase(pair);
   Changed();
+}
+
+void ClairPeeks::BeginClosing(std::vector<Pair>::iterator pair) {
+  if (pair == pairs_.end() || pair->closing) {
+    return;
+  }
+  pair->closing = true;
+  // ClairUI hears it before the parent becomes active, so the card closes the
+  // Peek at once (D4).
+  Changed();
+}
+
+void ClairPeeks::RequestClose(tabs::TabInterface* peek, uint32_t close_types) {
+  if (!model_ || !peek) {
+    return;
+  }
+  auto pair = FindByPeek(peek);
+  if (pair != pairs_.end()) {
+    if (pair->close_requested) {
+      return;
+    }
+    pair->close_requested = true;
+  }
+  const int index = strip()->GetIndexOfTab(peek);
+  if (index != TabStripModel::kNoTab) {
+    strip()->CloseWebContentsAt(index, close_types);
+  }
+}
+
+// static
+bool ClairPeeks::NoBeforeUnloadPending() {
+  for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
+    const UnloadController* unload = UnloadController::From(browser);
+    if (unload && unload->TabsNeedBeforeUnloadFired()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void ClairPeeks::Changed() {
@@ -379,14 +434,12 @@ void ClairPeeks::Close(tabs::TabInterface* tab) {
     Unlink(pair);
     return;
   }
+  BeginClosing(pair);
   // D4: the parent comes back, rather than whichever tab Chromium would pick.
   if (parent && strip()->GetActiveTab() == peek) {
     ActivateTab(parent);
   }
-  const int index = strip()->GetIndexOfTab(peek);
-  if (index != TabStripModel::kNoTab) {
-    strip()->CloseWebContentsAt(index, TabCloseTypes::CLOSE_USER_GESTURE);
-  }
+  RequestClose(peek, TabCloseTypes::CLOSE_USER_GESTURE);
 }
 
 void ClairPeeks::CloseSoon(tabs::TabInterface* peek) {
@@ -433,15 +486,13 @@ void ClairPeeks::CloseAll() {
   }
   confirm_peek_.reset();
   std::vector<tabs::TabHandle> peeks;
-  for (const Pair& pair : pairs_) {
+  for (Pair& pair : pairs_) {
+    pair.closing = true;
     peeks.push_back(pair.peek);
   }
+  Changed();
   for (tabs::TabHandle handle : peeks) {
-    tabs::TabInterface* peek = handle.Get();
-    const int index = peek ? strip()->GetIndexOfTab(peek) : TabStripModel::kNoTab;
-    if (index != TabStripModel::kNoTab) {
-      strip()->CloseWebContentsAt(index, TabCloseTypes::CLOSE_NONE);
-    }
+    RequestClose(handle.Get(), TabCloseTypes::CLOSE_NONE);
   }
 }
 
@@ -581,9 +632,11 @@ bool ClairPeeks::ExecuteCommand(int command) {
       return true;
     }
     case IDC_MOVE_TAB_TO_NEW_WINDOW:
-      // The parent moves, without its Peek: Chromium moves the active tab,
-      // which closing the Peek makes the parent.
-      Close(peek);
+      // The parent moves without its Peek: Chromium moves the active tab,
+      // which this makes the parent. The Peek, left behind without it, closes
+      // once, with its leave-page confirmation (Repair).
+      BeginClosing(FindByPeek(peek));
+      ActivateTab(parent);
       return false;
     default:
       return false;
@@ -657,6 +710,10 @@ void ClairPeeks::OnTabStripModelChanged(
               removed.remove_reason == TabRemovedReason::kDeleted) {
             parents_to_activate_.push_back(pair->parent);
           }
+          // One that left for another window leaves its parent unseen.
+          if (removed.remove_reason != TabRemovedReason::kDeleted) {
+            parents_to_hide_.push_back(pair->parent);
+          }
           Unlink(pair);
         } else if (auto parent = FindByParent(removed.tab);
                    parent != pairs_.end()) {
@@ -673,8 +730,11 @@ void ClairPeeks::OnTabStripModelChanged(
         break;
       }
       if (auto pair = FindByPeek(move->tab); pair != pairs_.end()) {
-        // Moved on its own, as by an extension: a normal tab from now on.
+        // Moved on its own, as by an extension: a normal tab from now on, and
+        // its parent is no longer shown behind it.
+        parents_to_hide_.push_back(pair->parent);
         Unlink(pair);
+        ScheduleRepair();
       } else {
         ScheduleRepair();
       }
@@ -691,6 +751,44 @@ void ClairPeeks::OnTabStripModelChanged(
     case TabStripModelChange::kSelectionOnly:
       break;
   }
+  if (selection.active_tab_changed()) {
+    ActiveTabChanged(selection.new_tab);
+  }
+}
+
+void ClairPeeks::ActiveTabChanged(tabs::TabInterface* active) {
+  if (!active) {
+    return;
+  }
+  if (auto pair = FindByPeek(active); pair != pairs_.end()) {
+    // Shown again, as after its leave-page confirmation was declined.
+    if (pair->closing) {
+      pair->closing = false;
+      pair->close_requested = false;
+      Changed();
+    }
+    return;
+  }
+  // D4: a parent made active some other way than its Peek closing, as when
+  // the tab next to it closes, shows its Peek. ClairUI already shows both;
+  // the Peek becomes active once the tab strip is done.
+  auto pair = FindByParent(active);
+  if (pair == pairs_.end() || pair->closing || !pair->peek.Get()) {
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&ClairPeeks::ShowPeekOf,
+                                weak_factory_.GetWeakPtr(), pair->parent));
+}
+
+void ClairPeeks::ShowPeekOf(tabs::TabHandle parent_handle) {
+  tabs::TabInterface* parent = parent_handle.Get();
+  auto pair = FindByParent(parent);
+  if (!model_ || pair == pairs_.end() || pair->closing ||
+      strip()->GetActiveTab() != parent) {
+    return;
+  }
+  ActivateTab(pair->peek.Get());
 }
 
 void ClairPeeks::OnTabStripModelDestroyed(TabStripModel* model) {
@@ -718,11 +816,7 @@ void ClairPeeks::Repair() {
   std::vector<tabs::TabHandle> orphans = std::move(orphans_);
   orphans_.clear();
   for (tabs::TabHandle handle : orphans) {
-    tabs::TabInterface* peek = handle.Get();
-    const int index = peek ? strip()->GetIndexOfTab(peek) : TabStripModel::kNoTab;
-    if (index != TabStripModel::kNoTab) {
-      strip()->CloseWebContentsAt(index, TabCloseTypes::CLOSE_USER_GESTURE);
-    }
+    RequestClose(handle.Get(), TabCloseTypes::CLOSE_USER_GESTURE);
     // Still there, waiting on its leave-page confirmation: a normal tab.
     Unlink(std::ranges::find_if(
         pairs_, [handle](const Pair& pair) { return pair.peek == handle; }));
@@ -746,6 +840,18 @@ void ClairPeeks::Repair() {
     }
     MoveQuietly(peek_index,
                 peek_index < parent_index ? parent_index : parent_index + 1);
+  }
+  // Parents whose Peek left on their own, unless shown.
+  std::vector<tabs::TabHandle> to_hide = std::move(parents_to_hide_);
+  parents_to_hide_.clear();
+  const std::set<content::WebContents*> shown =
+      PagesShownWith(strip()->GetActiveWebContents());
+  for (tabs::TabHandle handle : to_hide) {
+    tabs::TabInterface* parent = handle.Get();
+    if (parent && !shown.contains(parent->GetContents())) {
+      parent->GetContents()->UpdateWebContentsVisibility(
+          content::Visibility::HIDDEN);
+    }
   }
   // The parent of a Peek that closed while it showed.
   std::vector<tabs::TabHandle> parents = std::move(parents_to_activate_);

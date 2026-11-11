@@ -44,9 +44,12 @@ struct PeekTabListTests {
   @Test func theCardShowsThePeekOverItsParent() {
     let shown = TabListLogic.ShownPeek(parentID: 2, peekID: 4)
     #expect(TabListLogic.shownPeek(activeTabID: 4, in: tabs) == shown)
-    // The parent is active only while its Peek closes.
-    #expect(TabListLogic.shownPeek(activeTabID: 2, in: tabs) == nil)
+    // The parent, made active some other way, shows with its Peek.
+    #expect(TabListLogic.shownPeek(activeTabID: 2, in: tabs) == shown)
     #expect(TabListLogic.shownPeek(activeTabID: 1, in: tabs) == nil)
+    // A closing Peek has left its parent's peekID: the parent shows alone.
+    let closing: [any ClairTab] = [FakeTab(id: 2), FakeTab(id: 4, peekParentID: 2)]
+    #expect(TabListLogic.shownPeek(activeTabID: 2, in: closing) == nil)
     // A Peek whose parent has gone shows on its own.
     let orphan: [any ClairTab] = [FakeTab(id: 4, peekParentID: 9)]
     #expect(TabListLogic.shownPeek(activeTabID: 4, in: orphan) == nil)
@@ -207,12 +210,45 @@ struct PeekWindowTests {
   }
 
   @Test func thePeekClosesAsSoonAsItsParentIsActive() {
-    // Chromium activates the parent, then closes the Peek once its page has
-    // unloaded; the card doesn't wait.
+    // The engine drops the closing Peek from its parent's peekID, activates
+    // the parent, then closes the Peek once its page has unloaded; the card
+    // doesn't wait.
     let (parent, peek) = openPeek()
+    browser.beginClosingPeek(of: parent.tabID)
     browser.setActive(parent.tabID)
     #expect(controller.model.tabs.contains { $0.tabID == peek.tabID })
     #expect(!controller.rootView.card.isPeeking)
+  }
+
+  @Test func theParentComingBackAnyOtherWayShowsItsPeek() {
+    // As when the tab next to it closes: the card shows the pair at once,
+    // before the engine activates the Peek, so it doesn't close and reopen.
+    let (parent, peek) = openPeek()
+    let card = controller.rootView.card
+    let other = browser.tabs[0].tabID
+    browser.setActive(other)
+    #expect(!card.isPeeking)
+    browser.setActive(parent.tabID)
+    #expect(card.isPeeking)
+    #expect(card.pageView === browser.pageView(for: peek.tabID))
+    #expect(card.parentPageView === browser.pageView(for: parent.tabID))
+  }
+
+  @Test func closeTabsBelowAParentKeepsItsPeek() {
+    let (parent, peek) = openPeek()
+    #expect(TabListLogic.tabsBelow(parent.tabID, in: controller.model.tabs) == [browser.tabs.last!.tabID])
+    controller.closeTabs(below: parent.tabID)
+    #expect(controller.model.tabs.contains { $0.tabID == peek.tabID })
+    #expect(controller.model.tabs.last?.tabID == peek.tabID)
+  }
+
+  @Test func draggingAParentTakesItsPeekAlong() {
+    let (parent, peek) = openPeek()
+    // Rows [One, Two(+Peek), Three]: Two to the top.
+    let index = TabListLogic.stripIndex(movingRow: 1, toRow: 0, in: controller.model.tabs)!
+    controller.move(tab: parent.tabID, to: index)
+    #expect(controller.model.tabs.prefix(2).map(\.tabID) == [parent.tabID, peek.tabID])
+    #expect(TabListLogic.rows(controller.model.tabs).map(\.title) == ["Two", "One", "Three"])
   }
 
   @Test func closeAndExpandNameTheParent() {

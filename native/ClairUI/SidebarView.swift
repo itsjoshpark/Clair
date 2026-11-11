@@ -120,7 +120,7 @@ struct SidebarView: View {
           // Arc's line between a list that scrolls and the footer: 1 pt
           // across the sidebar, about 4% black in Light Mode and 8% white
           // in Dark Mode, as measured.
-          if TabList.overflows(height: tabListHeight, tabCount: TabListLogic.rows(model.tabs).count) {
+          if TabList.overflows(height: tabListHeight, tabCount: TabListLogic.rowCount(model.tabs)) {
             Rectangle().fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04)).frame(height: 1)
           }
         }
@@ -705,6 +705,11 @@ struct TabList: View {
   }
 
   var body: some View {
+    // A Peek has no row; its parent's row stands for both (add-peek D4).
+    // Worked out once per update, not per row.
+    let rows = TabListLogic.rows(model.tabs)
+    let peeks = TabListLogic.peeksByRow(model.tabs)
+    let highlighted = TabListLogic.highlightedRow(activeTabID: model.activeTabID, in: model.tabs)
     List {
       NewTabRow(isHighlighted: model.commandBar?.mode == .newTab) { actions?.newTab() }
         // From inside a row, where it can reach the list's scroll view.
@@ -713,14 +718,11 @@ struct TabList: View {
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
         .moveDisabled(true)
-      // A Peek has no row; its parent's row stands for both (add-peek D4).
-      let rows = TabListLogic.rows(model.tabs)
-      let highlighted = TabListLogic.highlightedRow(activeTabID: model.activeTabID, in: model.tabs)
       ForEach(rows, id: \.tabID) { tab in
         TabRow(
           tab: tab, isActive: tab.tabID == highlighted, isWindowKey: model.isWindowKey,
           isIncognito: model.profileKind == .incognito,
-          peek: TabListLogic.peek(ofRow: tab.tabID, in: model.tabs), actions: actions)
+          peek: peeks[tab.tabID], actions: actions)
           .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: -1))
           .listRowSeparator(.hidden)
           .listRowBackground(Color.clear)
@@ -740,7 +742,7 @@ struct TabList: View {
     // No taller than its rows, so the space below the last tab is the
     // sidebar's, which moves the window (design D18); the list scrolls once
     // the rows don't fit.
-    .frame(maxHeight: Self.contentHeight(tabCount: TabListLogic.rows(model.tabs).count))
+    .frame(maxHeight: Self.contentHeight(tabCount: rows.count))
     .accessibilityIdentifier("clair.tabList")
   }
 }

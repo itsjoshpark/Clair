@@ -77,7 +77,7 @@ For `OpenURLFromTab`, the hook navigates with `NavigateParams` at the forced ind
 
 ### D4. Activation, visibility and the card
 
-- **Activation:** selecting the parent's row activates its Peek when it has one. The sidebar highlights the parent row while either the parent or its Peek is active. Closing a Peek activates its parent explicitly, rather than leaving the choice to Chromium's opener logic. The card shows a Peek only while the Peek is active, so it starts closing as soon as the parent becomes active, without waiting about 350 ms for Chromium to unload the Peek's page.
+- **Activation:** selecting the parent's row activates its Peek when it has one. The sidebar highlights the parent row while either the parent or its Peek is active. Closing a Peek activates its parent explicitly, rather than leaving the choice to Chromium's opener logic. Closing first marks the Peek as closing, and the parent then reports no Peek (its snapshot's `peekID`), so the card starts closing the Peek as soon as the parent becomes active, without waiting about 350 ms for Chromium to unload the Peek's page. A parent made active any other way (the tab next to it closing, the command bar, an extension, a notification) shows with its Peek: the card shows both at once, and the bridge activates the Peek once the tab strip is done, so keys and Esc go to it. The closing mark clears if the Peek becomes active again, as after its leave-page confirmation is declined.
 - **Visibility:** `ActiveTabChanged` reports both the Peek and its parent as visible while the Peek is active, and both as hidden when another tab becomes active (spec "Page shown in the card").
 - **Parent behind the card:** `PageCardView` shows the parent's page view. A layer transform scales it down by 9 pt per side, which avoids resizing the page and a reflow. A wash view and a click catcher cover it; a click there closes the Peek.
 - **The Peek card:** the Peek's page view sits in a rounded, shadowed container at 80% of the card's width and the card's height less 2 pt at top and bottom. The page view gets its final frame at once; only the container's layer animates.
@@ -102,24 +102,25 @@ ClairUI only animates the pill; clicking it calls `closePeekOfTab:`. Arc closes 
 
 `ExecuteCommand` in `clair_native_window.mm` handles these for native windows itself:
 - `IDC_SELECT_NEXT_TAB`, `IDC_SELECT_PREVIOUS_TAB`, `IDC_SELECT_TAB_0`…`7` and `IDC_SELECT_LAST_TAB`: computed over the tabs that aren't Peeks. Selecting a tab that has a Peek activates the Peek (spec "Tab shortcuts treat a tab and its Peek as one").
-- `IDC_DUPLICATE_TAB` and `IDC_MOVE_TAB_TO_NEW_WINDOW` while a Peek shows: act on the parent. Moving closes the Peek first.
+- `IDC_DUPLICATE_TAB` and `IDC_MOVE_TAB_TO_NEW_WINDOW` while a Peek shows: act on the parent. Moving marks the Peek as closing and activates the parent, which Chromium then moves; the Peek, left without its parent, closes once (D8), with its leave-page confirmation.
 - `IDC_CLOSE_TAB` while a Peek shows: closes the Peek and activates its parent explicitly (D4), rather than leaving the next tab to Chromium.
 - `IDC_OPEN_FILE` (Cmd+O) while a Peek shows: expands it, as Arc does. Without a Peek it opens a file, as in Chromium.
 
 ### D8. Keeping the pair together
 
 A `TabStripModelObserver` in the bridge:
-- **When a parent closes:** closes its Peek, once the tab strip has finished, since it can't be changed from inside its own notification. Until then the Peek still reports a parent, so it never shows as a row. A leave-page confirmation still runs per page, through Chromium's close flow; a Peek whose confirmation keeps it open becomes a normal tab.
+- **When a parent closes or leaves the window:** closes its Peek, once the tab strip has finished, since it can't be changed from inside its own notification, and never twice. Until then the Peek still reports a parent, so it never shows as a row. A leave-page confirmation still runs per page, through Chromium's close flow; a Peek whose confirmation keeps it open becomes a normal tab.
 - **When a parent moves:** moves its Peek to the parent's index + 1.
-- **When a Peek is detached or moved by anything else:** unlinks it, which makes it a normal tab.
+- **When a Peek is detached or moved by anything else:** unlinks it, which makes it a normal tab, and hides its parent unless that is shown.
+- **Linking:** only a new tab that landed right after its parent in the same window becomes its Peek; `Navigate` can put it elsewhere, as in another window.
 
 Expand only unlinks, since the Peek already sits at its parent's index + 1 (spec "Expanding a Peek").
 
 ### D9. Peeks end with the session
 
-Before Chromium starts closing a native window's tabs, the window closes its Peeks:
-- **Closing a window:** in `WindowCloseRequested` and `Close`.
-- **Quitting:** from an observer of `BrowserList`'s close-all, which runs before session data is written for the quit.
+Before Chromium starts closing a native window's tabs, the window closes its Peeks, but only when no leave-page confirmation can still cancel the close, which would otherwise lose them:
+- **Closing a window:** in `Close`, when `UnloadController::GetBrowserClosingStatus()` permits the close. Otherwise the Peeks close with the window's other tabs once every page has agreed.
+- **Quitting:** from the close-all callback, which runs before session data is written for the quit, when no window has a beforeunload handler left to run.
 
 A runtime test checks that relaunching restores the parent alone.
 
@@ -140,6 +141,7 @@ The status capsule lays out against the Peek container's bottom-leading corner w
 ## Risks / Trade-offs
 
 - **[Session restore records a Peek before D9 closes it]** → A runtime test quits with a Peek open; the fallback is D9's extra data.
+- **[A close or quit that a page asks about]** → The Peeks stay open until it's certain, so declining keeps them; confirming may record them, and they come back as normal tabs from session restore or Reopen Closed Window. Rare, and nothing is lost.
 - **[Chromium picks a different tab after the Peek closes]** → D4 activates the parent explicitly, and the runtime test checks it.
 - **[Scaling the parent with a layer transform blurs it or misplaces hit testing]** → The click catcher covers the parent, so it takes no input. If the blur shows, inset the frame instead and accept one reflow.
 - **[Extensions or pages enumerating tabs see the Peek as a tab]** → Accepted. `chrome.tabs` lists it as the tab it is, and that keeps extensions working inside a Peek.

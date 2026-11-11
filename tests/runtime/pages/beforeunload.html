@@ -3,7 +3,10 @@
 <title>Clair leave page</title>
 <p>Click anywhere, then close the window: Clair asks before leaving.</p>
 <script>
+  // A test turns the question off with `window.guard = false` to close the tab.
+  window.guard = true;
   window.addEventListener('beforeunload', (event) => {
+    if (!window.guard) return;
     event.preventDefault();
     event.returnValue = '';
   });

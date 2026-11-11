@@ -969,8 +969,11 @@ void ClairBrowserWindow::ShowInactive() {
 
 void ClairBrowserWindow::Close() {
   // add-peek D9: the window's Peeks close first, so neither Reopen Closed
-  // Window nor the session brings them back.
-  if (peeks_) {
+  // Window nor the session brings them back; but only when no leave-page
+  // confirmation can still cancel the close, which would otherwise lose them.
+  // Then they close with the window's other tabs.
+  if (peeks_ && UnloadController::From(browser_)->GetBrowserClosingStatus() ==
+                    BrowserWindowInterface::ClosingStatus::kPermitted) {
     peeks_->CloseAll();
   }
   // Chromium's close flow: beforeunload may veto it; then the tabs close, and

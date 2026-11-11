@@ -739,7 +739,7 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   ClairTabID peekID = ClairTabIDNone;
   tabs::TabInterface* tab = tabs::TabInterface::MaybeGetFromContents(contents);
   if (ClairPeeks* peeks = self.peeks; peeks && tab) {
-    if (tabs::TabInterface* peek = peeks->PeekOf(tab)) {
+    if (tabs::TabInterface* peek = peeks->ShownPeekOf(tab)) {
       peekID = peek->GetHandle().raw_value();
     }
     if (std::optional<int32_t> parent = peeks->ParentIDOf(tab)) {

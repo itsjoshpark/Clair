@@ -57,6 +57,10 @@ A Peek SHALL stay with its parent tab until it's closed or expanded. Selecting a
 - **WHEN** a Peek is open on one tab, and the user selects another tab in the sidebar and then the first tab again
 - **THEN** the other tab shows normally, and then the first tab shows with its Peek, at the same page and scroll position
 
+#### Scenario: The parent comes back another way
+- **WHEN** a Peek is open on one tab, another tab is selected, and the first tab becomes active another way, as when the tab next to it closes or an extension selects it
+- **THEN** the first tab shows with its Peek, and Esc closes the Peek
+
 ### Requirement: The window acts on the Peek
 While a Peek shows, the URL field, back, forward, reload and stop, Copy URL, find in page, DevTools, site controls and page info SHALL act on the Peek's page, as they act on the active tab's page otherwise. Back and forward SHALL move through the Peek's own history.
 
@@ -132,11 +136,15 @@ Closing a tab that has a Peek SHALL close its Peek with it. A leave-page confirm
 - **THEN** the tab and its Peek close, and no Peek is left in the window
 
 ### Requirement: Peeks end with the session
-Peeks SHALL NOT outlive the session. Quitting Clair or closing a window SHALL close the Peeks in it, and session restore and Reopen Closed Window SHALL restore their parent tabs without them.
+Peeks SHALL NOT outlive the session. Quitting Clair or closing a window SHALL close the Peeks in it, and session restore and Reopen Closed Window SHALL restore their parent tabs without them. A close or quit that a page's leave-page confirmation cancels SHALL leave the Peeks open.
 
 #### Scenario: Quit with a Peek open
 - **WHEN** a tab has a Peek open, and the user quits and relaunches Clair with session restore on
 - **THEN** the tab is restored without its Peek, and no tab for the Peek's page is restored
+
+#### Scenario: Staying on a page that asks
+- **WHEN** a window has a tab with a Peek and a page that asks before it's left, and the user closes the window and chooses to stay
+- **THEN** the window stays open with the Peek
 
 ### Requirement: Tab shortcuts treat a tab and its Peek as one
 Ctrl+Tab, Ctrl+Shift+Tab, Cmd+Opt+Right and Left, and Cmd+1 to Cmd+9 SHALL count the tabs in the tab list, so a tab and its Peek are one stop. Selecting a tab that has a Peek SHALL show the Peek.

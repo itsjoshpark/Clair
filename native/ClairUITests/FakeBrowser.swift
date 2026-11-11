@@ -456,6 +456,17 @@ final class FakeBrowser: NSObject, ClairBrowser {
     clairWindow?.tabsDidChange(tabs)
   }
 
+  /// Marks the Peek of `parent` as closing, as the engine does before it
+  /// activates the parent: the parent stops reporting it, the Peek keeps its
+  /// parent.
+  func beginClosingPeek(of parent: TabID) {
+    guard let index = tabs.firstIndex(where: { $0.tabID == parent }), let tab = tabs[index] as? FakeTab else {
+      return
+    }
+    tabs[index] = tab.with(peekID: ClairTabIDNone)
+    clairWindow?.tabsDidChange(tabs)
+  }
+
   /// Keeps an Esc in the active Peek, as its page does with a dialog open.
   func keepEscape(for duration: TimeInterval = 1) {
     clairWindow?.peekDidKeepEscape(for: duration)
@@ -528,7 +539,9 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   func closeTabs(below tabID: TabID) {
     record("closeBelow \(tabID)")
-    guard let index = tabs.firstIndex(where: { $0.tabID == tabID }) else { return }
+    // As the engine: from the tab's Peek, which stays (ClairPeeks::LastOfFamily).
+    let last = tabs.first(where: { $0.tabID == tabID }).map { $0.peekID != ClairTabIDNone ? $0.peekID : tabID }
+    guard let last, let index = tabs.firstIndex(where: { $0.tabID == last }) else { return }
     for tab in tabs[(index + 1)...] {
       closeTabNow(tab.tabID)
     }
@@ -536,16 +549,29 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   func move(tab tabID: TabID, to index: Int) {
     record("move \(tabID) \(index)")
-    moveTab(tabID, to: index)
+    // As the engine: a tab and its Peek move as one, the tab ending at
+    // `index` and its Peek right after it (ClairPeeks::MoveTab).
+    guard let tab = tabs.first(where: { $0.tabID == tabID }), tab.peekID != ClairTabIDNone,
+      let peek = tabs.first(where: { $0.tabID == tab.peekID })
+    else {
+      moveTab(tabID, to: index)
+      return
+    }
+    tabs.removeAll { $0.tabID == tabID || $0.tabID == peek.tabID }
+    let at = max(0, min(index, tabs.count))
+    tabs.insert(contentsOf: [tab, peek], at: at)
+    clairWindow?.tabsDidChange(tabs)
   }
 
   func closePeek(of tabID: TabID) {
     record("closePeek \(tabID)")
     guard let peek = peek(of: tabID) else { return }
+    // As the engine: the parent stops reporting its closing Peek, then
+    // becomes active, then the Peek goes once its page has unloaded.
+    beginClosingPeek(of: peek.peekParentID)
     if activeTabID == peek.tabID {
       setActive(peek.peekParentID)
     }
-    unlinkPeek(peek.tabID)
     closeTabNow(peek.tabID)
   }
 

@@ -50,6 +50,10 @@ class ClairPeeks : public TabStripModelObserver {
 
   // The Peek of `parent`, or null.
   tabs::TabInterface* PeekOf(const tabs::TabInterface* parent) const;
+  // The Peek shown with `parent`: its Peek unless that is closing, or null.
+  // ClairUI gets this as the parent's peekID, so a closing Peek's parent
+  // shows alone at once (D4).
+  tabs::TabInterface* ShownPeekOf(const tabs::TabInterface* parent) const;
   // The tab `peek` is a Peek of, or null for a normal tab.
   tabs::TabInterface* ParentOf(const tabs::TabInterface* peek) const;
   // The ID ClairUI gets as `peek`'s parent: its parent's handle, or a null
@@ -127,6 +131,12 @@ class ClairPeeks : public TabStripModelObserver {
     tabs::TabHandle parent;
     tabs::TabHandle peek;
     std::unique_ptr<EscapeWatcher> escape_watcher;
+    // The Peek is closing: its parent shows alone, and activating the parent
+    // doesn't bring the Peek back. Cleared if the Peek becomes active again,
+    // as after its leave-page confirmation is declined.
+    bool closing = false;
+    // CloseWebContentsAt ran for the Peek, so it isn't asked again.
+    bool close_requested = false;
   };
 
   TabStripModel* strip() const { return model_; }
@@ -141,6 +151,17 @@ class ClairPeeks : public TabStripModelObserver {
   void Link(tabs::TabInterface* parent, tabs::TabInterface* peek);
   // Forgets the pair; the Peek, if still there, becomes a normal tab.
   void Unlink(std::vector<Pair>::iterator pair);
+  // Marks the Peek as closing before its parent becomes active.
+  void BeginClosing(std::vector<Pair>::iterator pair);
+  // Closes the Peek's tab, once.
+  void RequestClose(tabs::TabInterface* peek, uint32_t close_types);
+  // After the active tab changed: a parent made active some other way than
+  // its Peek closing shows its Peek again (D4).
+  void ActiveTabChanged(tabs::TabInterface* active);
+  void ShowPeekOf(tabs::TabHandle parent);
+  // Whether every window can close without a beforeunload handler left to
+  // run, so a quit can't be cancelled by a leave-page confirmation (D9).
+  static bool NoBeforeUnloadPending();
   // The tab list ClairUI shows changed.
   void Changed();
 
@@ -169,6 +190,8 @@ class ClairPeeks : public TabStripModelObserver {
   std::vector<tabs::TabHandle> orphans_;
   // Parents to activate because their Peek closed while active.
   std::vector<tabs::TabHandle> parents_to_activate_;
+  // Parents whose Peek left on its own, to hide unless shown (D8).
+  std::vector<tabs::TabHandle> parents_to_hide_;
   bool repair_posted_ = false;
   // While this moves tabs itself, moves don't unlink anything.
   bool moving_ = false;

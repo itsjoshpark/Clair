@@ -19,9 +19,11 @@ enum TabListLogic {
     return target == source ? nil : target
   }
 
-  /// The tabs Close Tabs Below closes: every tab after `tabID`.
+  /// The tabs Close Tabs Below closes: every tab after `tabID` and its Peek,
+  /// which stays (add-peek design D8).
   static func tabsBelow(_ tabID: TabID, in tabs: [any ClairTab]) -> [TabID] {
-    guard let index = tabs.firstIndex(where: { $0.tabID == tabID }) else {
+    let last = peek(ofRow: tabID, in: tabs)?.tabID ?? tabID
+    guard let index = tabs.firstIndex(where: { $0.tabID == last }) else {
       return []
     }
     return tabs[(index + 1)...].map(\.tabID)
@@ -54,6 +56,25 @@ enum TabListLogic {
     peek(ofRow: row, in: tabs)?.tabID ?? row
   }
 
+  /// The number of rows: every tab but the Peeks.
+  static func rowCount(_ tabs: [any ClairTab]) -> Int {
+    tabs.reduce(0) { $0 + (isPeek($1) ? 0 : 1) }
+  }
+
+  /// Each row's Peek, by the row's tab ID, in one pass over the tabs: the
+  /// sidebar's list asks for every row's on each update.
+  static func peeksByRow(_ tabs: [any ClairTab]) -> [TabID: any ClairTab] {
+    var byID: [TabID: any ClairTab] = [:]
+    for tab in tabs { byID[tab.tabID] = tab }
+    var peeks: [TabID: any ClairTab] = [:]
+    for tab in tabs where tab.peekID != ClairTabIDNone {
+      if let peek = byID[tab.peekID], peek.peekParentID == tab.tabID {
+        peeks[tab.tabID] = peek
+      }
+    }
+    return peeks
+  }
+
   /// The Peek of the tab with `row`, whose favicon the row shows as a badge.
   static func peek(ofRow row: TabID, in tabs: [any ClairTab]) -> (any ClairTab)? {
     guard let tab = tabs.first(where: { $0.tabID == row }), tab.peekID != ClairTabIDNone else { return nil }
@@ -66,15 +87,22 @@ enum TabListLogic {
     let peekID: TabID
   }
 
-  /// The Peek the card shows while `activeTabID` is active: the active Peek
-  /// over its parent. Selecting a row activates its Peek, so the parent is
-  /// active only while its Peek closes: Chromium makes it active first, then
-  /// waits for the Peek's page to unload, and the card closes the Peek at once.
+  /// The Peek the card shows while `activeTabID` is active: over its parent,
+  /// while either is active. A parent that becomes active some other way, as
+  /// when the tab next to it closes, shows with its Peek at once, and the
+  /// engine then activates the Peek. A Peek that's closing has left its
+  /// parent's `peekID`, so the card closes it as soon as the parent is active,
+  /// without waiting for its page to unload.
   static func shownPeek(activeTabID: TabID, in tabs: [any ClairTab]) -> ShownPeek? {
-    guard let active = tabs.first(where: { $0.tabID == activeTabID }), isPeek(active),
-      tabs.contains(where: { $0.tabID == active.peekParentID && $0.peekID == active.tabID })
-    else { return nil }
-    return ShownPeek(parentID: active.peekParentID, peekID: active.tabID)
+    guard let active = tabs.first(where: { $0.tabID == activeTabID }) else { return nil }
+    if isPeek(active) {
+      guard tabs.contains(where: { $0.tabID == active.peekParentID && $0.peekID == active.tabID }) else {
+        return nil
+      }
+      return ShownPeek(parentID: active.peekParentID, peekID: active.tabID)
+    }
+    guard let peek = peek(ofRow: active.tabID, in: tabs) else { return nil }
+    return ShownPeek(parentID: active.tabID, peekID: peek.tabID)
   }
 
   /// The tab strip index a row dragged from row `source` to row `target` (as

@@ -213,6 +213,62 @@ final class PeekTests: NativeWindowTestCase {
     XCTAssertTrue(peekClosed, "Closing the parent left its Peek open")
   }
 
+  func testThePeekComesBackSurvivesACancelledCloseAndStaysBehindAMove() async throws {
+    let (browser, links, other) = try await startWithLinks()
+    defer {
+      links.close()
+      other.close()
+    }
+
+    // The parent made active another way than its row, as by an extension or
+    // a notification, comes back with its Peek, and Esc closes the Peek.
+    try await openPeek("plain", in: links, browser: browser, suffix: "?plain")
+    let peek = try await browser.session(endingWith: "?plain")
+    defer { peek.close() }
+    browser.tabRow("Clair runtime test page")?.click()
+    let hidden = await Harness.wait(for: 15) { try await browser.visibility(of: peek) == "hidden" }
+    try require(hidden, "Selecting another row left the Peek visible")
+    let found = try await browser.target(endingWith: "peek.html")
+    let parentTarget = try XCTUnwrap(found, "The parent tab is gone")
+    let session = try await browser.browserSession()
+    _ = try await session.send("Target.activateTarget", ["targetId": parentTarget.id])
+    session.close()
+    let back = await Harness.wait(for: 15) { try await browser.visibility(of: peek) == "visible" }
+    XCTAssertTrue(back, "The parent came back without its Peek")
+    XCTAssertTrue(browser.peek.waitForExistence(timeout: 10), "The card doesn't show the Peek")
+    browser.ui.typeKey(.escape, modifierFlags: [])
+    let escaped = await browser.waitForTarget("?plain", open: false)
+    XCTAssertTrue(escaped, "Esc didn't close the Peek after its parent came back")
+
+    // Closing the window, then staying on a page that asks, keeps the Peek.
+    let asking = try await browser.open(url("beforeunload.html"))
+    defer { asking.close() }
+    // The page asks only after a click.
+    _ = try await asking.evaluate("document.body.id = 'body'; 1")
+    try await asking.click("body")
+    browser.tabRow(Self.links)?.click()
+    try await openPeek("plain", in: links, browser: browser, suffix: "?plain")
+    browser.ui.typeKey("w", modifierFlags: [.command, .shift])
+    let cancel = browser.ui.buttons["Cancel"]
+    try require(cancel.waitForExistence(timeout: 15), "Closing the window didn't ask about the page")
+    cancel.click()
+    try await Task.sleep(for: .seconds(1))
+    let kept = try await browser.target(endingWith: "?plain") != nil
+    XCTAssertTrue(kept, "Staying on the page lost the Peek")
+    browser.tabRow(Self.links)?.click()
+    XCTAssertTrue(browser.peek.waitForExistence(timeout: 15), "The parent's row doesn't show its Peek after staying")
+    _ = try await asking.evaluate("window.guard = false; 1")
+
+    // Move Tab to New Window moves the parent alone and closes its Peek.
+    browser.ui.menuItems["Move Tab to New Window"].click()
+    let moved = await Harness.wait(for: 15) { try await browser.windowCount() == 2 }
+    XCTAssertTrue(moved, "Move Tab to New Window didn't open a window")
+    let peekGone = await browser.waitForTarget("?plain", open: false)
+    XCTAssertTrue(peekGone, "The Peek stayed behind after its parent moved")
+    let parentOpen = try await browser.target(endingWith: "peek.html") != nil
+    XCTAssertTrue(parentOpen, "Moving the parent closed it")
+  }
+
   func testEscapeTheLinksSettingAndQuitting() async throws {
     let (browser, links, other) = try await startWithLinks()
     defer {

@@ -407,12 +407,9 @@ final class PageCardView: NSView {
     return CGPoint(x: bounds.midX, y: bounds.midY)
   }
 
-  /// `point`, in this view's coordinates, in the coordinates its subviews'
-  /// layers are placed in. AppKit places a flipped view's sublayers in its
-  /// own, top-left coordinates (checked with a 60 fps recording).
-  private func layerPoint(_ point: CGPoint) -> CGPoint {
-    point
-  }
+  // The grow and shrink transforms take points in this view's own top-left
+  // coordinates: AppKit places a flipped view's sublayers in them (checked
+  // with a 60 fps recording).
 
   private func animateOpening() {
     let origin = growOrigin()
@@ -428,7 +425,7 @@ final class PageCardView: NSView {
     if let layer = peekCard.layer {
       let grow = CABasicAnimation(keyPath: "transform")
       grow.fromValue = PeekLayout.growTransform(
-        from: layerPoint(origin), position: layer.position, scale: PeekLayout.startScale)
+        from: origin, position: layer.position, scale: PeekLayout.startScale)
       grow.toValue = CATransform3DIdentity
       grow.duration = PeekLayout.openDuration
       grow.timingFunction = PeekLayout.timing(PeekLayout.openTiming)
@@ -438,10 +435,9 @@ final class PageCardView: NSView {
     // The buttons ride the Peek's top-trailing corner out, as in Arc.
     if let controls = peekControls?.layer {
       let corner = CGPoint(x: peekCard.frame.maxX, y: peekCard.frame.minY)
-      let point = layerPoint(origin)
       let shift = 1 - PeekLayout.startScale
       let ride = CABasicAnimation(keyPath: "transform")
-      ride.fromValue = CATransform3DMakeTranslation(shift * (point.x - corner.x), shift * (point.y - corner.y), 0)
+      ride.fromValue = CATransform3DMakeTranslation(shift * (origin.x - corner.x), shift * (origin.y - corner.y), 0)
       ride.toValue = CATransform3DIdentity
       ride.duration = PeekLayout.openDuration
       ride.timingFunction = PeekLayout.timing(PeekLayout.openTiming)
@@ -529,7 +525,7 @@ final class PageCardView: NSView {
         let shrink = CABasicAnimation(keyPath: "transform")
         shrink.fromValue = CATransform3DIdentity
         shrink.toValue = PeekLayout.growTransform(
-          from: layerPoint(origin), position: layer.position, scale: PeekLayout.startScale)
+          from: origin, position: layer.position, scale: PeekLayout.startScale)
         shrink.duration = PeekLayout.closeDuration
         shrink.timingFunction = PeekLayout.timing(PeekLayout.openTiming)
         layer.transform = shrink.toValue as? CATransform3D ?? CATransform3DIdentity
