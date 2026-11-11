@@ -227,8 +227,9 @@ final class PageCardView: NSView {
     if let parent, parent.superview !== pageHolder {
       pageHolder.addSubview(parent)
     }
-    if let view {
-      // Under the infobars and the crashed view, above DevTools.
+    if let view, view.superview !== activeContainer {
+      // Under the infobars and the crashed view, above DevTools. A page
+      // already in place stays: adding it again blanks it for a frame.
       let surface = activeContainer
       if let devToolsView, devToolsView.superview === surface {
         surface.addSubview(view, positioned: .above, relativeTo: devToolsView)

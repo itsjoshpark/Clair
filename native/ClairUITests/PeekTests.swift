@@ -43,7 +43,8 @@ struct PeekTabListTests {
   @Test func theCardShowsThePeekOverItsParent() {
     let shown = TabListLogic.ShownPeek(parentID: 2, peekID: 4)
     #expect(TabListLogic.shownPeek(activeTabID: 4, in: tabs) == shown)
-    #expect(TabListLogic.shownPeek(activeTabID: 2, in: tabs) == shown)
+    // The parent is active only while its Peek closes.
+    #expect(TabListLogic.shownPeek(activeTabID: 2, in: tabs) == nil)
     #expect(TabListLogic.shownPeek(activeTabID: 1, in: tabs) == nil)
     // A Peek whose parent has gone shows on its own.
     let orphan: [any ClairTab] = [FakeTab(id: 4, peekParentID: 9)]
@@ -195,6 +196,15 @@ struct PeekWindowTests {
     controller.activate(tab: parent.tabID)
     #expect(browser.commands.last == "activate \(peek.tabID)")
     #expect(controller.rootView.card.isPeeking)
+  }
+
+  @Test func thePeekClosesAsSoonAsItsParentIsActive() {
+    // Chromium activates the parent, then closes the Peek once its page has
+    // unloaded; the card doesn't wait.
+    let (parent, peek) = openPeek()
+    browser.setActive(parent.tabID)
+    #expect(controller.model.tabs.contains { $0.tabID == peek.tabID })
+    #expect(!controller.rootView.card.isPeeking)
   }
 
   @Test func closeAndExpandNameTheParent() {

@@ -76,7 +76,7 @@ For `OpenURLFromTab`, the hook navigates with `NavigateParams` at the forced ind
 
 ### D4. Activation, visibility and the card
 
-- **Activation:** selecting the parent's row activates its Peek when it has one. The sidebar highlights the parent row while either the parent or its Peek is active. Closing a Peek activates its parent explicitly, rather than leaving the choice to Chromium's opener logic.
+- **Activation:** selecting the parent's row activates its Peek when it has one. The sidebar highlights the parent row while either the parent or its Peek is active. Closing a Peek activates its parent explicitly, rather than leaving the choice to Chromium's opener logic. The card shows a Peek only while the Peek is active, so it starts closing as soon as the parent becomes active, without waiting about 350 ms for Chromium to unload the Peek's page.
 - **Visibility:** `ActiveTabChanged` reports both the Peek and its parent as visible while the Peek is active, and both as hidden when another tab becomes active (spec "Page shown in the card").
 - **Parent behind the card:** `PageCardView` shows the parent's page view. A layer transform scales it down by about 5 pt per side, which avoids resizing the page and a reflow. A wash view and a click catcher cover it; a click there closes the Peek.
 - **The Peek card:** the Peek's page view sits in a rounded, shadowed container at 80% of the card's width and the card's height less 2 pt at top and bottom. The page view gets its final frame at once; only the container's layer animates.

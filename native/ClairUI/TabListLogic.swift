@@ -67,16 +67,14 @@ enum TabListLogic {
   }
 
   /// The Peek the card shows while `activeTabID` is active: the active Peek
-  /// over its parent, or the active tab's own Peek, while both are open.
+  /// over its parent. Selecting a row activates its Peek, so the parent is
+  /// active only while its Peek closes: Chromium makes it active first, then
+  /// waits for the Peek's page to unload, and the card closes the Peek at once.
   static func shownPeek(activeTabID: TabID, in tabs: [any ClairTab]) -> ShownPeek? {
-    guard let active = tabs.first(where: { $0.tabID == activeTabID }) else { return nil }
-    if isPeek(active) {
-      guard tabs.contains(where: { $0.tabID == active.peekParentID && $0.peekID == active.tabID }) else {
-        return nil
-      }
-      return ShownPeek(parentID: active.peekParentID, peekID: active.tabID)
-    }
-    return peek(ofRow: active.tabID, in: tabs).map { ShownPeek(parentID: active.tabID, peekID: $0.tabID) }
+    guard let active = tabs.first(where: { $0.tabID == activeTabID }), isPeek(active),
+      tabs.contains(where: { $0.tabID == active.peekParentID && $0.peekID == active.tabID })
+    else { return nil }
+    return ShownPeek(parentID: active.peekParentID, peekID: active.tabID)
   }
 
   /// The tab strip index a row dragged from row `source` to row `target` (as
