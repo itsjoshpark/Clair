@@ -20,7 +20,9 @@
 # - download_ui_controller.cc: a new download goes to the sidebar instead of
 #   Chromium's download bubble (D7).
 # - browser_web_contents_delegate.cc: Chromium treats every status bubble as a
-#   Views one; a native window shows the hovered link's URL itself (D8).
+#   Views one; a native window shows the hovered link's URL itself (D8). A
+#   link Shift+clicked in a native window opens in a Peek instead of a new
+#   window (add-peek D2).
 # - browser_prefs.cc, page_visibility.ts: passwords and autofill are off, and
 #   their settings section is hidden (D17). In Chromium 156 the section is
 #   gated by `yourSavedInfo`; a partial visibility object would hide the other
@@ -269,7 +271,35 @@
  #include "chrome/browser/background/background_contents_service_factory.h"
  #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
  #include "chrome/browser/content_settings/page_specific_content_settings_delegate.h"
-@@ -796,6 +797,10 @@
+@@ -541,6 +542,13 @@
+   DCHECK(params.Valid());
+ #endif
+ 
++  // Clair: a link Shift+clicked in a native window opens in a Peek.
++  content::WebContents* clair_peek_result = nullptr;
++  if (clair::MaybeOpenPeek(&*browser_, source, params,
++                           navigation_handle_callback, &clair_peek_result)) {
++    return clair_peek_result;
++  }
++
+   if ((browser_->GetType() == BrowserWindowInterface::Type::TYPE_DEVTOOLS)) {
+     DevToolsWindow* window = DevToolsWindow::AsDevToolsWindow(source);
+     DCHECK(window);
+@@ -672,6 +680,13 @@
+     const blink::mojom::WindowFeatures& window_features,
+     bool user_gesture,
+     bool* was_blocked) {
++  // Clair: a link with a target Shift+clicked in a native window opens in
++  // a Peek.
++  content::WebContents* clair_peek_result = nullptr;
++  if (clair::MaybeOpenPeek(&*browser_, source, new_contents, target_url,
++                           disposition, user_gesture, &clair_peek_result)) {
++    return clair_peek_result;
++  }
+   FullscreenController* fullscreen_controller =
+       exclusive_access_manager_->fullscreen_controller();
+ #if BUILDFLAG(IS_MAC)
+@@ -796,6 +811,10 @@
  
  void BrowserWebContentsDelegate::UpdateTargetURL(content::WebContents* source,
                                                   const GURL& url) {
@@ -280,7 +310,7 @@
    std::vector<StatusBubble*> status_bubbles =
        browser_ui_controller_->GetStatusBubbles();
    for (StatusBubble* status_bubble : status_bubbles) {
-@@ -822,6 +827,11 @@
+@@ -822,6 +841,11 @@
      exclusive_access_manager_->OnUserInput();
    }
  
@@ -420,7 +450,7 @@
      return;  // IN-TEST
 --- a/chrome/browser/ui/BUILD.gn
 +++ b/chrome/browser/ui/BUILD.gn
-@@ -3340,6 +3340,29 @@
+@@ -3340,6 +3340,31 @@
    }
  
    if (is_mac) {
@@ -438,6 +468,8 @@
 +      "//chrome/browser/clair/window/clair_extensions.mm",
 +      "//chrome/browser/clair/window/clair_native_window.h",
 +      "//chrome/browser/clair/window/clair_native_window.mm",
++      "//chrome/browser/clair/window/clair_peeks.h",
++      "//chrome/browser/clair/window/clair_peeks.mm",
 +      "//chrome/browser/clair/window/clair_window_hooks.h",
 +      "//chrome/browser/clair/window/clair_window_hooks.mm",
 +    ]

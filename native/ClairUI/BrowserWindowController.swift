@@ -46,6 +46,8 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
   /// Dragging the window from the top of the page (drag-window-from-page-top).
   private let dragPreference: WindowDragPreference
+  /// Whether Shift+click opens a Peek (add-peek design D10).
+  private let peekPreference: PeekPreference
   /// Watches the rest of a press once the window server has its window drag.
   private var safetyNetMonitor: Any?
   private var safetyNet = WindowDragSafetyNet()
@@ -57,12 +59,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   init(
     browser: any ClairBrowser, preferences: SidebarPreferences = SidebarPreferences(),
-    dragPreference: WindowDragPreference = WindowDragPreference()
+    dragPreference: WindowDragPreference = WindowDragPreference(),
+    peekPreference: PeekPreference = PeekPreference()
   ) {
     self.browser = browser
     self.window = browser.window
     self.preferences = preferences
     self.dragPreference = dragPreference
+    self.peekPreference = peekPreference
     let model = BrowserWindowModel(profileKind: browser.profileKind, sidebar: preferences.initialState)
     self.model = model
     sidebarHost = NSHostingView.edgeToEdge(rootView: SidebarView(model: model, actions: nil))
@@ -352,6 +356,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   var isSidebarHidden: Bool {
     model.sidebar.isHidden
+  }
+
+  var opensPeekOnShiftClick: Bool {
+    peekPreference.isEnabled
+  }
+
+  func peekDidKeepEscape(for duration: TimeInterval) {
+    model.peekConfirm.show(for: duration)
   }
 
   func tabsDidChange(_ tabs: [any ClairTab]) {

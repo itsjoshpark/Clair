@@ -18,6 +18,7 @@
 #import "chrome/browser/app_controller_mac.h"
 #import "chrome/browser/clair/ClairHost.h"
 #include "chrome/browser/clair/window/clair_browser_window.h"
+#include "chrome/browser/clair/window/clair_peeks.h"
 #include "chrome/browser/global_keyboard_shortcuts_mac.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_command_controller.h"
@@ -107,7 +108,8 @@ NSMenuItem* FindMenuItem(NSMenu* menu, NSInteger tag) {
 
 // Runs `command` for the native window's browser, as BrowserNativeWidgetMac's
 // ExecuteCommand does. In a native window, New Tab opens the command bar
-// instead (D10). Returns whether the command ran.
+// instead (D10), and the tab commands skip Peeks (add-peek D7). Returns
+// whether the command ran.
 bool ExecuteCommand(ClairBrowserWindow* window,
                     int command,
                     WindowOpenDisposition disposition,
@@ -130,6 +132,10 @@ bool ExecuteCommand(ClairBrowserWindow* window,
     return true;
   }
   if (ClairIsRemovedCommand(command)) {
+    return true;
+  }
+  // add-peek D7: tab commands treat a tab and its Peek as one.
+  if (window->peeks() && window->peeks()->ExecuteCommand(command)) {
     return true;
   }
   chrome::ExecuteCommandWithDisposition(browser, command, disposition);
