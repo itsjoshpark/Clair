@@ -20,6 +20,7 @@ See proposal.md, "Why". What shapes the approach:
 |---|---|
 | Page card | 1723×1030 pt, at x 187 |
 | Peek card | 1386×1026 pt (80.4% of the card's width), centred on the card, 2 pt inset at top and bottom |
+| Peek shadow | tight and even on every side, no offset: about 15% darker at the card's edge, gone 7.5 pt out (a 4 pt blur at 30% opacity) |
 | Parent page | inset 9 pt per side at any window size (measured at 738 and 1678 pt cards on a coloured page), washed out toward the window background (light grey in Light Mode, dark grey in Dark Mode) |
 | Buttons | 34.5×33.5 pt circles, 13.5 pt right of the card, top at +7.5 pt, centres 43.5 pt apart: Close, Expand, Split; glyphs 12 pt (×) and 14 pt (expand) across. They ride the card's top-trailing corner as it grows |
 | Opening | the parent shrinks and washes out over about 150 ms with an ease-out; the card grows from the link's rectangle, covering two thirds of the way in the first 50 ms and settling by about 170–190 ms (a fitted curve of cubic-bezier(0.3, 1, 0.75, 1) over 190 ms) |

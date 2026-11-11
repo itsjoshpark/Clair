@@ -16,6 +16,10 @@ enum PeekLayout {
   /// Arc at any window size.
   static let parentInset: CGFloat = 9
   static let cornerRadius: CGFloat = 10
+  /// The card's shadow: tight and even on every side, as in Arc, about 15%
+  /// darker at the card's edge and gone 7.5 pt out.
+  static let shadowOpacity: Float = 0.3
+  static let shadowRadius: CGFloat = 4
   /// The round buttons beside the Peek's top-trailing corner.
   static let buttonSize = CGSize(width: 34.5, height: 33.5)
   /// From the Peek's trailing edge to the buttons.

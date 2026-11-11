@@ -129,9 +129,9 @@ final class PageCardView: NSView {
     peekCard.wantsLayer = true
     peekCard.layer?.masksToBounds = false
     peekCard.layer?.shadowColor = NSColor.black.cgColor
-    peekCard.layer?.shadowOpacity = 0.25
-    peekCard.layer?.shadowRadius = 12
-    peekCard.layer?.shadowOffset = CGSize(width: 0, height: -2)
+    peekCard.layer?.shadowOpacity = PeekLayout.shadowOpacity
+    peekCard.layer?.shadowRadius = PeekLayout.shadowRadius
+    peekCard.layer?.shadowOffset = .zero
     peekContainer.wantsLayer = true
     peekContainer.layer?.masksToBounds = true
     peekContainer.layer?.cornerRadius = PeekLayout.cornerRadius
@@ -499,8 +499,9 @@ final class PageCardView: NSView {
     ghost.layer?.cornerRadius = PeekLayout.cornerRadius
     ghost.layer?.cornerCurve = .continuous
     ghost.layer?.shadowColor = NSColor.black.cgColor
-    ghost.layer?.shadowOpacity = 0.25
-    ghost.layer?.shadowRadius = 12
+    ghost.layer?.shadowOpacity = PeekLayout.shadowOpacity
+    ghost.layer?.shadowRadius = PeekLayout.shadowRadius
+    ghost.layer?.shadowOffset = .zero
     addSubview(ghost)
     let wash = DynamicFillView(color: PeekWash.color)
     wash.frame = bounds
