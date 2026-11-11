@@ -1,0 +1,32 @@
+<!doctype html><title>esc case</title>
+<!-- Esc cases for a Peek: open from http://localhost:<port>/esc-links.html, which links to 127.0.0.1, so the iframe cases (localhost) are cross-origin. ?<case> picks one. -->
+<style>body{margin:0;font:24px -apple-system;height:3000px} #log{position:fixed;left:40px;top:20px;font-size:30px;background:#ffd;z-index:9}
+.b{position:absolute;left:40px;top:120px;width:500px;height:80px;font-size:24px} iframe{position:absolute;left:40px;top:120px;width:600px;height:200px;border:3px solid blue}
+#custom{position:fixed;left:40px;top:250px;width:400px;height:150px;background:#fcc;border:3px solid red}</style>
+<body><div id="log">case: <span id="c"></span> | esc events: <span id="n">0</span> <span id="w"></span></div>
+<script>
+const c=location.search.slice(1); document.getElementById('c').textContent=c;
+let n=0; window.customOpen=false;
+function log(w){document.getElementById('n').textContent=++n; document.getElementById('w').textContent=w||'';}
+if(c!=='listener') addEventListener('keydown',e=>{ if(e.key!=='Escape')return;
+  if(window.customOpen){e.preventDefault();document.getElementById('custom').remove();window.customOpen=false;log('(custom closed, prevented)');return;}
+  log(e.defaultPrevented?'(prevented)':'');},true);
+if(c==='listener') addEventListener('keydown',e=>{ if(e.key==='Escape') log('(listener only)');});
+if(c==='keyup') addEventListener('keyup',e=>{ if(e.key==='Escape'){e.preventDefault(); log('(keyup prevented)');}});
+const add=h=>{document.body.insertAdjacentHTML('beforeend',h);};
+switch(c){
+ case 'custom': add('<div id="custom">CUSTOM MODAL</div>'); window.customOpen=true; break;
+ case 'field': add('<input class="b" id="f" value="some text">'); f.focus(); break;
+ case 'dialog': add('<dialog id="d">NATIVE DIALOG</dialog>'); d.showModal(); break;
+ case 'editable': add('<div class="b" id="f" contenteditable style="border:1px solid">editable text</div>'); f.focus(); break;
+ case 'textarea': add('<textarea class="b" id="f">some text</textarea>'); f.focus(); break;
+ case 'search': add('<input type="search" class="b" id="f" value="search text">'); f.focus(); break;
+ case 'readonly': add('<input class="b" id="f" readonly value="read only">'); f.focus(); break;
+ case 'checkbox': add('<input type="checkbox" id="f" style="position:absolute;left:40px;top:120px;width:60px;height:60px">'); f.focus(); break;
+ case 'select': add('<select class="b" id="f"><option>one</option><option>two</option><option>three</option></select>'); f.focus(); break;
+ case 'iframebody': add('<iframe id="fr" src="http://localhost:'+location.port+'/frame.html?body"></iframe>'); break;
+ case 'iframefield': add('<iframe id="fr" src="http://localhost:'+location.port+'/frame.html?field"></iframe>'); break;
+ case 'fullscreen': add('<button class="b" onclick="document.documentElement.requestFullscreen()">go full screen</button>'); break;
+ case 'scrolled': scrollTo(0,800); break;
+}
+</script>
