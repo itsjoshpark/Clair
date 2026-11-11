@@ -41,6 +41,7 @@ To compare Clair with Arc, or check a UI change by hand, drive both apps with XC
 - The first XCUITest run and the first debugger attach each show a macOS permission prompt on the owner's screen. Ask the owner to approve it rather than waiting on a hung run, and never kill an attached `lldb`: that kills the app.
 - Measure from accessibility frames (`AXPosition`/`AXSize` through a small Swift script) and from `screencapture -l <window id>`; an XCUITest window screenshot captures only the web content. Record animations with `screencapture -v -V <s> -R <rect>` and step through frames with `AVAssetImageGenerator`.
 - Don't commit the screenshots or recordings.
+- Write every probe loop and multi-step helper as a `#!/bin/bash` script file and run that, never inline in the agent's shell: it is zsh, which doesn't word-split `$var`, so a loop over `"name x y"` passes one argument, the probe gets a command without coordinates and crashes.
 
 ## Git and PRs
 
