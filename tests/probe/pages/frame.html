@@ -1,0 +1,5 @@
+<!doctype html><body style="font:20px -apple-system;background:#eef"><span>cross-origin frame: <b id="k">0</b> esc</span>
+<!-- The cross-origin frame inside esc.html: ?field focuses its text field, anything else its button. -->
+<button id="btn" style="font-size:20px">frame button</button><input id="f" value="frame text" style="font-size:20px">
+<script>let k=0; addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('k').textContent=++k;});
+if(location.search==='?field') f.focus(); else btn.focus();</script>

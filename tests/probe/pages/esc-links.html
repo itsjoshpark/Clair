@@ -1,0 +1,6 @@
+<!doctype html><title>Peek esc links</title><body style="font:22px -apple-system;padding:30px">
+<!-- Shift+click a case to open esc.html?<case> in a Peek, then press Esc. Served from localhost, it links to 127.0.0.1. -->
+<script>
+const cases=['none','custom','field','dialog','editable','textarea','search','readonly','checkbox','select','iframebody','iframefield','listener','keyup','fullscreen','scrolled'];
+for (const c of cases) document.write(`<a style="display:inline-block;width:260px;padding:6px" id="${c}" href="http://127.0.0.1:${location.port}/esc.html?${c}">${c}</a> `);
+</script>

@@ -11,6 +11,7 @@
 #include "base/functional/callback_forward.h"
 #include "extensions/browser/extension_install_prompt_client.h"
 #include "ui/base/page_transition_types.h"
+#include "ui/base/window_open_disposition.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/native_ui_types.h"
 
@@ -27,7 +28,9 @@ class TabStripModel;
 class GURL;
 
 namespace content {
+class NavigationHandle;
 class WebContents;
+struct OpenURLParams;
 }  // namespace content
 
 namespace download {
@@ -91,6 +94,27 @@ bool ShowToast(BrowserWindowInterface* browser, const std::u16string& text);
 // False when `source` isn't in a native window.
 bool UpdateTargetURL(content::WebContents* source, const GURL& url);
 bool ContentsMouseEvent(content::WebContents* source, bool exited);
+
+// browser_web_contents_delegate.cc, at the start of OpenURLFromTab and
+// AddNewContents: a link Shift+clicked in a native window's page opens in a
+// Peek of its tab (add-peek D2), or, from a Peek, in a new tab at the top.
+// False when that doesn't apply, and Chromium goes on: another window, another
+// disposition than NEW_WINDOW, no user gesture or not from the page (the
+// context menu), or the preference off. True when it handled the link, with
+// `*result` the contents it opened or navigated, or null.
+bool MaybeOpenPeek(BrowserWindowInterface* browser,
+                   content::WebContents* source,
+                   const content::OpenURLParams& params,
+                   base::OnceCallback<void(content::NavigationHandle&)>&
+                       navigation_handle_callback,
+                   content::WebContents** result);
+bool MaybeOpenPeek(BrowserWindowInterface* browser,
+                   content::WebContents* source,
+                   std::unique_ptr<content::WebContents>& new_contents,
+                   const GURL& target_url,
+                   WindowOpenDisposition disposition,
+                   bool user_gesture,
+                   content::WebContents** result);
 
 // download_ui_controller.cc: hands a new download to the sidebar of the
 // native window it belongs to (D7). False when it belongs to none, and

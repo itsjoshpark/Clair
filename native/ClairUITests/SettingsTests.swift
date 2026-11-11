@@ -70,7 +70,7 @@ struct SettingsWindowTests {
     let window = try #require(settings.window)
     #expect(window.title == "Advanced")
     let tabs = try #require(window.contentViewController as? NSTabViewController)
-    #expect(tabs.tabViewItems.map(\.label) == ["General", "Advanced"])
+    #expect(tabs.tabViewItems.map(\.label) == ["General", "Links", "Advanced"])
 
     tabs.selectedTabViewItemIndex = 0
     #expect(window.title == "General")
@@ -80,8 +80,40 @@ struct SettingsWindowTests {
 
   @Test func aMissingOrUnknownPageOpensGeneral() {
     #expect(SettingsPage.stored(in: defaults) == .general)
-    defaults.set("links", forKey: SettingsPage.key)
+    defaults.set("privacy", forKey: SettingsPage.key)
     #expect(SettingsPage.stored(in: defaults) == .general)
+  }
+
+  @Test func linksSitsBetweenGeneralAndAdvanced() {
+    #expect(SettingsPage.allCases == [.general, .links, .advanced])
+    #expect(SettingsPage.links.label == "Links")
+  }
+
+  @Test func peekOnShiftClickIsOnUntilTurnedOff() {
+    #expect(PeekPreference(defaults: defaults).isEnabled)
+    defaults.set(false, forKey: PeekPreference.key)
+    #expect(!PeekPreference(defaults: defaults).isEnabled)
+    defaults.set(true, forKey: PeekPreference.key)
+    #expect(PeekPreference(defaults: defaults).isEnabled)
+  }
+
+  @Test func theWindowAnswersFromThePreferenceLive() {
+    let browser = FakeBrowser()
+    let controller = BrowserWindowController(
+      browser: browser, preferences: SidebarPreferences(defaults: defaults),
+      peekPreference: PeekPreference(defaults: defaults))
+    #expect(controller.opensPeekOnShiftClick)
+    defaults.set(false, forKey: PeekPreference.key)
+    #expect(!controller.opensPeekOnShiftClick)
+  }
+
+  @Test func linksOpensOnItsPage() throws {
+    defaults.set(SettingsPage.links.rawValue, forKey: SettingsPage.key)
+    let settings = SettingsWindowController(host: FakeHost(), defaults: defaults)
+    settings.show()
+    let window = try #require(settings.window)
+    #expect(window.title == "Links")
+    window.close()
   }
 
   @Test func moreSettingsOpensChromiumsSettingsAndCloses() throws {

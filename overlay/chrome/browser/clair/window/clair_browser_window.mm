@@ -30,6 +30,7 @@
 #include "chrome/browser/clair/window/clair_downloads.h"
 #include "chrome/browser/clair/window/clair_extensions.h"
 #import "chrome/browser/clair/window/clair_native_window.h"
+#include "chrome/browser/clair/window/clair_peeks.h"
 #include "chrome/browser/clair/window/clair_window_hooks.h"
 #include "chrome/browser/global_keyboard_shortcuts_mac.h"
 #include "chrome/browser/profiles/profile.h"
@@ -748,6 +749,8 @@ ClairBrowserWindow::ClairBrowserWindow(Browser* browser)
   bridge_ = [[ClairChromiumBrowser alloc] initWithBrowserWindow:this];
   extensions_ = std::make_unique<ClairExtensions>(this);
   downloads_ = std::make_unique<ClairDownloads>(this);
+  // After the bridge, so the bridge hears of tab strip changes first.
+  peeks_ = std::make_unique<ClairPeeks>(this);
   clair::ApplyPasswordAndAutofillOverrides(browser->GetProfile());
 
   // D2: ClairUI returns a window for every browser. A nil window is a bug that
@@ -764,6 +767,7 @@ ClairBrowserWindow::ClairBrowserWindow(Browser* browser)
 
 ClairBrowserWindow::~ClairBrowserWindow() {
   browser_->GetFeatures().TearDownPreBrowserWindowDestruction();
+  peeks_.reset();
   DetachFromClairUI();
   zoom_subscription_ = {};
   extensions_.reset();
@@ -797,6 +801,15 @@ void ClairBrowserWindow::DetachFromClairUI() {
   [clair_window_ browserDidClose];
   [bridge_ detach];
   clair_window_ = nil;
+}
+
+std::set<content::WebContents*> ClairBrowserWindow::PagesShownWith(
+    content::WebContents* active) const {
+  if (peeks_) {
+    return peeks_->PagesShownWith(active);
+  }
+  return active ? std::set<content::WebContents*>{active}
+                : std::set<content::WebContents*>();
 }
 
 void ClairBrowserWindow::ForgetFindBar() {
@@ -934,7 +947,9 @@ void ClairBrowserWindow::Show() {
     }
     if (content::WebContents* active =
             browser_->tab_strip_model()->GetActiveWebContents()) {
-      active->UpdateWebContentsVisibility(content::Visibility::VISIBLE);
+      for (content::WebContents* page : PagesShownWith(active)) {
+        page->UpdateWebContentsVisibility(content::Visibility::VISIBLE);
+      }
       active->Focus();
     }
   }
@@ -953,6 +968,8 @@ void ClairBrowserWindow::ShowInactive() {
 }
 
 void ClairBrowserWindow::Close() {
+  // add-peek D9: Peeks close with the window's other tabs; session restore
+  // and Reopen Closed Window leave them out by their tag.
   // Chromium's close flow: beforeunload may veto it; then the tabs close, and
   // TabStripEmpty() calls this again for the empty browser, whose deletion
   // UnloadController then schedules. The browser is never deleted here.
@@ -1096,13 +1113,19 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
   // ClairUI swaps the page in the card now, before visibility changes.
   [bridge_ activeTabChanged];
   // As WebUIBrowserWindow: the old page reports hidden, the new one the
-  // window's visibility.
+  // window's visibility. A tab and its Peek show together (add-peek D4).
+  const std::set<content::WebContents*> shown = PagesShownWith(new_contents);
   if (old_contents) {
-    old_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
+    for (content::WebContents* page : PagesShownWith(old_contents)) {
+      if (!shown.contains(page)) {
+        page->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
+      }
+    }
   }
-  new_contents->UpdateWebContentsVisibility(IsVisible()
-                                                ? content::Visibility::VISIBLE
-                                                : content::Visibility::HIDDEN);
+  for (content::WebContents* page : shown) {
+    page->UpdateWebContentsVisibility(IsVisible() ? content::Visibility::VISIBLE
+                                                  : content::Visibility::HIDDEN);
+  }
   if (extensions_) {
     extensions_->ActiveTabChanged();
   }
@@ -1273,6 +1296,15 @@ ClairBrowserWindow::PreHandleKeyboardEvent(
   // As BrowserNativeWidgetMac: key equivalents with modifiers were offered to
   // CommandDispatcher already; the page may have them first unless they're a
   // browser shortcut.
+  // add-peek D6: Esc while Confirm shows closes the Peek before the page
+  // sees it.
+  if (peeks_) {
+    const content::KeyboardEventProcessingResult result =
+        peeks_->PreHandleKeyboardEvent(event);
+    if (result != content::KeyboardEventProcessingResult::NOT_HANDLED) {
+      return result;
+    }
+  }
   NSEvent* ns_event = event.os_event.Get();
   if (ns_event && EventUsesPerformKeyEquivalent(ns_event)) {
     int command = CommandForKeyEvent(ns_event).chrome_command;
@@ -1290,6 +1322,10 @@ bool ClairBrowserWindow::HandleKeyboardEvent(
     const input::NativeWebKeyboardEvent& event) {
   if (!ShouldHandleKeyboardEvent(event)) {
     return false;
+  }
+  // add-peek D6: an Esc the Peek's page didn't use closes the Peek.
+  if (peeks_ && peeks_->HandleKeyboardEvent(event)) {
+    return true;
   }
   // Gives CommandDispatcher the chance to finish passing the key on.
   return [[ns_window_ commandDispatcher] redispatchKeyEvent:event.os_event.Get()];

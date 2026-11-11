@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,7 @@ class Browser;
 class ClairBrowserWindow;
 class ClairDownloads;
 class ClairExtensions;
+class ClairPeeks;
 
 namespace autofill {
 class AutofillBubbleHandler;
@@ -276,6 +278,8 @@ class ClairBrowserWindow : public BrowserWindow {
   ClairFindBar* find_bar() const { return find_bar_; }
   ClairExtensions* extensions() const { return extensions_.get(); }
   ClairDownloads* downloads() const { return downloads_.get(); }
+  // The window's Peeks (add-peek design D1); null once the window is going.
+  ClairPeeks* peeks() const { return peeks_.get(); }
   ClairExclusiveAccessContext* exclusive_access_context() {
     return &exclusive_access_context_;
   }
@@ -444,6 +448,10 @@ class ClairBrowserWindow : public BrowserWindow {
   void ZoomChanged(bool can_show_bubble);
   // Tells ClairUI the browser closed and lets go of it, once.
   void DetachFromClairUI();
+  // The pages the card shows while `active` is the active tab: it and its
+  // Peek or parent (add-peek D4).
+  std::set<content::WebContents*> PagesShownWith(
+      content::WebContents* active) const;
 
   const raw_ptr<Browser> browser_;
   ClairNativeWindow* __strong ns_window_ = nil;
@@ -456,6 +464,7 @@ class ClairBrowserWindow : public BrowserWindow {
   std::unique_ptr<autofill::AutofillBubbleHandler> autofill_bubble_handler_;
   std::unique_ptr<ClairExtensions> extensions_;
   std::unique_ptr<ClairDownloads> downloads_;
+  std::unique_ptr<ClairPeeks> peeks_;
   // Owned by the browser's FindBarController once created.
   raw_ptr<ClairFindBar> find_bar_ = nullptr;
   base::CallbackListSubscription zoom_subscription_;

@@ -10,6 +10,7 @@ import SwiftUI
 /// adds its page here.
 enum SettingsPage: String, CaseIterable {
   case general
+  case links
   case advanced
 
   /// The user default holding the page last shown (design D3).
@@ -18,6 +19,7 @@ enum SettingsPage: String, CaseIterable {
   var label: String {
     switch self {
     case .general: "General"
+    case .links: "Links"
     case .advanced: "Advanced"
     }
   }
@@ -25,6 +27,7 @@ enum SettingsPage: String, CaseIterable {
   var symbol: String {
     switch self {
     case .general: "gearshape"
+    case .links: "link"
     case .advanced: "slider.horizontal.3"
     }
   }
@@ -80,6 +83,25 @@ struct GeneralSettingsView: View {
           Text("Default browser")
           Text(defaultBrowser.isClair ? "Clair is your default browser." : "Clair isn't your default browser.")
         }
+      }
+    }
+    .formStyle(.grouped)
+    .scrollDisabled(true)
+    .frame(width: SettingsWindowController.width)
+    .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+/// How links open (add-peek design D10).
+struct LinksSettingsView: View {
+  @AppStorage(PeekPreference.key) private var peekOnShiftClick = true
+
+  var body: some View {
+    Form {
+      Section {
+        Toggle("Open a Peek window when clicking on links with Shift held", isOn: $peekOnShiftClick)
+          // Accessibility reads the switch and its label as separate elements.
+          .accessibilityIdentifier("clair.peekToggle")
       }
     }
     .formStyle(.grouped)
@@ -187,6 +209,7 @@ final class SettingsWindowController: NSObject {
     let view: AnyView =
       switch page {
       case .general: AnyView(GeneralSettingsView(defaultBrowser: defaultBrowser))
+      case .links: AnyView(LinksSettingsView())
       case .advanced: AnyView(AdvancedSettingsView { [weak self] in self?.openMoreSettings() })
       }
     let controller = NSHostingController(rootView: view.defaultAppStorage(defaults))

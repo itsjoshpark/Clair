@@ -23,6 +23,7 @@
 #include "chrome/browser/clair/window/clair_browser_window.h"
 #include "chrome/browser/clair/window/clair_downloads.h"
 #include "chrome/browser/clair/window/clair_extensions.h"
+#include "chrome/browser/clair/window/clair_peeks.h"
 #include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
@@ -171,7 +172,9 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
 @end
 
 @interface ClairChromiumTab : NSObject <ClairTab>
-- (instancetype)initWithContents:(content::WebContents*)contents;
+- (instancetype)initWithContents:(content::WebContents*)contents
+                    peekParentID:(ClairTabID)peekParentID
+                          peekID:(ClairTabID)peekID;
 @end
 
 @implementation ClairChromiumTab
@@ -192,9 +195,15 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
 @synthesize isCrashed = _isCrashed;
 @synthesize indicators = _indicators;
 @synthesize infobars = _infobars;
+@synthesize peekParentID = _peekParentID;
+@synthesize peekID = _peekID;
 
-- (instancetype)initWithContents:(content::WebContents*)contents {
+- (instancetype)initWithContents:(content::WebContents*)contents
+                    peekParentID:(ClairTabID)peekParentID
+                          peekID:(ClairTabID)peekID {
   if ((self = [super init])) {
+    _peekParentID = peekParentID;
+    _peekID = peekID;
     const GURL& url = contents->GetVisibleURL();
     _tabID = TabIDOf(contents);
     _url = url.is_valid() ? net::NSURLWithGURL(url) : nil;
@@ -714,8 +723,32 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   return tab ? strip->GetIndexOfTab(tab) : TabStripModel::kNoTab;
 }
 
+- (ClairPeeks*)peeks {
+  return _browserWindow ? _browserWindow->peeks() : nullptr;
+}
+
+// The tab named by `tabID`, or null.
+- (tabs::TabInterface*)tabWithID:(ClairTabID)tabID {
+  const int index = [self indexOfTab:tabID];
+  return index == TabStripModel::kNoTab ? nullptr
+                                        : self.tabStrip->GetTabAtIndex(index);
+}
+
 - (id<ClairTab>)snapshotOf:(content::WebContents*)contents {
-  return [[ClairChromiumTab alloc] initWithContents:contents];
+  ClairTabID peekParentID = ClairTabIDNone;
+  ClairTabID peekID = ClairTabIDNone;
+  tabs::TabInterface* tab = tabs::TabInterface::MaybeGetFromContents(contents);
+  if (ClairPeeks* peeks = self.peeks; peeks && tab) {
+    if (tabs::TabInterface* peek = peeks->ShownPeekOf(tab)) {
+      peekID = peek->GetHandle().raw_value();
+    }
+    if (std::optional<int32_t> parent = peeks->ParentIDOf(tab)) {
+      peekParentID = *parent;
+    }
+  }
+  return [[ClairChromiumTab alloc] initWithContents:contents
+                                       peekParentID:peekParentID
+                                             peekID:peekID];
 }
 
 // --- Posting changes ---
@@ -899,7 +932,13 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 }
 
 - (void)closeTabsBelowTab:(ClairTabID)tabID {
-  const int index = [self indexOfTab:tabID];
+  // Below the tab's Peek, which goes only with the tab (add-peek D8).
+  tabs::TabInterface* tab = [self tabWithID:tabID];
+  if (ClairPeeks* peeks = self.peeks; peeks && tab) {
+    tab = peeks->LastOfFamily(tab);
+  }
+  const int index = tab ? self.tabStrip->GetIndexOfTab(tab)
+                        : TabStripModel::kNoTab;
   if (index != TabStripModel::kNoTab) {
     self.tabStrip->ExecuteContextMenuCommand(index,
                                              tabs::CommandCloseTabsToRight);
@@ -911,6 +950,11 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   TabStripModel* strip = self.tabStrip;
   if (index == TabStripModel::kNoTab || toIndex < 0 ||
       toIndex >= strip->count()) {
+    return;
+  }
+  // A tab and its Peek move together (add-peek D8).
+  if (ClairPeeks* peeks = self.peeks) {
+    peeks->MoveTab(strip->GetTabAtIndex(index), static_cast<int>(toIndex));
     return;
   }
   strip->MoveWebContentsAt(index, static_cast<int>(toIndex),
@@ -930,6 +974,22 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   if (index != TabStripModel::kNoTab) {
     SetTabAudioMuted(self.tabStrip->GetWebContentsAt(index), muted,
                      TabMutedReason::kAudioIndicator, std::string());
+  }
+}
+
+// --- ClairBrowser: Peek ---
+
+- (void)closePeekOfTab:(ClairTabID)tabID {
+  ClairPeeks* peeks = self.peeks;
+  if (tabs::TabInterface* tab = peeks ? [self tabWithID:tabID] : nullptr) {
+    peeks->Close(tab);
+  }
+}
+
+- (void)expandPeekOfTab:(ClairTabID)tabID {
+  ClairPeeks* peeks = self.peeks;
+  if (tabs::TabInterface* tab = peeks ? [self tabWithID:tabID] : nullptr) {
+    peeks->Expand(tab);
   }
 }
 

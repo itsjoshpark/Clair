@@ -15,7 +15,10 @@ import Observation
 /// - Within the double-click interval after a reload click, a load starting
 ///   under the pointer doesn't turn the button into stop until the interval
 ///   ends, so a double click doesn't stop the reload it just started.
-/// - A forced change, such as a tab switch, applies at once.
+/// - A forced change, such as a tab switch, applies at once, except that
+///   reload turns into stop only once the load has run for `stopDelay`, as
+///   in Arc, so a page that loads quickly, or a Peek that opens on one, never
+///   flashes stop (add-peek design D12).
 struct ReloadStopMode: Equatable {
   enum Mode: Equatable {
     case reload
@@ -30,6 +33,9 @@ struct ReloadStopMode: Equatable {
 
   /// Chromium's `mode_switch_timer_delay_`.
   static let modeSwitchDelay: TimeInterval = 1.35
+  /// How long a load runs before reload turns into stop: about 770 ms in Arc,
+  /// measured from a Peek's Shift+click.
+  static let stopDelay: TimeInterval = 0.75
 
   /// The system's double-click interval.
   let doubleClickInterval: TimeInterval
@@ -42,6 +48,10 @@ struct ReloadStopMode: Equatable {
   /// they run.
   private var doubleClickDeadline: TimeInterval?
   private var modeSwitchDeadline: TimeInterval?
+  /// When the active tab's load began, while it loads, and when it has run
+  /// for `stopDelay`, while reload waits to turn into stop.
+  private var loadStart: TimeInterval?
+  private var stopDeadline: TimeInterval?
 
   init(doubleClickInterval: TimeInterval) {
     self.doubleClickInterval = doubleClickInterval
@@ -49,17 +59,36 @@ struct ReloadStopMode: Equatable {
 
   /// When `tick(now:)` should next run, or nil while no timer runs.
   var nextDeadline: TimeInterval? {
-    [doubleClickDeadline, modeSwitchDeadline].compactMap { $0 }.min()
+    [doubleClickDeadline, modeSwitchDeadline, stopDeadline].compactMap { $0 }.min()
   }
 
   /// The tab's `isLoading` changed, or was posted again.
   mutating func loadingChanged(_ isLoading: Bool, now: TimeInterval) {
+    setLoading(isLoading, now: now)
     change(to: isLoading ? .stop : .reload, force: false, now: now)
   }
 
-  /// Another tab became active: show its state at once.
+  /// Another tab became active: show its state at once. A tab that's still
+  /// loading shows stop at once while stop shows already, and otherwise once
+  /// its load has run `stopDelay` from the switch, since the snapshot doesn't
+  /// say when the load began: a Peek's opens with its tab.
   mutating func tabSwitched(isLoading: Bool, now: TimeInterval) {
+    if isLoading && visible == .stop {
+      loadStart = now - Self.stopDelay
+    } else {
+      loadStart = nil
+      setLoading(isLoading, now: now)
+    }
     change(to: isLoading ? .stop : .reload, force: true, now: now)
+  }
+
+  private mutating func setLoading(_ isLoading: Bool, now: TimeInterval) {
+    if !isLoading {
+      loadStart = nil
+      stopDeadline = nil
+    } else if loadStart == nil {
+      loadStart = now
+    }
   }
 
   mutating func pointerEntered() {
@@ -99,11 +128,20 @@ struct ReloadStopMode: Equatable {
       modeSwitchDeadline = nil
       change(to: intended, force: true, now: now)
     }
+    if let deadline = stopDeadline, deadline <= now {
+      stopDeadline = nil
+      change(to: intended, force: false, now: now)
+    }
   }
 
   /// `ReloadButton::ChangeMode`.
   private mutating func change(to mode: Mode, force: Bool, now: TimeInterval) {
     intended = mode
+    // Reload waits for a load to run `stopDelay` before turning into stop.
+    if mode == .stop, visible == .reload, let loadStart, now - loadStart < Self.stopDelay {
+      stopDeadline = loadStart + Self.stopDelay
+      return
+    }
     let safe = mode == .stop ? doubleClickDeadline == nil : visible != .stop
     if force || !isHovered || safe {
       doubleClickDeadline = nil

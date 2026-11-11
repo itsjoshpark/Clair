@@ -25,13 +25,18 @@ final class FakeTab: NSObject, ClairTab {
   let isCrashed: Bool
   let indicators: TabIndicators
   let infobars: [any ClairInfobar]
+  let peekParentID: TabID
+  let peekID: TabID
 
   init(
     id: TabID, title: String = "", url: String? = nil, isLoading: Bool = false, loadProgress: Double = 0,
     canGoBack: Bool = false, canGoForward: Bool = false, isAudible: Bool = false, isMuted: Bool = false, isCrashed: Bool = false,
-    indicators: TabIndicators = [], infobars: [any ClairInfobar] = [], isNotSecure: Bool = false
+    indicators: TabIndicators = [], infobars: [any ClairInfobar] = [], isNotSecure: Bool = false,
+    peekParentID: TabID = ClairTabIDNone, peekID: TabID = ClairTabIDNone
   ) {
     tabID = id
+    self.peekParentID = peekParentID
+    self.peekID = peekID
     self.title = title
     self.url = url.flatMap(URL.init(string:))
     urlText = url ?? ""
@@ -53,7 +58,8 @@ final class FakeTab: NSObject, ClairTab {
   func with(
     title: String? = nil, url: String? = nil, isLoading: Bool? = nil, loadProgress: Double? = nil,
     isAudible: Bool? = nil, isMuted: Bool? = nil, canGoBack: Bool? = nil, canGoForward: Bool? = nil,
-    isCrashed: Bool? = nil, indicators: TabIndicators? = nil, isNotSecure: Bool? = nil
+    isCrashed: Bool? = nil, indicators: TabIndicators? = nil, isNotSecure: Bool? = nil,
+    peekParentID: TabID? = nil, peekID: TabID? = nil
   ) -> FakeTab {
     FakeTab(
       id: tabID, title: title ?? self.title, url: url ?? (self.url?.absoluteString),
@@ -61,7 +67,8 @@ final class FakeTab: NSObject, ClairTab {
       canGoBack: canGoBack ?? self.canGoBack,
       canGoForward: canGoForward ?? self.canGoForward, isAudible: isAudible ?? self.isAudible,
       isMuted: isMuted ?? self.isMuted, isCrashed: isCrashed ?? self.isCrashed,
-      indicators: indicators ?? self.indicators, infobars: infobars, isNotSecure: isNotSecure ?? self.isNotSecure)
+      indicators: indicators ?? self.indicators, infobars: infobars, isNotSecure: isNotSecure ?? self.isNotSecure,
+      peekParentID: peekParentID ?? self.peekParentID, peekID: peekID ?? self.peekID)
   }
 }
 
@@ -418,6 +425,60 @@ final class FakeBrowser: NSObject, ClairBrowser {
     clairWindow?.activeTabDidChange(tabID)
   }
 
+  /// Opens a Peek of `parent` right after it and shows it, as a Shift+click
+  /// does in Chromium (add-peek design D1).
+  @discardableResult
+  func openPeek(of parent: TabID, title: String = "", url: String? = nil) -> FakeTab? {
+    guard let index = tabs.firstIndex(where: { $0.tabID == parent }), let parentTab = tabs[index] as? FakeTab else {
+      return nil
+    }
+    let peek = FakeTab(id: nextTabID, title: title, url: url, peekParentID: parent)
+    nextTabID += 1
+    tabs[index] = parentTab.with(peekID: peek.tabID)
+    tabs.insert(peek, at: index + 1)
+    pageViews[peek.tabID] = NSView()
+    clairWindow?.tabsDidChange(tabs)
+    setActive(peek.tabID)
+    return peek
+  }
+
+  /// Unlinks a Peek from its parent, as expanding it or Chromium's own moves
+  /// do.
+  func unlinkPeek(_ peekID: TabID) {
+    guard let index = tabs.firstIndex(where: { $0.tabID == peekID }), let peek = tabs[index] as? FakeTab else {
+      return
+    }
+    if let parentIndex = tabs.firstIndex(where: { $0.tabID == peek.peekParentID }),
+      let parent = tabs[parentIndex] as? FakeTab {
+      tabs[parentIndex] = parent.with(peekID: ClairTabIDNone)
+    }
+    tabs[index] = peek.with(peekParentID: ClairTabIDNone)
+    clairWindow?.tabsDidChange(tabs)
+  }
+
+  /// Marks the Peek of `parent` as closing, as the engine does before it
+  /// activates the parent: the parent stops reporting it, the Peek keeps its
+  /// parent.
+  func beginClosingPeek(of parent: TabID) {
+    guard let index = tabs.firstIndex(where: { $0.tabID == parent }), let tab = tabs[index] as? FakeTab else {
+      return
+    }
+    tabs[index] = tab.with(peekID: ClairTabIDNone)
+    clairWindow?.tabsDidChange(tabs)
+  }
+
+  /// Keeps an Esc in the active Peek, as its page does with a dialog open.
+  func keepEscape(for duration: TimeInterval = 1) {
+    clairWindow?.peekDidKeepEscape(for: duration)
+  }
+
+  /// The Peek's ID for a parent or a Peek, or nil.
+  private func peek(of tabID: TabID) -> FakeTab? {
+    guard let tab = tabs.first(where: { $0.tabID == tabID }) else { return nil }
+    let peekID = tab.peekParentID != ClairTabIDNone ? tab.tabID : tab.peekID
+    return tabs.first { $0.tabID == peekID } as? FakeTab
+  }
+
   func setDevTools(_ view: NSView?, layout: DevToolsLayout) {
     devToolsView = view
     devToolsLayout = layout
@@ -478,7 +539,9 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   func closeTabs(below tabID: TabID) {
     record("closeBelow \(tabID)")
-    guard let index = tabs.firstIndex(where: { $0.tabID == tabID }) else { return }
+    // As the engine: from the tab's Peek, which stays (ClairPeeks::LastOfFamily).
+    let last = tabs.first(where: { $0.tabID == tabID }).map { $0.peekID != ClairTabIDNone ? $0.peekID : tabID }
+    guard let last, let index = tabs.firstIndex(where: { $0.tabID == last }) else { return }
     for tab in tabs[(index + 1)...] {
       closeTabNow(tab.tabID)
     }
@@ -486,7 +549,39 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   func move(tab tabID: TabID, to index: Int) {
     record("move \(tabID) \(index)")
-    moveTab(tabID, to: index)
+    // As the engine: a tab and its Peek move as one, the tab ending at
+    // `index` and its Peek right after it (ClairPeeks::MoveTab).
+    guard let tab = tabs.first(where: { $0.tabID == tabID }), tab.peekID != ClairTabIDNone,
+      let peek = tabs.first(where: { $0.tabID == tab.peekID })
+    else {
+      moveTab(tabID, to: index)
+      return
+    }
+    tabs.removeAll { $0.tabID == tabID || $0.tabID == peek.tabID }
+    let at = max(0, min(index, tabs.count))
+    tabs.insert(contentsOf: [tab, peek], at: at)
+    clairWindow?.tabsDidChange(tabs)
+  }
+
+  func closePeek(of tabID: TabID) {
+    record("closePeek \(tabID)")
+    guard let peek = peek(of: tabID) else { return }
+    // As the engine: the parent stops reporting its closing Peek, then
+    // becomes active, then the Peek goes once its page has unloaded.
+    beginClosingPeek(of: peek.peekParentID)
+    if activeTabID == peek.tabID {
+      setActive(peek.peekParentID)
+    }
+    closeTabNow(peek.tabID)
+  }
+
+  func expandPeek(of tabID: TabID) {
+    record("expandPeek \(tabID)")
+    guard let peek = peek(of: tabID) else { return }
+    unlinkPeek(peek.tabID)
+    if activeTabID != peek.tabID {
+      setActive(peek.tabID)
+    }
   }
 
   func duplicate(tab tabID: TabID) { record("duplicate \(tabID)") }
@@ -565,6 +660,7 @@ final class FakeBrowser: NSObject, ClairBrowser {
 final class RecordingWindow: NSObject, ClairWindow {
   let pageContainerView = NSView()
   var isSidebarHidden = false
+  var opensPeekOnShiftClick = true
   private(set) var calls: [String] = []
   private(set) var tabs: [any ClairTab] = []
   private(set) var lastTab: (any ClairTab)?
@@ -612,4 +708,5 @@ final class RecordingWindow: NSObject, ClairWindow {
   }
   func downloadProgressDidChange(_ progress: DownloadProgress) { calls.append("progress \(progress.count)") }
   func browserDidClose() { calls.append("closed") }
+  func peekDidKeepEscape(for duration: TimeInterval) { calls.append("keptEscape \(duration)") }
 }

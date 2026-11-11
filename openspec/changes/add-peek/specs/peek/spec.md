@@ -22,7 +22,7 @@ While the Peek preference is on, Shift+clicking a link in a page in a native bro
 - **THEN** the link opens in a new window
 
 ### Requirement: Peek layout
-The Peek SHALL be a card with rounded corners centred over the page card, about 80% of the page card's width and its full height less about 2 points at the top and bottom. Behind it, the parent page SHALL shrink by about 5 points on each side and be washed out toward the window's background colour, in Light and Dark Mode.
+The Peek SHALL be a card with rounded corners centred over the page card, about 80% of the page card's width and its full height less about 2 points at the top and bottom. Behind it, the parent page SHALL shrink by about 9 points on each side and be washed out toward the window's background colour, in Light and Dark Mode.
 
 #### Scenario: Peek open
 - **WHEN** a Peek is open in a window whose page card is 1723 by 1030 points
@@ -33,18 +33,18 @@ The Peek SHALL be a card with rounded corners centred over the page card, about 
 - **THEN** the Peek and the parent page keep their proportions to the card
 
 ### Requirement: Peek buttons
-A column of round buttons SHALL sit outside the Peek's top-trailing corner, beside the card: Close (×) and then Expand. Each SHALL highlight under the pointer and have a tooltip and a VoiceOver label naming its action.
+A column of round buttons SHALL sit outside the Peek's top-trailing corner, beside the card: Close (×) and then Expand. Each SHALL highlight under the pointer and have a VoiceOver label naming its action, and Arc's tooltip: "Close" with ⌘W, and "Expand" with ⌘O.
 
 #### Scenario: Buttons shown
 - **WHEN** a Peek is open
 - **THEN** Close and Expand show in a column beside its top-trailing corner, outside the card
 
 ### Requirement: Peek animation
-Opening a Peek SHALL grow the card from the point the user clicked to its full size in about 130 ms, while the parent page shrinks and washes out. Closing it SHALL reverse this toward the same point. With Reduce Motion on, the Peek SHALL fade in and out instead.
+Opening a Peek SHALL grow the card from the point the user clicked to its full size in about 190 ms, fast at first and then settling, while the parent page shrinks and washes out and the buttons move with the card's corner. Closing it SHALL reverse this toward the same point. With Reduce Motion on, the Peek SHALL fade in and out instead.
 
 #### Scenario: Opening
 - **WHEN** the user Shift+clicks a link near the top-leading corner of the page
-- **THEN** the Peek grows from that point to full size in about 130 ms
+- **THEN** the Peek grows from that point to full size in about 190 ms, most of the way in the first 50 ms
 
 #### Scenario: Closing
 - **WHEN** the user closes the Peek
@@ -56,6 +56,10 @@ A Peek SHALL stay with its parent tab until it's closed or expanded. Selecting a
 #### Scenario: Switching tabs and back
 - **WHEN** a Peek is open on one tab, and the user selects another tab in the sidebar and then the first tab again
 - **THEN** the other tab shows normally, and then the first tab shows with its Peek, at the same page and scroll position
+
+#### Scenario: The parent comes back another way
+- **WHEN** a Peek is open on one tab, another tab is selected, and the first tab becomes active another way, as when the tab next to it closes or an extension selects it
+- **THEN** the first tab shows with its Peek, and Esc closes the Peek
 
 ### Requirement: The window acts on the Peek
 While a Peek shows, the URL field, back, forward, reload and stop, Copy URL, find in page, DevTools, site controls and page info SHALL act on the Peek's page, as they act on the active tab's page otherwise. Back and forward SHALL move through the Peek's own history.
@@ -114,11 +118,15 @@ When the Peek's page uses an Esc, by preventing its default action or because a 
 - **THEN** the page receives the Esc as before, and the Peek closes only if the page doesn't use it
 
 ### Requirement: Expanding a Peek
-Clicking Expand SHALL turn the Peek into a normal, active tab directly below its parent in the tab list, keeping its page, scroll position and history. The parent tab SHALL then have no Peek.
+Clicking Expand, or pressing Cmd+O while the Peek shows, SHALL turn the Peek into a normal, active tab directly below its parent in the tab list, keeping its page, scroll position and history. The parent tab SHALL then have no Peek. Cmd+O SHALL open a file, as in Chromium, only while no Peek shows.
 
 #### Scenario: Expand
 - **WHEN** a Peek is open on the second of three tabs and the user clicks Expand
 - **THEN** the Peek's page becomes the third of four tabs, is active and shows full size, and back returns through its Peek history
+
+#### Scenario: Cmd+O
+- **WHEN** a Peek shows and the user presses Cmd+O
+- **THEN** the Peek expands into a tab, as with the Expand button
 
 ### Requirement: Closing the parent closes its Peek
 Closing a tab that has a Peek SHALL close its Peek with it. A leave-page confirmation from either page SHALL work as it does for a tab, and cancelling it SHALL keep both open.
@@ -128,11 +136,19 @@ Closing a tab that has a Peek SHALL close its Peek with it. A leave-page confirm
 - **THEN** the tab and its Peek close, and no Peek is left in the window
 
 ### Requirement: Peeks end with the session
-Peeks SHALL NOT outlive the session. Quitting Clair or closing a window SHALL close the Peeks in it, and session restore and Reopen Closed Window SHALL restore their parent tabs without them.
+Peeks SHALL NOT outlive the session. Session restore, after a quit or a crash, and Reopen Closed Window SHALL restore a Peek's parent tab without its Peek. A close or quit that a page's leave-page confirmation cancels SHALL leave the Peeks open. An expanded Peek is a normal tab and SHALL be restored as one.
 
 #### Scenario: Quit with a Peek open
 - **WHEN** a tab has a Peek open, and the user quits and relaunches Clair with session restore on
 - **THEN** the tab is restored without its Peek, and no tab for the Peek's page is restored
+
+#### Scenario: Reopening a closed window
+- **WHEN** a window with a tab that has a Peek open is closed, and the user reopens it with Reopen Closed Window
+- **THEN** the tab comes back without its Peek
+
+#### Scenario: Staying on a page that asks
+- **WHEN** a window has a tab with a Peek and a page that asks before it's left, and the user closes the window and chooses to stay
+- **THEN** the window stays open with the Peek
 
 ### Requirement: Tab shortcuts treat a tab and its Peek as one
 Ctrl+Tab, Ctrl+Shift+Tab, Cmd+Opt+Right and Left, and Cmd+1 to Cmd+9 SHALL count the tabs in the tab list, so a tab and its Peek are one stop. Selecting a tab that has a Peek SHALL show the Peek.

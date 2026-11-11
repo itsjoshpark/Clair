@@ -70,7 +70,7 @@ jobs:
           exit "$failures"
 
       - name: Lint shell scripts
-        run: shellcheck -S warning build.sh package.sh package.test.sh scripts/*.sh tests/runtime/*.sh .github/scripts/*.sh
+        run: shellcheck -S warning build.sh package.sh package.test.sh scripts/*.sh tests/runtime/*.sh tests/probe/*.sh tests/probe/tools/*.sh .github/scripts/*.sh
 
       - name: Lint workflows
         run: actionlint
@@ -120,6 +120,17 @@ jobs:
             -destination "platform=macOS,arch=arm64" \
             -derivedDataPath "$RUNNER_TEMP/RuntimeDerivedData" \
             -quiet build-for-testing
+
+      # The probe tooling runs by hand (tests/probe/README.md). This keeps it compiling.
+      - name: Build the probe tooling
+        env:
+          CLAIR_PROBE_WORK: ${{ runner.temp }}/probe
+        run: |
+          xcodebuild -project tests/probe/ClairProbe.xcodeproj -scheme ClairProbe \
+            -destination "platform=macOS,arch=arm64" \
+            -derivedDataPath "$RUNNER_TEMP/ProbeDerivedData" \
+            -quiet build-for-testing
+          tests/probe/tools/build.sh
 
   engine-key:
     name: Engine key

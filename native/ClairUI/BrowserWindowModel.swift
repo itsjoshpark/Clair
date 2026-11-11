@@ -57,6 +57,8 @@ final class BrowserWindowModel {
   var exclusiveAccessNotice: String?
   /// The popup in the card's top-trailing corner (design D18).
   let notice = NoticeState()
+  /// Confirm on the Peek's Close button (add-peek design D6).
+  let peekConfirm = PeekConfirmState()
   var isPageFullscreen = false
   var isSiteControlCenterOpen = false
   var isDownloadsListOpen = false

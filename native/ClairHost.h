@@ -319,6 +319,11 @@ NS_SWIFT_NAME(ClairTab)
 @property(nonatomic, readonly) ClairTabIndicators indicators;
 // The tab's infobars, top first.
 @property(nonatomic, readonly, copy) NSArray<id<ClairInfobar>> *infobars;
+// The tab this one is a Peek of, or ClairTabIDNone for a normal tab
+// (add-peek design D3). A Peek follows its parent directly in the tab order.
+@property(nonatomic, readonly) ClairTabID peekParentID;
+// The tab's Peek, or ClairTabIDNone.
+@property(nonatomic, readonly) ClairTabID peekID;
 @end
 
 // A suggestion in the command bar. Chromium implements it as a snapshot of an
@@ -612,6 +617,13 @@ NS_SWIFT_NAME(ClairBrowser)
 // Mutes or unmutes the tab.
 - (void)setMuted:(BOOL)muted forTab:(ClairTabID)tabID NS_SWIFT_NAME(setMuted(_:tab:));
 
+// --- Peek (add-peek design D3); `tabID` names the parent or its Peek ---
+// Closes the tab's Peek, with its leave-page confirmation, and makes the
+// parent active.
+- (void)closePeekOfTab:(ClairTabID)tabID NS_SWIFT_NAME(closePeek(of:));
+// Turns the tab's Peek into a normal, active tab directly below its parent.
+- (void)expandPeekOfTab:(ClairTabID)tabID NS_SWIFT_NAME(expandPeek(of:));
+
 // --- Navigation of the active tab: back, forward, reload (which also
 // reloads a crashed page) and stop ---
 - (void)goBack;
@@ -708,6 +720,15 @@ NS_SWIFT_NAME(ClairWindow)
 
 // Whether the sidebar is hidden, for View > Hide Sidebar's title.
 @property(nonatomic, readonly) BOOL isSidebarHidden;
+
+// Whether Shift+clicking a link opens it in a Peek rather than a new window
+// (add-peek design D10). Read each time a link opens.
+@property(nonatomic, readonly) BOOL opensPeekOnShiftClick;
+
+// --- Peek ---
+// The active Peek's page kept an Esc for itself. For `duration` seconds,
+// another Esc closes the Peek; ClairUI shows Confirm for as long.
+- (void)peekDidKeepEscape:(NSTimeInterval)duration NS_SWIFT_NAME(peekDidKeepEscape(for:));
 
 // --- Tabs ---
 // Tabs were added, closed or moved. `tabs` is the new list, in order.

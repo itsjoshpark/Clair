@@ -34,12 +34,11 @@ To run the current `ClairUI` against the published engine for the checkout, use 
 
 ### Comparing with Arc and driving the UI
 
-To compare Clair with Arc, or check a UI change by hand, drive both apps with XCUITest rather than synthetic mouse events, which Arc ignores:
+To compare Clair with Arc, or check a UI change by hand, use the probe tooling in `tests/probe/` (see its `README.md`): an XCUITest probe that drives either app (Arc ignores synthetic mouse events), a test copy of Clair with a throwaway profile and the mock keychain, a page server with deliberately slow responses, 60 fps screen recordings, and pixel measurements. Improve the tooling there rather than rebuilding it in a scratchpad.
 
-- Write a throwaway UI-testing bundle in the scratchpad (a copy of `tests/runtime/ClairRuntimeTests.xcodeproj` with one test that reads steps from a file) and run it with `xcodebuild test-without-building`. `XCUIApplication(bundleIdentifier:)` attaches to a running app: Arc is `company.thebrowser.Browser`. Hover, click, drag and `typeKey` all work on Arc; a drag that misses its sidebar edge moves the window.
-- XCUITest only finds Clair when Launch Services knows the running copy: launch the `run-local.sh --no-launch` package with `open -n <app> --args --user-data-dir=<profile> --use-mock-keychain --no-first-run --no-default-browser-check`, and unregister stale copies (`lsregister -dump` lists them; old DMG mounts, delta tests and the runner's build dir pile up), or it reports "does not have a process ID".
-- The first XCUITest run and the first debugger attach each show a macOS permission prompt on the owner's screen. Ask the owner to approve it rather than waiting on a hung run, and never kill an attached `lldb`: that kills the app.
-- Measure from accessibility frames (`AXPosition`/`AXSize` through a small Swift script) and from `screencapture -l <window id>`; an XCUITest window screenshot captures only the web content. Record animations with `screencapture -v -V <s> -R <rect>` and step through frames with `AVAssetImageGenerator`.
+- Start Clair with `tests/probe/launch-clair.sh`, never another copy: XCUITest attaches to whatever Launch Services knows, and can launch the runner's build with the owner's real profile and keychain.
+- The first probe run and the first debugger attach each show a macOS permission prompt on the owner's screen, and the probe needs automation mode once. Ask the owner rather than waiting on a hung run, and never kill an attached `lldb`: that kills the app.
+- Write every probe loop and multi-step helper as a `#!/bin/bash` script file and run that, never inline in the agent's shell: it is zsh, which doesn't word-split `$var`, so a loop over `"name x y"` passes one argument and the probe gets a command without coordinates.
 - Don't commit the screenshots or recordings.
 
 ## Git and PRs
@@ -66,6 +65,7 @@ To compare Clair with Arc, or check a UI change by hand, drive both apps with XC
 - `package.sh`: turns an engine into `Clair.app`: embeds `ClairUI` and Sparkle, writes the version and Sparkle keys into `Info.plist`, signs, and builds the DMG.
 - `build.sh`: the staged engine build (`fetch`, `prepare`, `configure`, `compile`), used by `engine.yml` and the patch check. See `docs/building.md`.
 - `tests/runtime/`: the runtime suite (XCUITest and the Chrome DevTools Protocol) that `quality.yml` runs. It deletes Clair's data for the current user, so it runs on hosted runners by default, and locally only when losing that data is fine.
+- `tests/probe/`: the tooling for driving Arc and Clair side by side by hand (an XCUITest probe, a test copy of Clair, recordings and measurements). See its `README.md`.
 - `.github/scripts/`: CI helpers (runner preparation, packing and unpacking the build directory, the smoke test).
 - `scripts/`: release tooling (appcast entries, deltas, release notes rendering, release preflight), each with a `*.test.sh`.
 - `.sparkle/`: `appcast.xml`, served from `main` as Sparkle's feed.

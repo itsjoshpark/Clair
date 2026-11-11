@@ -13,14 +13,15 @@ Suggested order: 1, then 2 and 3 (2 can start in `ClairUI` against `FakeBrowser`
 - [ ] 1.5 Add Esc handling for an active Peek to `ClairBrowserWindow` (D6): an Esc the page didn't use closes the Peek; an observer of the Peek's main-frame widget arms Confirm for 1 s on a consumed Esc and calls `peekDidKeepEscape:`; Esc while armed closes the Peek before the page sees it. Verify by the runtime tests in 3.2.
 - [ ] 1.6 Close a window's Peeks before its tabs close, and every window's Peeks before quitting (D9). Verify by the runtime test in 5.1.
 - [ ] 1.7 Build the engine with `gh workflow run engine.yml -f ref=<branch>`. Verify that `chromium-engine-<key>` is published and CI's engine check passes.
+- [ ] 1.8 Fix the code review's findings (D4, D7, D8, D9): a parent made active any other way shows its Peek; a Peek moved away on its own hides its parent; Peeks are tagged in the saved session and left out of session restore and Reopen Closed Window (D9, `patches/clair/peek-session.patch`), so a close or quit a page cancels keeps them; Move Tab to New Window closes the Peek once; only an adjacent tab is linked; and the fake browser, `tabsBelow` and the sidebar's list follow the engine. Verify that CI's patch check applies the new patch, with unit tests in CI, the engine build, and the runtime tests `testThePeekComesBackSurvivesACancelledCloseAndStaysBehindAMove` (with Reopen Closed Window) and `testEscapeTheLinksSettingAndQuitting` (quit and relaunch) in a `quality.yml` run on the branch.
 
 ## 2. Sidebar and the Peek card
 
 - [ ] 2.1 Add pure helpers to `TabListLogic.swift`: the rows (tabs that aren't Peeks), the row to highlight for an active Peek, the tab to activate for a row (its Peek, if any), and the badge favicon. Verify with unit tests in CI: a Peek is never a row, its parent's row is highlighted while the Peek is active, a click on that row targets the Peek, and expanding gives the Peek a row directly below its parent.
 - [ ] 2.2 Use them in `SidebarView.swift`: no row for a Peek, the badge at the trailing end of its parent's row, and a click on that row showing the Peek. Copy Link and Duplicate use the parent's snapshot. Verify by hand against Arc: the badge's size and place, with and without a favicon.
-- [ ] 2.3 Add a pure helper for the Peek's geometry: card 80% of the page card's width and its height less 2 pt at top and bottom, centred; parent inset 5 pt per side; buttons 34.5×33.5 pt, 13 pt beside the card, 7.5 pt down, 43.5 pt apart. Lay out the Peek in `PageCardView.swift` from it (D4): the parent scaled behind the wash and the click catcher, the Peek's page view in a rounded, shadowed container, and `pageContainerView` returning that container. The status capsule follows the Peek's corner (D11). Verify with unit tests of the helper at Arc's 1723×1030 card (1386×1026), passing in CI, and by hand side by side with Arc in Light and Dark Mode, including the wash's colour.
+- [ ] 2.3 Add a pure helper for the Peek's geometry: card 80% of the page card's width and its height less 2 pt at top and bottom, centred; parent inset 9 pt per side; buttons 34.5×33.5 pt, 13 pt beside the card, 7.5 pt down, 43.5 pt apart, clear of the title bar's safe area, with 12 pt and 14 pt glyphs. Lay out the Peek in `PageCardView.swift` from it (D4): the parent scaled behind the wash and the click catcher, the Peek's page view in a rounded, shadowed container, and `pageContainerView` returning that container. The status capsule follows the Peek's corner (D11). Verify with unit tests of the helper at Arc's 1723×1030 card (1386×1026), passing in CI, and by hand side by side with Arc in Light and Dark Mode, including the wash's colour.
 - [ ] 2.4 Add the Close and Expand buttons and the Confirm pill, wired to `closePeekOfTab:` and `expandPeekOfTab:`, with tooltips in Arc's wording (read from Arc by hovering) and VoiceOver labels. Verify by hand against Arc: the highlight under the pointer, the tooltips, and the pill's look.
-- [ ] 2.5 Add the opening and closing animations from the last mouse-down in the card, the Reduce Motion fades, and Expand moving the Peek into the full card (D5). Verify by hand with 60 fps recordings of Clair and Arc side by side: about 130 ms each way, growing from and shrinking to the click point.
+- [ ] 2.5 Add the opening and closing animations from the last mouse-down in the card, the Reduce Motion fades, and Expand moving the Peek into the full card (D5). Verify by hand with 60 fps recordings of Clair and Arc side by side: Arc's ease-out, about 190 ms to open and 150 ms to close, growing from and shrinking to the click point, the buttons riding the card's corner, and no frame without the card while a closing Peek's page goes.
 - [ ] 2.6 Add runtime tests to `tests/runtime/` with a local page of links:
   - Shift+click opens a Peek: no new window and no new row, the parent's row badged and highlighted, the URL field showing the Peek's host.
   - A `target="_blank"` link opens a Peek too.
@@ -32,6 +33,7 @@ Suggested order: 1, then 2 and 3 (2 can start in `ClairUI` against `FakeBrowser`
   - `document.visibilityState` over CDP for both pages, with the Peek shown and with another tab active.
 
   Verify with a `quality.yml` run on the branch.
+- [ ] 2.7 Turn reload into stop only once a load has run 750 ms, and crossfade the two glyphs (D12). Verify with unit tests of `ReloadStopMode` in CI, and by hand with 60 fps recordings of Clair and Arc opening Peeks on pages a local server delays by 200 ms to 3 s.
 
 ## 3. Esc and Confirm
 
@@ -54,7 +56,7 @@ Suggested order: 1, then 2 and 3 (2 can start in `ClairUI` against `FakeBrowser`
 
 ## 6. Release notes and integration
 
-- [ ] 6.1 Add a Changie fragment (`changie new`, kind Added) for Peek on Shift+click and the Links page in Settings. Verify that it's in the PR.
+- [ ] 6.1 Add a Changie fragment (`changie new`, kind New) for Peek on Shift+click and the Links page in Settings. Verify that it's in the PR.
 - [ ] 6.2 Run `openspec validate --all --strict` and the merge gate, and verify that CI passes.
 - [ ] 6.3 Run `quality.yml` on the branch and verify that it passes before merging.
 - [ ] 6.4 By hand, side by side with Arc: Shift+click, switching tabs and back, expanding, Esc on a page that keeps it, and the Links toggle.

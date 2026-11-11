@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair Peek Esc page</title>
+<p>With ?modal, a dialog of the page's own is open; Esc closes it and puts
+focus in the text field, which keeps the next Esc too. window.escapes counts the
+Esc presses the page received.</p>
+<div id="modal" hidden>The page's own dialog</div>
+<input id="field" value="Some text">
+<script>
+  window.escapes = 0;
+  const modal = document.getElementById('modal');
+  if (location.search === '?modal') {
+    modal.hidden = false;
+  }
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    window.escapes += 1;
+    if (!modal.hidden) {
+      modal.hidden = true;
+      event.preventDefault();
+      document.getElementById('field').focus();
+    }
+  });
+</script>

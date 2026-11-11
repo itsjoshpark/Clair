@@ -17,6 +17,7 @@
 #include "chrome/browser/clair/clair_native_layer.h"
 #include "chrome/browser/clair/window/clair_browser_window.h"
 #import "chrome/browser/clair/window/clair_native_window.h"
+#include "chrome/browser/clair/window/clair_peeks.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -31,6 +32,7 @@
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/download_item_utils.h"
+#include "content/public/browser/page_navigator.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/menus/simple_menu_model.h"
 #include "url/gurl.h"
@@ -198,6 +200,68 @@ bool ContentsMouseEvent(content::WebContents* source, bool exited) {
   if (exited) {
     window->SetStatusURL(GURL());
   }
+  return true;
+}
+
+namespace {
+
+// The native window whose page `source` is, when Shift+click opens Peeks in
+// it.
+ClairBrowserWindow* PeekWindowFor(BrowserWindowInterface* browser,
+                                  content::WebContents* source) {
+  ClairBrowserWindow* window = ClairBrowserWindow::FromBrowser(browser);
+  if (!window || !window->peeks() || !source ||
+      window->browser()->tab_strip_model()->GetIndexOfWebContents(source) ==
+          TabStripModel::kNoTab) {
+    return nullptr;
+  }
+  id<ClairWindow> clair_window = window->clair_window();
+  return clair_window && clair_window.opensPeekOnShiftClick ? window : nullptr;
+}
+
+}  // namespace
+
+bool MaybeOpenPeek(BrowserWindowInterface* browser,
+                   content::WebContents* source,
+                   const content::OpenURLParams& params,
+                   base::OnceCallback<void(content::NavigationHandle&)>&
+                       navigation_handle_callback,
+                   content::WebContents** result) {
+  // Shift+click is NEW_WINDOW on macOS; the context menu's Open Link in New
+  // Window isn't renderer-initiated, and window.open() without a click has
+  // no user gesture.
+  if (params.disposition != WindowOpenDisposition::NEW_WINDOW ||
+      !params.is_renderer_initiated || !params.user_gesture) {
+    return false;
+  }
+  ClairBrowserWindow* window = PeekWindowFor(browser, source);
+  if (!window) {
+    return false;
+  }
+  *result =
+      window->peeks()->OpenURL(source, params, navigation_handle_callback);
+  return true;
+}
+
+bool MaybeOpenPeek(BrowserWindowInterface* browser,
+                   content::WebContents* source,
+                   std::unique_ptr<content::WebContents>& new_contents,
+                   const GURL& target_url,
+                   WindowOpenDisposition disposition,
+                   bool user_gesture,
+                   content::WebContents** result) {
+  // A link with a target, such as target="_blank", creates its contents
+  // first and arrives here.
+  if (disposition != WindowOpenDisposition::NEW_WINDOW || !user_gesture ||
+      !new_contents) {
+    return false;
+  }
+  ClairBrowserWindow* window = PeekWindowFor(browser, source);
+  if (!window) {
+    return false;
+  }
+  *result = window->peeks()->AddContents(source, std::move(new_contents),
+                                         target_url, user_gesture);
   return true;
 }
 
