@@ -162,6 +162,31 @@ struct PeekWindowTests {
     #expect(URLDisplay.text(for: controller.model.activeTab) == "peek.example")
   }
 
+  @Test func theParentPageStaysPutWhenAPeekOpensAndCloses() {
+    // Moving a page's view blanks it for a frame, so the parent's stays where
+    // it is, in the page holder, and only shrinks.
+    browser.addTab(title: "Two", url: "https://two.example/")
+    let parent = browser.tabs[0]
+    let page = browser.pageView(for: parent.tabID)
+    let holder = page?.superview
+    #expect(holder != nil)
+    browser.openPeek(of: parent.tabID, url: "https://peek.example/")
+    #expect(page?.superview === holder)
+    controller.closePeek()
+    #expect(page?.superview === holder)
+  }
+
+  @Test func confirmGrowsOverThePeekOnlyWithoutRoomBesideIt() {
+    _ = openPeek()
+    let root = controller.rootView
+    root.frame = CGRect(x: 0, y: 0, width: 1920, height: 1050)
+    root.layoutSubtreeIfNeeded()
+    #expect(!controller.model.peekConfirm.growsTowardPeek)
+    root.frame = CGRect(x: 0, y: 0, width: 900, height: 700)
+    root.layoutSubtreeIfNeeded()
+    #expect(controller.model.peekConfirm.growsTowardPeek)
+  }
+
   @Test func selectingTheParentsRowShowsThePeekAgain() {
     let (parent, peek) = openPeek()
     let other = browser.tabs[0].tabID
@@ -179,7 +204,8 @@ struct PeekWindowTests {
     #expect(!controller.rootView.card.isPeeking)
     #expect(controller.model.activeTabID == parent.tabID)
     #expect(!controller.model.tabs.contains { $0.tabID == peek.tabID })
-    #expect(controller.pageContainerView === controller.rootView.card.container)
+    #expect(controller.pageContainerView === controller.rootView.card.activeContainer)
+    #expect(controller.pageContainerView !== controller.rootView.card.peekContainer)
   }
 
   @Test func expandingGivesThePeekARowBelowItsParent() {

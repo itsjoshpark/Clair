@@ -33,7 +33,7 @@ The Peek SHALL be a card with rounded corners centred over the page card, about 
 - **THEN** the Peek and the parent page keep their proportions to the card
 
 ### Requirement: Peek buttons
-A column of round buttons SHALL sit outside the Peek's top-trailing corner, beside the card: Close (×) and then Expand. Each SHALL highlight under the pointer and have a tooltip and a VoiceOver label naming its action.
+A column of round buttons SHALL sit outside the Peek's top-trailing corner, beside the card: Close (×) and then Expand. Each SHALL highlight under the pointer and have a VoiceOver label naming its action, and Arc's tooltip: "Close" with ⌘W, and "Expand" with ⌘O.
 
 #### Scenario: Buttons shown
 - **WHEN** a Peek is open
@@ -114,11 +114,15 @@ When the Peek's page uses an Esc, by preventing its default action or because a 
 - **THEN** the page receives the Esc as before, and the Peek closes only if the page doesn't use it
 
 ### Requirement: Expanding a Peek
-Clicking Expand SHALL turn the Peek into a normal, active tab directly below its parent in the tab list, keeping its page, scroll position and history. The parent tab SHALL then have no Peek.
+Clicking Expand, or pressing Cmd+O while the Peek shows, SHALL turn the Peek into a normal, active tab directly below its parent in the tab list, keeping its page, scroll position and history. The parent tab SHALL then have no Peek. Cmd+O SHALL open a file, as in Chromium, only while no Peek shows.
 
 #### Scenario: Expand
 - **WHEN** a Peek is open on the second of three tabs and the user clicks Expand
 - **THEN** the Peek's page becomes the third of four tabs, is active and shows full size, and back returns through its Peek history
+
+#### Scenario: Cmd+O
+- **WHEN** a Peek shows and the user presses Cmd+O
+- **THEN** the Peek expands into a tab, as with the Expand button
 
 ### Requirement: Closing the parent closes its Peek
 Closing a tab that has a Peek SHALL close its Peek with it. A leave-page confirmation from either page SHALL work as it does for a tab, and cancelling it SHALL keep both open.

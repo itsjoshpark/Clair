@@ -99,6 +99,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     rootView.card.peekControls = NSHostingView(
       rootView: PeekControlsView(confirm: model.peekConfirm, actions: self))
     rootView.card.peekClickCatcher.onClick = { [weak self] in self?.closePeek() }
+    rootView.card.onConfirmDirectionChange = { [weak model] towardPeek in
+      model?.peekConfirm.growsTowardPeek = towardPeek
+    }
     WindowStyle.apply(to: window, profileKind: browser.profileKind)
     window.contentView = rootView
     model.isWindowKey = window.isKeyWindow

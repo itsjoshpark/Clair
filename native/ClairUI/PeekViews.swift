@@ -77,6 +77,8 @@ enum PeekLayout {
   static let animationDuration: TimeInterval = 0.13
   /// The fades that replace it with Reduce Motion on.
   static let reducedMotionDuration: TimeInterval = 0.15
+  /// Room the Confirm pill grows into beside the column.
+  static let confirmWidth: CGFloat = 110
   /// How small the Peek starts.
   static let startScale: CGFloat = 0.02
 }
@@ -96,15 +98,23 @@ struct PeekControlsView: View {
   weak var actions: (any PeekActions)?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: PeekLayout.buttonPitch - PeekLayout.buttonSize.height) {
+    let towardPeek = confirm.growsTowardPeek
+    VStack(alignment: towardPeek ? .trailing : .leading, spacing: PeekLayout.buttonPitch - PeekLayout.buttonSize.height) {
+      // Confirm grows from the ×, to the trailing side or, without room
+      // there, over the Peek, without moving the column.
       PeekCloseButton(isConfirming: confirm.isShowing) { actions?.closePeek() }
+        .fixedSize()
+        .frame(
+          width: PeekLayout.buttonSize.width, height: PeekLayout.buttonSize.height,
+          alignment: towardPeek ? .trailing : .leading)
       PeekRoundButton(
-        systemImage: "arrow.up.left.and.arrow.down.right", help: "Expand Peek into a tab",
+        systemImage: "arrow.up.left.and.arrow.down.right", tooltip: "Expand", shortcut: ["⌘", "O"],
+        label: "Expand Peek into a tab",
         identifier: "clair.peekExpand"
       ) { actions?.expandPeek() }
     }
     .fixedSize()
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: towardPeek ? .topTrailing : .topLeading)
   }
 }
 
@@ -112,7 +122,11 @@ struct PeekControlsView: View {
 /// under the pointer.
 struct PeekRoundButton: View {
   let systemImage: String
-  let help: String
+  /// Arc's tooltip, read by hovering its buttons.
+  let tooltip: String
+  var shortcut: [String] = []
+  /// What VoiceOver reads.
+  let label: String
   let identifier: String
   let action: () -> Void
 
@@ -123,15 +137,15 @@ struct PeekRoundButton: View {
     Button(action: action) {
       Image(systemName: systemImage)
         .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(Color.primary.opacity(0.75))
+        .foregroundStyle(PeekButtonBackground.glyph)
         .frame(width: PeekLayout.buttonSize.width, height: PeekLayout.buttonSize.height)
         .background(PeekButtonBackground(isHovered: isHovered, colorScheme: colorScheme))
         .contentShape(Capsule())
     }
     .buttonStyle(.plain)
     .onHover { isHovered = $0 }
-    .help(help)
-    .accessibilityLabel(help)
+    .tooltip(tooltip, shortcut: shortcut)
+    .accessibilityLabel(label)
     .accessibilityIdentifier(identifier)
   }
 }
@@ -160,7 +174,7 @@ struct PeekCloseButton: View {
             .transition(.opacity)
         }
       }
-      .foregroundStyle(isConfirming ? Color.white : Color.primary.opacity(0.75))
+      .foregroundStyle(isConfirming ? Color.white : PeekButtonBackground.glyph)
       .padding(.horizontal, isConfirming ? 12 : 0)
       .frame(minWidth: PeekLayout.buttonSize.width, minHeight: PeekLayout.buttonSize.height)
       .background {
@@ -177,21 +191,25 @@ struct PeekCloseButton: View {
     .onHover { isHovered = $0 }
     // Grows from the × in about 100 ms and shrinks back as fast, as in Arc.
     .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: isConfirming)
-    .help(isConfirming ? "Press Esc again to close the Peek" : Self.help)
+    // Arc's tooltip, read by hovering its button.
+    .tooltip(isConfirming ? nil : "Close", shortcut: ["⌘", "W"])
     .accessibilityLabel(isConfirming ? "Confirm close Peek" : Self.help)
     .accessibilityIdentifier("clair.peekClose")
   }
 }
 
-/// The buttons' disc: a light, translucent material with a soft shadow.
+/// The buttons' disc, as in Arc: white (dark grey in Dark Mode) with a soft
+/// shadow, and the glyph in the accent colour.
 struct PeekButtonBackground: View {
   let isHovered: Bool
   let colorScheme: ColorScheme
 
+  static let glyph = Color.accentColor
+
   var body: some View {
     Capsule()
-      .fill(.regularMaterial)
-      .overlay(Capsule().fill(Color.primary.opacity(isHovered ? 0.1 : 0)))
+      .fill(colorScheme == .dark ? Color(white: 0.22) : Color.white)
+      .overlay(Capsule().fill(Color.primary.opacity(isHovered ? 0.08 : 0)))
       .overlay(Capsule().strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.06), lineWidth: 0.5))
       .shadow(color: .black.opacity(0.16), radius: 3, y: 1)
   }

@@ -567,6 +567,10 @@ bool ClairPeeks::ExecuteCommand(int command) {
       // Cmd+W closes the Peek and shows its parent.
       Close(peek);
       return true;
+    case IDC_OPEN_FILE:
+      // Cmd+O expands the Peek, as in Arc, instead of File > Open File.
+      Expand(peek);
+      return true;
     case IDC_DUPLICATE_TAB: {
       const int index = parent ? strip()->GetIndexOfTab(parent)
                                : TabStripModel::kNoTab;

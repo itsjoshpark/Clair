@@ -100,6 +100,8 @@ struct LinksSettingsView: View {
     Form {
       Section {
         Toggle("Open a Peek window when clicking on links with Shift held", isOn: $peekOnShiftClick)
+          // Accessibility reads the switch and its label as separate elements.
+          .accessibilityIdentifier("clair.peekToggle")
       }
     }
     .formStyle(.grouped)

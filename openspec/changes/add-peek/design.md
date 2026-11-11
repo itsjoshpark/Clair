@@ -102,7 +102,8 @@ ClairUI only animates the pill; clicking it calls `closePeekOfTab:`. Arc closes 
 `ExecuteCommand` in `clair_native_window.mm` handles these for native windows itself:
 - `IDC_SELECT_NEXT_TAB`, `IDC_SELECT_PREVIOUS_TAB`, `IDC_SELECT_TAB_0`…`7` and `IDC_SELECT_LAST_TAB`: computed over the tabs that aren't Peeks. Selecting a tab that has a Peek activates the Peek (spec "Tab shortcuts treat a tab and its Peek as one").
 - `IDC_DUPLICATE_TAB` and `IDC_MOVE_TAB_TO_NEW_WINDOW` while a Peek shows: act on the parent. Moving closes the Peek first.
-- `IDC_CLOSE_TAB`: needs nothing new, since the Peek is the active tab.
+- `IDC_CLOSE_TAB` while a Peek shows: closes the Peek and activates its parent explicitly (D4), rather than leaving the next tab to Chromium.
+- `IDC_OPEN_FILE` (Cmd+O) while a Peek shows: expands it, as Arc does. Without a Peek it opens a file, as in Chromium.
 
 ### D8. Keeping the pair together
 
@@ -145,5 +146,6 @@ None. The preference defaults to on. Rolling back means reverting the patch hunk
 
 ## Open Questions
 
-- Arc's tooltip wording for Close and Expand: not in Arc's binaries as plain strings. The buttons say "Close Peek" and "Expand Peek into a tab" until the hand check in 6.4 reads Arc's by hovering.
+- Arc's tooltips, read by hovering with the probe: "Close ⌘W" and "Expand ⌘O". Clair uses them; Arc places them right of the button, Clair's tooltips below and after the pointer, as everywhere else.
+- Esc with focus in a cross-origin iframe: Arc neither closes the Peek nor shows Confirm. Clair closes it, or shows Confirm when a text field there has focus, as for the main frame; the owner chose to keep that.
 - The wash colour and opacity in Light and Dark Mode: match Arc by sampling pixels side by side.

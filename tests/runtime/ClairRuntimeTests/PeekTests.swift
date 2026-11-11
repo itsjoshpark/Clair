@@ -182,13 +182,13 @@ final class PeekTests: NativeWindowTestCase {
     let peekStays = try await browser.target(endingWith: "?next") != nil
     XCTAssertTrue(peekStays, "Opening a tab from the Peek closed it")
 
-    // Expand: a row right below the parent, which goes back through the
-    // Peek's history.
+    // Expand with Cmd+O, as in Arc: a row right below the parent, which goes
+    // back through the Peek's history. (Unit tests cover the button.)
     browser.tabRow(Self.links)?.click()
     try require(browser.peek.waitForExistence(timeout: 15), "The parent's row didn't show its Peek")
-    browser.peekExpand.click()
+    browser.ui.typeKey("o", modifierFlags: .command)
     let expanded = await browser.waitForTabs { $0.count == rows + 2 }
-    XCTAssertTrue(expanded, "Expand gave the Peek no row")
+    XCTAssertTrue(expanded, "Cmd+O didn't expand the Peek into a row")
     let titles = browser.tabTitles
     if let parent = titles.firstIndex(of: Self.links), parent + 1 < titles.count {
       XCTAssertEqual(titles[parent + 1], Self.target, "The expanded Peek isn't right below its parent: \(titles)")
@@ -263,10 +263,8 @@ final class PeekTests: NativeWindowTestCase {
     let linksPage = browser.ui.toolbars.buttons["Links"]
     try require(linksPage.waitForExistence(timeout: 15), "Settings has no Links page")
     linksPage.click()
-    // A form draws the toggle as a switch.
-    let toggle = browser.ui.descendants(matching: .any)
-      .matching(NSPredicate(format: "label == %@", "Open a Peek window when clicking on links with Shift held"))
-      .firstMatch
+    // A form draws the toggle as a switch, its label beside it.
+    let toggle = browser.ui.switches["clair.peekToggle"]
     try require(toggle.waitForExistence(timeout: 10), "The Links page has no Peek toggle")
     XCTAssertEqual(Self.isOn(toggle), true, "The Peek toggle isn't on by default")
     toggle.click()

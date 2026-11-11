@@ -28,6 +28,9 @@ struct PeekPreference {
 @Observable
 final class PeekConfirmState {
   private(set) var isShowing = false
+  /// Whether Confirm grows toward the Peek, as in a window too narrow for it
+  /// beside the buttons.
+  var growsTowardPeek = false
   private var hideTask: Task<Void, Never>?
   /// Waits out Confirm's time; tests replace it so they don't depend on the
   /// clock.
