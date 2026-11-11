@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair Peek links</title>
+<style>a { display: inline-block; padding: 12px; font-size: 20px; }</style>
+<p><a id="plain" href="http://127.0.0.1:8123/pages/peek-target.html?plain">A link to another site</a></p>
+<p><a id="blank" href="http://127.0.0.1:8123/pages/peek-target.html?blank" target="_blank">A link with a target</a></p>
+<p><a id="esc" href="http://127.0.0.1:8123/pages/peek-esc.html?modal">A page with a dialog</a></p>
+<p><a id="window" href="http://127.0.0.1:8123/pages/index.html?window">A link for a new window</a></p>
+<script>
+  // Clicks that reach the page, to tell a click beside a Peek from one on it.
+  window.clicks = 0;
+  document.addEventListener('mousedown', () => { window.clicks += 1; });
+</script>

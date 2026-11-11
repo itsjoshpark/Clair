@@ -120,7 +120,7 @@ struct SidebarView: View {
           // Arc's line between a list that scrolls and the footer: 1 pt
           // across the sidebar, about 4% black in Light Mode and 8% white
           // in Dark Mode, as measured.
-          if TabList.overflows(height: tabListHeight, tabCount: model.tabs.count) {
+          if TabList.overflows(height: tabListHeight, tabCount: TabListLogic.rows(model.tabs).count) {
             Rectangle().fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.04)).frame(height: 1)
           }
         }
@@ -705,20 +705,25 @@ struct TabList: View {
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
         .moveDisabled(true)
-      ForEach(model.tabs, id: \.tabID) { tab in
+      // A Peek has no row; its parent's row stands for both (add-peek D4).
+      let rows = TabListLogic.rows(model.tabs)
+      let highlighted = TabListLogic.highlightedRow(activeTabID: model.activeTabID, in: model.tabs)
+      ForEach(rows, id: \.tabID) { tab in
         TabRow(
-          tab: tab, isActive: tab.tabID == model.activeTabID, isWindowKey: model.isWindowKey,
-          isIncognito: model.profileKind == .incognito, actions: actions)
+          tab: tab, isActive: tab.tabID == highlighted, isWindowKey: model.isWindowKey,
+          isIncognito: model.profileKind == .incognito,
+          peek: TabListLogic.peek(ofRow: tab.tabID, in: model.tabs), actions: actions)
           .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: -1))
           .listRowSeparator(.hidden)
           .listRowBackground(Color.clear)
       }
       .onMove { source, destination in
-        // The offsets count the tabs only, not the "New Tab" row.
+        // The offsets count the rows only, not the "New Tab" row or Peeks.
         guard let from = source.first,
-          let target = TabListLogic.moveTarget(from: from, to: destination, count: model.tabs.count)
+          let target = TabListLogic.moveTarget(from: from, to: destination, count: rows.count),
+          let index = TabListLogic.stripIndex(movingRow: from, toRow: target, in: model.tabs)
         else { return }
-        actions?.move(tab: model.tabs[from].tabID, to: target)
+        actions?.move(tab: rows[from].tabID, to: index)
       }
     }
     .listStyle(.plain)
@@ -727,7 +732,7 @@ struct TabList: View {
     // No taller than its rows, so the space below the last tab is the
     // sidebar's, which moves the window (design D18); the list scrolls once
     // the rows don't fit.
-    .frame(maxHeight: Self.contentHeight(tabCount: model.tabs.count))
+    .frame(maxHeight: Self.contentHeight(tabCount: TabListLogic.rows(model.tabs).count))
     .accessibilityIdentifier("clair.tabList")
   }
 }
@@ -806,6 +811,8 @@ struct TabRow: View {
   let isActive: Bool
   let isWindowKey: Bool
   var isIncognito = false
+  /// The tab's Peek, whose favicon the row shows as a badge (add-peek D4).
+  var peek: (any ClairTab)?
   weak var actions: (any SidebarActions)?
 
   @State private var isHovered = false
@@ -874,6 +881,10 @@ struct TabRow: View {
           .accessibilityIdentifier("clair.tabTitle")
       }
       Spacer(minLength: 0)
+      if let peek {
+        PeekBadge(peek: peek)
+          .padding(.trailing, isHovered ? 0 : PeekBadge.trailing - Self.horizontalPadding)
+      }
       if isHovered {
         TabCloseButton { actions?.close(tab: tab.tabID) }
           .padding(.trailing, Self.closeTrailing - Self.horizontalPadding)
@@ -913,6 +924,37 @@ struct TabRow: View {
     .accessibilityLabel(tab.title)
     .accessibilityIdentifier("clair.tabRow")
     .accessibilityAddTraits(isActive ? .isSelected : [])
+  }
+}
+
+/// The favicon of a tab's Peek, at the trailing end of the tab's row
+/// (add-peek design D4): the page's favicon on a small rounded tile.
+struct PeekBadge: View {
+  let peek: any ClairTab
+
+  static let size: CGFloat = 20
+  static let faviconSize: CGFloat = 14
+  /// From the badge to the pill's end while the close button is hidden.
+  static let trailing: CGFloat = 8
+
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    Group {
+      if let favicon = peek.favicon {
+        Image(nsImage: favicon).resizable().interpolation(.high)
+      } else {
+        Image(systemName: "globe").resizable().foregroundStyle(.secondary)
+      }
+    }
+    .frame(width: Self.faviconSize, height: Self.faviconSize)
+    .frame(width: Self.size, height: Self.size)
+    .background(
+      Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.07),
+      in: .rect(cornerRadius: 5, style: .continuous))
+    .accessibilityElement()
+    .accessibilityLabel(peek.title.isEmpty ? "Peek" : "Peek: \(peek.title)")
+    .accessibilityIdentifier("clair.peekBadge")
   }
 }
 

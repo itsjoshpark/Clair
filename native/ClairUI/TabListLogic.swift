@@ -27,6 +27,71 @@ enum TabListLogic {
     return tabs[(index + 1)...].map(\.tabID)
   }
 
+  // MARK: Peeks (add-peek design D4)
+
+  /// Whether `tab` is a Peek, which has no row of its own.
+  static func isPeek(_ tab: any ClairTab) -> Bool {
+    tab.peekParentID != ClairTabIDNone
+  }
+
+  /// The tabs with a row in the sidebar: every tab but the Peeks, in order.
+  static func rows(_ tabs: [any ClairTab]) -> [any ClairTab] {
+    tabs.filter { !isPeek($0) }
+  }
+
+  /// The row highlighted while `activeTabID` is active: the tab's own, or its
+  /// parent's while a Peek shows.
+  static func highlightedRow(activeTabID: TabID, in tabs: [any ClairTab]) -> TabID {
+    guard let active = tabs.first(where: { $0.tabID == activeTabID }), isPeek(active),
+      tabs.contains(where: { $0.tabID == active.peekParentID })
+    else { return activeTabID }
+    return active.peekParentID
+  }
+
+  /// The tab a click on `row` activates: its Peek, if it has one, so the tab
+  /// shows with its Peek as it was.
+  static func tabToActivate(forRow row: TabID, in tabs: [any ClairTab]) -> TabID {
+    peek(ofRow: row, in: tabs)?.tabID ?? row
+  }
+
+  /// The Peek of the tab with `row`, whose favicon the row shows as a badge.
+  static func peek(ofRow row: TabID, in tabs: [any ClairTab]) -> (any ClairTab)? {
+    guard let tab = tabs.first(where: { $0.tabID == row }), tab.peekID != ClairTabIDNone else { return nil }
+    return tabs.first { $0.tabID == tab.peekID && $0.peekParentID == row }
+  }
+
+  /// A tab and its Peek as the card shows them.
+  struct ShownPeek: Equatable {
+    let parentID: TabID
+    let peekID: TabID
+  }
+
+  /// The Peek the card shows while `activeTabID` is active: the active Peek
+  /// over its parent, or the active tab's own Peek, while both are open.
+  static func shownPeek(activeTabID: TabID, in tabs: [any ClairTab]) -> ShownPeek? {
+    guard let active = tabs.first(where: { $0.tabID == activeTabID }) else { return nil }
+    if isPeek(active) {
+      guard tabs.contains(where: { $0.tabID == active.peekParentID && $0.peekID == active.tabID }) else {
+        return nil
+      }
+      return ShownPeek(parentID: active.peekParentID, peekID: active.tabID)
+    }
+    return peek(ofRow: active.tabID, in: tabs).map { ShownPeek(parentID: active.tabID, peekID: $0.tabID) }
+  }
+
+  /// The tab strip index a row dragged from row `source` to row `target` (as
+  /// `moveTarget` gives it) asks for: where the tab ends up once each tab is
+  /// counted with its Peek, which moves with it.
+  static func stripIndex(movingRow source: Int, toRow target: Int, in tabs: [any ClairTab]) -> Int? {
+    var rows = rows(tabs)
+    guard rows.indices.contains(source), target >= 0, target < rows.count else { return nil }
+    let moving = rows.remove(at: source)
+    rows.insert(moving, at: target)
+    return rows[..<target].reduce(0) { count, row in
+      count + 1 + (peek(ofRow: row.tabID, in: tabs) == nil ? 0 : 1)
+    }
+  }
+
   /// The URL Copy Link puts on the pasteboard.
   static func link(of tab: any ClairTab) -> String? {
     if let url = tab.url {

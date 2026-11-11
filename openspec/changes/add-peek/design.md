@@ -57,9 +57,9 @@ While the Peek shows, it is Chromium's active tab, so the URL field, navigation,
 - The navigation is renderer-initiated with a user gesture. This excludes the context menu and `window.open` without a click.
 - ClairUI's `opensPeekOnShiftClick` is true.
 
-When the source is itself a Peek, `MaybeOpenPeek` changes the disposition to `NEW_FOREGROUND_TAB` with no index, so the link goes to the top of the list. When the source's tab already has a Peek, which can only happen from the keyboard, the existing Peek navigates to the URL instead of a second one opening.
+When the source is itself a Peek, `MaybeOpenPeek` changes the disposition to `NEW_FOREGROUND_TAB` with no index, so the link goes to the top of the list. When the source's tab already has a Peek, which can only happen from the keyboard, the existing Peek navigates to the URL instead of a second one opening; for `AddNewContents`, the contents the page created are dropped.
 
-For `OpenURLFromTab`, the hook navigates with `NavigateParams` at the forced index. For `AddNewContents`, it inserts the already-created contents at that index. Either way it records the link and returns the new contents.
+For `OpenURLFromTab`, the hook navigates with `NavigateParams` at the forced index. For `AddNewContents`, it inserts the already-created contents at that index. Either way the new tab goes in the background, the hook records the link, and only then activates it, so ClairUI never sees the Peek as a tab of its own. It returns the new contents.
 
 *Alternative:* translating the disposition in `DispositionFromClick`. That's in `ui/`, below the browser, and can't tell which tab clicked.
 
@@ -84,13 +84,13 @@ For `OpenURLFromTab`, the hook navigates with `NavigateParams` at the forced ind
 
 ### D5. Animation
 
-ClairUI records where the last left mouse-down in the card happened, through a local event monitor. When a Peek appears, the container's layer starts scaled down to that point at near-zero size and springs to identity in about 130 ms. The wash fades in alongside. Closing runs the reverse on a snapshot of the Peek, so the page view can go at once. With Reduce Motion on, both are 150 ms fades. Expand drops the wash and the parent's scale, and moves the Peek's view into the full card without a grow animation.
+ClairUI records where the last left mouse-down in the card happened, through a local event monitor; a Peek opened from the keyboard grows from the card's centre. When a Peek appears, the container's layer starts scaled down to that point at near-zero size and springs to identity in about 130 ms. The wash fades in alongside. Closing runs the reverse on a plain card in the Peek's place: by the time ClairUI hears that the Peek closed, its page view has gone with its tab, and the page's GPU content can't be snapshotted without the screen-recording permission. With Reduce Motion on, both are 150 ms fades. Expand drops the wash and the parent's scale, and moves the Peek's view into the full card without a grow animation.
 
 ### D6. Esc and Confirm
 
 In `ClairBrowserWindow`, when the active tab is a Peek:
 - **`PreHandleKeyboardEvent`:** if Confirm is armed (a deadline the engine keeps), Esc closes the Peek and returns `HANDLED`, so the page never sees it.
-- **`HandleKeyboardEvent`:** an Esc the page didn't use closes the Peek.
+- **`HandleKeyboardEvent`:** an Esc the page didn't use closes the Peek, unless a text field has focus (`WebContents::IsFocusedElementEditable()`): that Esc counts as kept, as Arc treats it, whether or not the field used it.
 - **An observer on the Peek's main-frame widget** (`RenderWidgetHost::InputEventObserver::OnInputEventAck`): it sees a `RawKeyDown` Esc acked as consumed, which covers both `preventDefault()` and a text field taking the key. It arms Confirm for 1 s and calls `peekDidKeepEscape:` with that duration.
 
 ClairUI only animates the pill; clicking it calls `closePeekOfTab:`. Arc closes at once on a native `<dialog>`. If Chromium acks that Esc as consumed, Clair shows Confirm there instead; either is acceptable.
@@ -107,7 +107,7 @@ ClairUI only animates the pill; clicking it calls `closePeekOfTab:`. Arc closes 
 ### D8. Keeping the pair together
 
 A `TabStripModelObserver` in the bridge:
-- **When a parent closes:** closes its Peek. A leave-page confirmation still runs per page, through Chromium's close flow.
+- **When a parent closes:** closes its Peek, once the tab strip has finished, since it can't be changed from inside its own notification. Until then the Peek still reports a parent, so it never shows as a row. A leave-page confirmation still runs per page, through Chromium's close flow; a Peek whose confirmation keeps it open becomes a normal tab.
 - **When a parent moves:** moves its Peek to the parent's index + 1.
 - **When a Peek is detached or moved by anything else:** unlinks it, which makes it a normal tab.
 
@@ -145,5 +145,5 @@ None. The preference defaults to on. Rolling back means reverting the patch hunk
 
 ## Open Questions
 
-- Arc's tooltip wording for Close and Expand: read it by hovering with the probe while building the buttons.
+- Arc's tooltip wording for Close and Expand: not in Arc's binaries as plain strings. The buttons say "Close Peek" and "Expand Peek into a tab" until the hand check in 6.4 reads Arc's by hovering.
 - The wash colour and opacity in Light and Dark Mode: match Arc by sampling pixels side by side.

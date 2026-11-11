@@ -400,8 +400,10 @@ final class BrowserRootView: NSView {
       findHost.frame = CGRect(x: card.maxX - size.width - 10, y: card.minY + 10, width: size.width, height: size.height)
     }
     if let statusHost {
-      let size = fit(statusHost, maxWidth: card.width / 2)
-      statusHost.frame = CGRect(x: card.minX + 8, y: card.maxY - size.height - 8, width: size.width, height: size.height)
+      // At the Peek's corner while a Peek shows (add-peek design D11).
+      let page = self.card.isPeeking ? convert(self.card.activePageFrame, from: self.card) : card
+      let size = fit(statusHost, maxWidth: page.width / 2)
+      statusHost.frame = CGRect(x: page.minX + 8, y: page.maxY - size.height - 8, width: size.width, height: size.height)
     }
     if let toastHost {
       let size = fit(toastHost, maxWidth: card.width - 40)

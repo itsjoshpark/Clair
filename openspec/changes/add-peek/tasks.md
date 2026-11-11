@@ -54,7 +54,7 @@ Suggested order: 1, then 2 and 3 (2 can start in `ClairUI` against `FakeBrowser`
 
 ## 6. Release notes and integration
 
-- [ ] 6.1 Add a Changie fragment (`changie new`, kind Added) for Peek on Shift+click and the Links page in Settings. Verify that it's in the PR.
+- [ ] 6.1 Add a Changie fragment (`changie new`, kind New) for Peek on Shift+click and the Links page in Settings. Verify that it's in the PR.
 - [ ] 6.2 Run `openspec validate --all --strict` and the merge gate, and verify that CI passes.
 - [ ] 6.3 Run `quality.yml` on the branch and verify that it passes before merging.
 - [ ] 6.4 By hand, side by side with Arc: Shift+click, switching tabs and back, expanding, Esc on a page that keeps it, and the Links toggle.

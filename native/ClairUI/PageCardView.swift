@@ -9,22 +9,65 @@ import ClairHost
 /// a masked container, and a soft shadow from the outer layer, since a masked
 /// layer can't cast one. Docked DevTools fills the container, with the page on
 /// top at the bounds DevTools asks for.
+///
+/// While a Peek shows (add-peek design D4), the container holds the parent's
+/// page, shrunk a little and washed out, under a click catcher that closes
+/// the Peek; the Peek's page, with its DevTools, infobars and crashed view,
+/// sits in a rounded card of its own over it, with its buttons beside it.
 final class PageCardView: NSView {
   static let cornerRadius: CGFloat = 8
 
   /// Holds the page (and DevTools); Chromium's tab-modal dialogs centre on it.
   let container = FlippedView()
 
+  /// The active tab's page: the Peek's while a Peek shows.
   private(set) weak var pageView: NSView?
+  /// The page behind the Peek, while one shows.
+  private(set) weak var parentPageView: NSView?
   /// Moves the window from the top of the page (drag-window-from-page-top).
   let dragStrip = PageTopDragStrip()
   private(set) weak var devToolsView: NSView?
+
+  // The Peek (add-peek design D4).
+  /// Holds the parent page; its layer's sublayer transform shrinks it without
+  /// resizing the page.
+  private let parentHolder = FlippedView()
+  /// Washes the parent page out toward the window's background.
+  private let wash = DynamicFillView(color: PeekWash.color)
+  /// Covers the parent page; a click on it closes the Peek.
+  let peekClickCatcher = ClickCatcherView()
+  /// The Peek's card: the shadow outside, the masked container inside.
+  private let peekCard = NSView()
+  let peekContainer = FlippedView()
+  /// The Peek's buttons, beside its top-trailing corner.
+  var peekControls: NSView? {
+    didSet {
+      oldValue?.removeFromSuperview()
+      if let peekControls {
+        addSubview(peekControls)
+        peekControls.isHidden = !isPeeking
+      }
+      needsLayout = true
+    }
+  }
+
+  /// Whether a Peek shows over its parent.
+  var isPeeking: Bool { parentPageView != nil }
+
+  /// The view that holds the active page, its DevTools and infobars, and
+  /// where Chromium's tab-modal dialogs centre: the Peek's container while a
+  /// Peek shows.
+  var activeContainer: FlippedView { isPeeking ? peekContainer : container }
+
+  /// The Peek's frame in the card, or the card's bounds without a Peek; the
+  /// link status shows at its bottom-leading corner (add-peek design D11).
+  var activePageFrame: CGRect { isPeeking ? peekCard.frame : bounds }
 
   /// The tab's infobars, above the page.
   var infobarView: NSView? {
     didSet {
       oldValue?.removeFromSuperview()
-      if let infobarView { container.addSubview(infobarView) }
+      if let infobarView { activeContainer.addSubview(infobarView) }
       needsLayout = true
     }
   }
@@ -33,7 +76,7 @@ final class PageCardView: NSView {
   var crashedView: NSView? {
     didSet {
       oldValue?.removeFromSuperview()
-      if let crashedView { container.addSubview(crashedView) }
+      if let crashedView { activeContainer.addSubview(crashedView) }
       needsLayout = true
     }
   }
@@ -44,6 +87,13 @@ final class PageCardView: NSView {
   var isBare = false {
     didSet { updateAppearance() }
   }
+
+  /// Where and when the last left press in the card was, which a new Peek
+  /// grows from (add-peek design D5).
+  private var lastPress: (point: CGPoint, time: TimeInterval)?
+  nonisolated(unsafe) private var pressMonitor: Any?
+  /// Where the shown Peek grew from, which it shrinks back to.
+  private var peekOrigin: CGPoint?
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -56,8 +106,29 @@ final class PageCardView: NSView {
     container.setAccessibilityRole(.group)
     container.setAccessibilityLabel("Page")
     container.setAccessibilityIdentifier("clair.card")
+    parentHolder.wantsLayer = true
+    container.addSubview(parentHolder)
     container.addSubview(dragStrip)
+    container.addSubview(wash)
+    container.addSubview(peekClickCatcher)
     addSubview(container)
+    peekCard.wantsLayer = true
+    peekCard.layer?.masksToBounds = false
+    peekCard.layer?.shadowColor = NSColor.black.cgColor
+    peekCard.layer?.shadowOpacity = 0.25
+    peekCard.layer?.shadowRadius = 12
+    peekCard.layer?.shadowOffset = CGSize(width: 0, height: -2)
+    peekContainer.wantsLayer = true
+    peekContainer.layer?.masksToBounds = true
+    peekContainer.layer?.cornerRadius = PeekLayout.cornerRadius
+    peekContainer.layer?.cornerCurve = .continuous
+    peekContainer.setAccessibilityElement(true)
+    peekContainer.setAccessibilityRole(.group)
+    peekContainer.setAccessibilityLabel("Peek")
+    peekContainer.setAccessibilityIdentifier("clair.peek")
+    peekCard.addSubview(peekContainer)
+    addSubview(peekCard)
+    updatePeekVisibility()
     updateAppearance()
   }
 
@@ -66,7 +137,34 @@ final class PageCardView: NSView {
     fatalError("init(coder:) is not used")
   }
 
+  deinit {
+    if let pressMonitor {
+      NSEvent.removeMonitor(pressMonitor)
+    }
+  }
+
   override var isFlipped: Bool { true }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if let pressMonitor {
+      NSEvent.removeMonitor(pressMonitor)
+      self.pressMonitor = nil
+    }
+    guard window != nil else { return }
+    // Records where a press lands without taking it from the page.
+    pressMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+      MainActor.assumeIsolated { self?.recordPress(event) }
+      return event
+    }
+  }
+
+  private func recordPress(_ event: NSEvent) {
+    guard event.window === window else { return }
+    let point = convert(event.locationInWindow, from: nil)
+    guard bounds.contains(point) else { return }
+    lastPress = (point, event.timestamp)
+  }
 
   private func updateAppearance() {
     container.layer?.cornerRadius = isBare ? 0 : Self.cornerRadius
@@ -80,14 +178,90 @@ final class PageCardView: NSView {
   /// Shows `view` as the page, replacing the previous one. Chromium owns the
   /// view; the card only places it.
   func show(page view: NSView?) {
-    guard view !== pageView else { return }
-    pageView?.removeFromSuperview()
+    show(page: view, behind: nil)
+  }
+
+  /// What the card shows changes from one tab to another, or a Peek opens,
+  /// closes or expands (add-peek design D5).
+  private enum Transition {
+    case none, open, close, expand
+  }
+
+  /// Shows `view` as the active page, over `parent` in a Peek when there is
+  /// one. Opening and closing a Peek animate; switching tabs doesn't.
+  func show(page view: NSView?, behind parent: NSView?) {
+    let oldPage = pageView
+    let oldParent = parentPageView
+    guard view !== oldPage || parent !== oldParent else { return }
+    let wasPeeking = oldParent != nil
+    let oldPeekFrame = peekCard.frame
+    let transition: Transition =
+      if parent != nil, !wasPeeking, parent === oldPage, view != nil {
+        .open
+      } else if parent == nil, wasPeeking, view != nil, view === oldParent {
+        .close
+      } else if parent == nil, wasPeeking, view != nil, view === oldPage {
+        .expand
+      } else {
+        .none
+      }
+
+    if oldPage !== view, oldPage !== parent { oldPage?.removeFromSuperview() }
+    if oldParent !== view, oldParent !== parent { oldParent?.removeFromSuperview() }
     pageView = view
-    if let view {
-      container.addSubview(view, positioned: .above, relativeTo: devToolsView)
-      container.addSubview(dragStrip, positioned: .above, relativeTo: view)
+    parentPageView = parent
+    if let parent, parent.superview !== parentHolder {
+      parentHolder.addSubview(parent)
     }
+    if let view {
+      // Under the infobars and the crashed view, above DevTools.
+      let surface = activeContainer
+      if let devToolsView, devToolsView.superview === surface {
+        surface.addSubview(view, positioned: .above, relativeTo: devToolsView)
+      } else {
+        surface.addSubview(view, positioned: .below, relativeTo: nil)
+      }
+    }
+    moveSurfaceViews()
+    updatePeekVisibility()
     needsLayout = true
+    layoutSubtreeIfNeeded()
+
+    switch transition {
+    case .open:
+      animateOpening()
+    case .close:
+      animateClosing(from: oldPeekFrame)
+    case .expand, .none:
+      peekOrigin = isPeeking ? peekOrigin : nil
+    }
+  }
+
+  /// Puts DevTools, the infobars and the crashed view with the active page,
+  /// in the order they stack.
+  private func moveSurfaceViews() {
+    let surface = activeContainer
+    if let devToolsView, devToolsView.superview !== surface {
+      surface.addSubview(devToolsView, positioned: .below, relativeTo: nil)
+    }
+    for view in [infobarView, crashedView].compactMap({ $0 }) where view.superview !== surface {
+      surface.addSubview(view)
+    }
+    if !isPeeking, let pageView, pageView.superview === container {
+      container.addSubview(dragStrip, positioned: .above, relativeTo: pageView)
+    }
+  }
+
+  private func updatePeekVisibility() {
+    let peeking = isPeeking
+    parentHolder.isHidden = !peeking
+    wash.isHidden = !peeking
+    peekClickCatcher.isHidden = !peeking
+    peekCard.isHidden = !peeking
+    peekControls?.isHidden = !peeking
+    if !peeking {
+      parentHolder.layer?.sublayerTransform = CATransform3DIdentity
+    }
   }
 
   /// Shows the active tab's docked DevTools, or none.
@@ -96,7 +270,12 @@ final class PageCardView: NSView {
       devToolsView?.removeFromSuperview()
       devToolsView = view
       if let view {
-        container.addSubview(view, positioned: .below, relativeTo: pageView)
+        let surface = activeContainer
+        if let pageView, pageView.superview === surface {
+          surface.addSubview(view, positioned: .below, relativeTo: pageView)
+        } else {
+          surface.addSubview(view, positioned: .below, relativeTo: nil)
+        }
       }
     }
     devToolsLayout = layout
@@ -108,7 +287,51 @@ final class PageCardView: NSView {
     container.frame = bounds
     layer?.shadowPath = isBare ? nil : CGPath(
       roundedRect: bounds, cornerWidth: Self.cornerRadius, cornerHeight: Self.cornerRadius, transform: nil)
-    var card = container.bounds
+    if isPeeking {
+      parentHolder.frame = container.bounds
+      parentPageView?.frame = parentHolder.bounds
+      if let holderLayer = parentHolder.layer {
+        holderLayer.sublayerTransform = PeekLayout.parentTransform(
+          size: parentHolder.bounds.size, anchor: holderLayer.anchorPoint)
+      }
+      wash.frame = container.bounds
+      peekClickCatcher.frame = container.bounds
+      let peek = PeekLayout.peekFrame(in: bounds)
+      peekCard.frame = peek
+      peekContainer.frame = peekCard.bounds
+      peekCard.layer?.shadowPath = CGPath(
+        roundedRect: peekCard.bounds, cornerWidth: PeekLayout.cornerRadius, cornerHeight: PeekLayout.cornerRadius,
+        transform: nil)
+      if let peekControls {
+        let buttons = PeekLayout.buttonFrames(beside: peek)
+        let first = buttons[0]
+        // Room to the card's edge, for the Confirm pill to grow into.
+        peekControls.frame = CGRect(
+          x: first.minX, y: first.minY, width: max(first.width, bounds.maxX - first.minX),
+          height: buttons[buttons.count - 1].maxY - first.minY)
+        if peekControls !== subviews.last {
+          addSubview(peekControls)
+        }
+      }
+      dragStrip.isHidden = true
+      layoutSurface(in: peekContainer.bounds)
+    } else {
+      layoutSurface(in: container.bounds)
+      if let pageView, !pageView.isHidden {
+        var strip = pageView.frame
+        strip.size.height = min(strip.height, PageTopWindowDrag.stripHeight)
+        dragStrip.frame = strip
+        dragStrip.isHidden = false
+      } else {
+        dragStrip.isHidden = true
+      }
+    }
+  }
+
+  /// Lays out the active page, its DevTools, infobars and crashed view in
+  /// `bounds` of the active container.
+  private func layoutSurface(in bounds: CGRect) {
+    var card = bounds
     if let infobarView {
       let height = infobarView.fittingSize.height
       infobarView.frame = CGRect(x: 0, y: 0, width: card.width, height: height)
@@ -126,16 +349,146 @@ final class PageCardView: NSView {
       pageView?.frame = card
       pageView?.isHidden = crashedView != nil
     }
-    if let pageView, !pageView.isHidden {
-      var strip = pageView.frame
-      strip.size.height = min(strip.height, PageTopWindowDrag.stripHeight)
-      dragStrip.frame = strip
-      dragStrip.isHidden = false
-    } else {
-      dragStrip.isHidden = true
+  }
+
+  // MARK: Animation (add-peek design D5)
+
+  private var reduceMotion: Bool {
+    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+  }
+
+  /// The point a new Peek grows from: the last press in the card if it was
+  /// recent, as the Shift+click that opened it, or else the card's centre.
+  private func growOrigin() -> CGPoint {
+    if let lastPress, ProcessInfo.processInfo.systemUptime - lastPress.time < 2 {
+      return lastPress.point
+    }
+    return CGPoint(x: bounds.midX, y: bounds.midY)
+  }
+
+  /// `point`, in this view's coordinates, in the coordinates its subviews'
+  /// layers are placed in: flipped as the view is only if its layer's
+  /// geometry is.
+  private func layerPoint(_ point: CGPoint) -> CGPoint {
+    let layerIsFlipped = layer?.isGeometryFlipped ?? false
+    return layerIsFlipped == isFlipped ? point : CGPoint(x: point.x, y: bounds.height - point.y)
+  }
+
+  private func animateOpening() {
+    let origin = growOrigin()
+    peekOrigin = origin
+    let duration = reduceMotion ? PeekLayout.reducedMotionDuration : PeekLayout.animationDuration
+    let timing = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
+    let views = [peekCard, peekControls].compactMap { $0 }
+    if reduceMotion {
+      for view in views { fadeIn(view.layer, duration: duration) }
+    } else if let layer = peekCard.layer {
+      let grow = CABasicAnimation(keyPath: "transform")
+      grow.fromValue = PeekLayout.growTransform(
+        from: layerPoint(origin), position: layer.position, scale: PeekLayout.startScale)
+      grow.toValue = CATransform3DIdentity
+      grow.duration = duration
+      grow.timingFunction = timing
+      layer.add(grow, forKey: "peekGrow")
+      fadeIn(layer, duration: duration * 0.5)
+      fadeIn(peekControls?.layer, duration: duration)
+    }
+    fadeIn(wash.layer, duration: duration)
+    if !reduceMotion, let holder = parentHolder.layer {
+      let shrink = CABasicAnimation(keyPath: "sublayerTransform")
+      shrink.fromValue = CATransform3DIdentity
+      shrink.toValue = holder.sublayerTransform
+      shrink.duration = duration
+      shrink.timingFunction = timing
+      holder.add(shrink, forKey: "peekParentOpen")
     }
   }
 
+  private func fadeIn(_ layer: CALayer?, duration: TimeInterval) {
+    guard let layer else { return }
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = 0
+    fade.toValue = 1
+    fade.duration = duration
+    layer.add(fade, forKey: "peekFadeIn")
+  }
+
+  /// The Peek's page has gone with its tab, so a plain card in its place
+  /// shrinks back toward where it grew from while the parent page returns.
+  private func animateClosing(from frame: CGRect) {
+    let origin = peekOrigin ?? CGPoint(x: frame.midX, y: frame.midY)
+    peekOrigin = nil
+    guard !frame.isEmpty else { return }
+    let duration = reduceMotion ? PeekLayout.reducedMotionDuration : PeekLayout.animationDuration
+    let ghost = NSView(frame: frame)
+    ghost.wantsLayer = true
+    ghost.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+    ghost.layer?.cornerRadius = PeekLayout.cornerRadius
+    ghost.layer?.cornerCurve = .continuous
+    ghost.layer?.shadowColor = NSColor.black.cgColor
+    ghost.layer?.shadowOpacity = 0.25
+    ghost.layer?.shadowRadius = 12
+    addSubview(ghost)
+    let wash = DynamicFillView(color: PeekWash.color)
+    wash.frame = bounds
+    addSubview(wash, positioned: .below, relativeTo: ghost)
+    let timing = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.8, 0.4)
+    CATransaction.begin()
+    CATransaction.setCompletionBlock { [weak ghost, weak wash] in
+      MainActor.assumeIsolated {
+        ghost?.removeFromSuperview()
+        wash?.removeFromSuperview()
+      }
+    }
+    if let layer = ghost.layer {
+      layer.opacity = 0
+      let fade = CABasicAnimation(keyPath: "opacity")
+      fade.fromValue = 1
+      fade.toValue = 0
+      fade.duration = duration
+      fade.timingFunction = CAMediaTimingFunction(name: reduceMotion ? .linear : .easeIn)
+      layer.add(fade, forKey: "peekFadeOut")
+      if !reduceMotion {
+        let shrink = CABasicAnimation(keyPath: "transform")
+        shrink.fromValue = CATransform3DIdentity
+        shrink.toValue = PeekLayout.growTransform(
+          from: layerPoint(origin), position: layer.position, scale: PeekLayout.startScale)
+        shrink.duration = duration
+        shrink.timingFunction = timing
+        layer.transform = shrink.toValue as? CATransform3D ?? CATransform3DIdentity
+        layer.add(shrink, forKey: "peekShrink")
+      }
+    }
+    if let layer = wash.layer {
+      layer.opacity = 0
+      let fade = CABasicAnimation(keyPath: "opacity")
+      fade.fromValue = 1
+      fade.toValue = 0
+      fade.duration = duration
+      layer.add(fade, forKey: "peekWashOut")
+    }
+    if !reduceMotion, let pageLayer = pageView?.layer {
+      // The parent page grows back to the card's size.
+      let grow = CABasicAnimation(keyPath: "transform")
+      grow.fromValue = PeekLayout.parentTransform(size: pageLayer.bounds.size, anchor: pageLayer.anchorPoint)
+      grow.toValue = CATransform3DIdentity
+      grow.duration = duration
+      grow.timingFunction = timing
+      pageLayer.add(grow, forKey: "peekParentClose")
+    }
+    CATransaction.commit()
+  }
+}
+
+/// The wash over the parent page behind a Peek: the window's background
+/// colour, light grey in Light Mode and dark grey in Dark Mode, part
+/// transparent (add-peek design D4).
+enum PeekWash {
+  static let color = NSColor(name: "clair.peekWash") { appearance in
+    appearance.isDark
+      ? NSColor(white: 0.13, alpha: 0.55)
+      : NSColor(white: 0.93, alpha: 0.55)
+  }
 }
 
 /// An NSView whose origin is at the top left, as Chromium's and DevTools'

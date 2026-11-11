@@ -1,0 +1,198 @@
+// Copyright 2026 The Clair Authors
+// You can use, redistribute, and/or modify this source code under
+// the terms of the GPL-3.0 license that can be found in the LICENSE file.
+
+import AppKit
+import SwiftUI
+
+/// Where a Peek and its parent sit in the page card (add-peek design D4), as
+/// measured in Arc at a 1723×1030 pt card.
+enum PeekLayout {
+  /// The Peek's width over the card's: Arc's 1386 pt at a 1723 pt card.
+  static let widthFraction: CGFloat = 1386.0 / 1723.0
+  /// Between the Peek and the card's top and bottom edges.
+  static let verticalInset: CGFloat = 2
+  /// How far the parent page shrinks on each side behind the Peek.
+  static let parentInset: CGFloat = 5
+  static let cornerRadius: CGFloat = 10
+  /// The round buttons beside the Peek's top-trailing corner.
+  static let buttonSize = CGSize(width: 34.5, height: 33.5)
+  /// From the Peek's trailing edge to the buttons.
+  static let buttonGap: CGFloat = 13
+  /// From the Peek's top to the first button's.
+  static let buttonTop: CGFloat = 7.5
+  /// From one button's top to the next one's.
+  static let buttonPitch: CGFloat = 43.5
+
+  /// The Peek's frame in a card with `bounds` (top-left origin), in whole
+  /// points.
+  static func peekFrame(in bounds: CGRect) -> CGRect {
+    let width = (bounds.width * widthFraction).rounded()
+    let height = max(0, bounds.height - 2 * verticalInset)
+    return CGRect(
+      x: (bounds.midX - width / 2).rounded(), y: bounds.minY + verticalInset, width: width, height: height)
+  }
+
+  /// The parent page's frame behind the Peek: the card less `parentInset` on
+  /// each side.
+  static func parentFrame(in bounds: CGRect) -> CGRect {
+    bounds.insetBy(dx: min(parentInset, bounds.width / 2), dy: min(parentInset, bounds.height / 2))
+  }
+
+  /// The buttons' frames beside a Peek at `peek`, top first: Close, then
+  /// Expand.
+  static func buttonFrames(beside peek: CGRect, count: Int = 2) -> [CGRect] {
+    (0..<count).map { index in
+      CGRect(
+        x: peek.maxX + buttonGap, y: peek.minY + buttonTop + CGFloat(index) * buttonPitch,
+        width: buttonSize.width, height: buttonSize.height)
+    }
+  }
+
+  /// The transform that shrinks a page of `size` into `parentFrame`, for a
+  /// layer whose anchor point is `anchor`: a scale about the page's centre.
+  static func parentTransform(size: CGSize, anchor: CGPoint) -> CATransform3D {
+    guard size.width > 0, size.height > 0 else { return CATransform3DIdentity }
+    let target = parentFrame(in: CGRect(origin: .zero, size: size))
+    let scaleX = target.width / size.width
+    let scaleY = target.height / size.height
+    // p' = s·p + d about the layer's origin; the layer applies the transform
+    // about its anchor point, so the translation makes up the difference.
+    let pivot = CGPoint(x: anchor.x * size.width, y: anchor.y * size.height)
+    let dx = target.minX - (1 - scaleX) * pivot.x
+    let dy = target.minY - (1 - scaleY) * pivot.y
+    return CATransform3DConcat(CATransform3DMakeScale(scaleX, scaleY, 1), CATransform3DMakeTranslation(dx, dy, 0))
+  }
+
+  /// The transform that shrinks a layer at `frame` towards `point` (both in
+  /// its superlayer's coordinates) to `scale`, for a layer whose `position`
+  /// is `position`: what the Peek grows from and shrinks back to.
+  static func growTransform(from point: CGPoint, position: CGPoint, scale: CGFloat) -> CATransform3D {
+    let dx = (1 - scale) * (point.x - position.x)
+    let dy = (1 - scale) * (point.y - position.y)
+    return CATransform3DConcat(CATransform3DMakeScale(scale, scale, 1), CATransform3DMakeTranslation(dx, dy, 0))
+  }
+
+  /// How long the Peek takes to grow or shrink, as in Arc.
+  static let animationDuration: TimeInterval = 0.13
+  /// The fades that replace it with Reduce Motion on.
+  static let reducedMotionDuration: TimeInterval = 0.15
+  /// How small the Peek starts.
+  static let startScale: CGFloat = 0.02
+}
+
+/// What the Peek's buttons do.
+@MainActor
+protocol PeekActions: AnyObject {
+  func closePeek()
+  func expandPeek()
+}
+
+/// The column of round buttons beside the Peek (add-peek design D4, D6):
+/// Close, which turns into a red Confirm pill while an Esc the page kept
+/// arms the next one, and Expand.
+struct PeekControlsView: View {
+  let confirm: PeekConfirmState
+  weak var actions: (any PeekActions)?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: PeekLayout.buttonPitch - PeekLayout.buttonSize.height) {
+      PeekCloseButton(isConfirming: confirm.isShowing) { actions?.closePeek() }
+      PeekRoundButton(
+        systemImage: "arrow.up.left.and.arrow.down.right", help: "Expand Peek into a tab",
+        identifier: "clair.peekExpand"
+      ) { actions?.expandPeek() }
+    }
+    .fixedSize()
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+}
+
+/// A round button beside the Peek: a translucent disc with a shadow, darker
+/// under the pointer.
+struct PeekRoundButton: View {
+  let systemImage: String
+  let help: String
+  let identifier: String
+  let action: () -> Void
+
+  @State private var isHovered = false
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: systemImage)
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(Color.primary.opacity(0.75))
+        .frame(width: PeekLayout.buttonSize.width, height: PeekLayout.buttonSize.height)
+        .background(PeekButtonBackground(isHovered: isHovered, colorScheme: colorScheme))
+        .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .onHover { isHovered = $0 }
+    .help(help)
+    .accessibilityLabel(help)
+    .accessibilityIdentifier(identifier)
+  }
+}
+
+/// The Close button, which grows into "× Confirm" in red while another Esc
+/// closes the Peek.
+struct PeekCloseButton: View {
+  let isConfirming: Bool
+  let action: () -> Void
+
+  @State private var isHovered = false
+  @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  static let help = "Close Peek"
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 5) {
+        Image(systemName: "xmark")
+          .font(.system(size: 13, weight: .semibold))
+        if isConfirming {
+          Text("Confirm")
+            .font(.system(size: 13, weight: .semibold))
+            .fixedSize()
+            .transition(.opacity)
+        }
+      }
+      .foregroundStyle(isConfirming ? Color.white : Color.primary.opacity(0.75))
+      .padding(.horizontal, isConfirming ? 12 : 0)
+      .frame(minWidth: PeekLayout.buttonSize.width, minHeight: PeekLayout.buttonSize.height)
+      .background {
+        if isConfirming {
+          Capsule().fill(Color(nsColor: .systemRed).opacity(isHovered ? 0.85 : 1))
+            .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
+        } else {
+          PeekButtonBackground(isHovered: isHovered, colorScheme: colorScheme)
+        }
+      }
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .onHover { isHovered = $0 }
+    // Grows from the × in about 100 ms and shrinks back as fast, as in Arc.
+    .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: isConfirming)
+    .help(isConfirming ? "Press Esc again to close the Peek" : Self.help)
+    .accessibilityLabel(isConfirming ? "Confirm close Peek" : Self.help)
+    .accessibilityIdentifier("clair.peekClose")
+  }
+}
+
+/// The buttons' disc: a light, translucent material with a soft shadow.
+struct PeekButtonBackground: View {
+  let isHovered: Bool
+  let colorScheme: ColorScheme
+
+  var body: some View {
+    Capsule()
+      .fill(.regularMaterial)
+      .overlay(Capsule().fill(Color.primary.opacity(isHovered ? 0.1 : 0)))
+      .overlay(Capsule().strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.06), lineWidth: 0.5))
+      .shadow(color: .black.opacity(0.16), radius: 3, y: 1)
+  }
+}

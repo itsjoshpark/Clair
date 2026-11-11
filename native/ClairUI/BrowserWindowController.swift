@@ -10,7 +10,7 @@ import os
 /// One native browser window (`ClairWindow`, design D3 and D4). Chromium
 /// creates the `NSWindow` and the browser; this styles the window, fills it,
 /// and keeps `BrowserWindowModel` up to date with what Chromium reports.
-final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, OverlayActions {
+final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, OverlayActions, PeekActions {
   static let toastDuration: Duration = .seconds(3)
 
   /// Every window's controller, for app-wide menus such as Extensions.
@@ -94,6 +94,11 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       self.model.sidebar.width = max(width, self.model.windowControls.narrowestSidebar)
       if done { self.preferences.remember(self.model.sidebar) }
     }
+    // The Peek's buttons, and a click beside it, close or expand it
+    // (add-peek design D4).
+    rootView.card.peekControls = NSHostingView(
+      rootView: PeekControlsView(confirm: model.peekConfirm, actions: self))
+    rootView.card.peekClickCatcher.onClick = { [weak self] in self?.closePeek() }
     WindowStyle.apply(to: window, profileKind: browser.profileKind)
     window.contentView = rootView
     model.isWindowKey = window.isKeyWindow
@@ -351,7 +356,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   // MARK: ClairWindow
 
   var pageContainerView: NSView {
-    rootView.card.container
+    // The Peek's container while a Peek shows, so its dialogs centre on it
+    // (add-peek design D4).
+    rootView.card.activeContainer
   }
 
   var isSidebarHidden: Bool {
@@ -368,6 +375,8 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   func tabsDidChange(_ tabs: [any ClairTab]) {
     model.setTabs(tabs)
+    // A Peek opened, closed or expanded.
+    showPages()
     model.reloadStop.loadingChanged(model.activeTab?.isLoading == true)
     rootView.loadingIndicator.loadingChanged(model.activeTab?.isLoading == true)
   }
@@ -417,9 +426,40 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
       model.reloadStop.tabSwitched(isLoading: model.activeTab?.isLoading == true)
       rootView.loadingIndicator.tabSwitched(isLoading: model.activeTab?.isLoading == true)
     }
-    rootView.card.show(page: browser?.pageView(for: tabID))
+    showPages()
     devToolsDidChange()
     offerCommandBarIfNew()
+  }
+
+  /// What the card shows: the active tab's page, or a Peek over its parent's
+  /// (add-peek design D4).
+  private func showPages() {
+    let shown = TabListLogic.shownPeek(activeTabID: model.activeTabID, in: model.tabs)
+    if shown?.peekID != shownPeek?.peekID {
+      model.peekConfirm.hide()
+    }
+    shownPeek = shown
+    if let shown {
+      rootView.card.show(page: browser?.pageView(for: shown.peekID), behind: browser?.pageView(for: shown.parentID))
+    } else {
+      rootView.card.show(page: browser?.pageView(for: model.activeTabID), behind: nil)
+    }
+    rootView.needsLayout = true
+  }
+
+  /// The Peek the card shows, if any.
+  private var shownPeek: TabListLogic.ShownPeek?
+
+  // MARK: PeekActions
+
+  func closePeek() {
+    guard let shownPeek else { return }
+    browser?.closePeek(of: shownPeek.parentID)
+  }
+
+  func expandPeek() {
+    guard let shownPeek else { return }
+    browser?.expandPeek(of: shownPeek.parentID)
   }
 
   func devToolsDidChange() {
@@ -589,7 +629,8 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   // MARK: SidebarActions
 
   func activate(tab: TabID) {
-    browser?.activate(tab: tab)
+    // A tab with a Peek shows with its Peek (add-peek D4).
+    browser?.activate(tab: TabListLogic.tabToActivate(forRow: tab, in: model.tabs))
   }
 
   func close(tab: TabID) {
