@@ -58,6 +58,17 @@ tests/probe/serve.sh stop
   fails when a line failed (`error: …`) or the probe stopped.
 - `probe.sh status` and `probe.sh stop`.
 
+**When the owner's own Clair is running** (for example a `run-local.sh` build
+they're trying), never attach the probe to Clair: with two copies running,
+XCUITest may drive theirs, so `probe.sh start dev.joshuapark.Clair` refuses.
+Drive the test copy over the DevTools protocol instead, which reaches only
+that copy: launch it with `launch-clair.sh --port 9333`, then
+`build/probe/bin/cdp 9333 <url part> click <x> <y> 8` Shift+clicks at CSS
+pixels (x, y), and `cdp` sends any other protocol command. Capture its window
+by ID (`screencapture -l`, IDs from `build/probe/bin/windows <pid>`), since
+the windows may overlap. The scripts never unregister a running copy from
+Launch Services.
+
 ## Commands
 
 Coordinates are in points from the top-left corner of the app's main window
@@ -94,10 +105,12 @@ build/probe/bin/measure track build/probe/rec/peek/frames white 0 0 2400 2012 80
   (Arc, Clair). `measure` works in the image's pixels: halve them for points.
 - `tools/` holds small Swift tools, compiled into `build/probe/bin/` on first
   use (or by `tools/build.sh`); each describes its arguments at the top:
-  `windows` (window IDs and frames), `frames` (a movie's frames), `sheet` (a
+  `windows` (window IDs and frames, by app name or process ID), `cdp` (DevTools
+  protocol commands for the test copy), `frames` (a movie's frames), `sheet` (a
   labelled contact sheet), `crop` (a pixel rectangle; `sips --cropOffset`
   centres instead), and `measure`:
-  - `pixel`, `bbox`, `runs` on one image;
+  - `pixel`, `line` (every pixel along a row or column, for profiles such as a
+    shadow's falloff), `bbox`, `runs` on one image;
   - `track` (a bounding box per frame), `lum` (the darkest pixel in a
     rectangle per frame) and `match` (where each frame sits between two
     templates, such as reload and stop) over a recording, printing only
@@ -116,6 +129,9 @@ These come from the add-peek change (its design.md has the numbers):
   card's edges, `measure track … white … 80` the Peek's (rows with a white
   run of 80 px, 40 pt, or more, which skips the buttons), and `measure bbox … accent`
   a button's glyph.
+- **Shadows.** `measure line` along a row through a card, outward from its
+  edge, against the washed page further out gives the shadow's darkening per
+  pixel; compare both apps' profiles side by side.
 - **Animation curves.** Record the open and close, `track` the Peek's height
   per frame, and fit a curve to it.
 - **Load timing.** `/slow-links` links to pages the server sends after 200 ms

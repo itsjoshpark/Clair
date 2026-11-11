@@ -8,9 +8,9 @@
 #   probe.sh status              whether it runs, and the end of its log
 #   probe.sh stop
 #
-# Clair (dev.joshuapark.Clair) must be the test copy from launch-clair.sh:
-# start refuses to attach to Clair otherwise, since XCUITest would launch
-# whichever copy Launch Services prefers.
+# Clair (dev.joshuapark.Clair) must be the test copy from launch-clair.sh,
+# running alone: start refuses to attach to Clair otherwise, since XCUITest
+# would launch, or drive, whichever copy Launch Services prefers.
 
 set -euo pipefail
 # shellcheck source=tests/probe/lib.sh
@@ -74,6 +74,11 @@ start() {
   local app="${1:-company.thebrowser.Browser}"
   if [[ "$app" == "$clair_id" ]]; then
     test_clair_running || die "start the test copy of Clair with launch-clair.sh first"
+    # With two copies running, XCUITest may drive the other, such as the
+    # owner's own test build.
+    local others
+    others="$(running_clairs | grep -vxF "$(test_clair)" || true)"
+    [[ -z "$others" ]] || die "another Clair is running, and the probe could drive it: $others"
   fi
   unregister_other_clairs "$(test_clair)"
   stop

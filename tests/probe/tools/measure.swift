@@ -12,6 +12,8 @@
 //
 //   pixel <png> <x> <y>                    the pixel's r g b a
 //   bbox  <png> <test> [x y w h]           the bounding box of matching pixels
+//   line  <png> row|col <n> <from> <to>    each pixel's r g b along a row or
+//                                          column, from `from` to `to`
 //   runs  <png> row|col <n> <test> [min]   runs of matching pixels along a row
 //                                          or column, at least `min` long
 //   track <dir> <test> [x y w h] [min]     per frame: the bounding box of the
@@ -150,6 +152,16 @@ case "pixel" where args.count == 4:
 case "bbox" where args.count >= 3:
   let image = Image(args[1])
   print(box(bbox(image, test(args[2]), rect(args, at: 3, in: image))))
+
+case "line" where args.count == 6:
+  let image = Image(args[1])
+  let alongRow = args[2] == "row"
+  guard alongRow || args[2] == "col" else { fail("measure line: row or col") }
+  let n = int(args[3]), from = int(args[4]), to = int(args[5])
+  for i in stride(from: from, through: to, by: from <= to ? 1 : -1) {
+    let p = alongRow ? image.rgba(i, n) : image.rgba(n, i)
+    print(i, p[0], p[1], p[2])
+  }
 
 case "runs" where args.count >= 5:
   let image = Image(args[1])

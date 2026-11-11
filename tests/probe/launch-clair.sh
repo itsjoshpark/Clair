@@ -49,9 +49,11 @@ args=(--user-data-dir="$profile" --use-mock-keychain --no-first-run --no-default
 [[ -n "$url" ]] && args+=("$url")
 open -n "$app" --args "${args[@]}"
 
+# Its windows, not those of another Clair the owner may be running.
 for _ in $(seq 1 40); do
-  if "$bin/windows" Clair | grep -q "on screen"; then
-    "$bin/windows" Clair
+  pid="$(pgrep -f "^$app/Contents/MacOS/Clair( |$)" | head -1 || true)"
+  if [[ -n "$pid" ]] && "$bin/windows" "$pid" | grep -q "on screen"; then
+    "$bin/windows" "$pid" | grep "on screen"
     exit 0
   fi
   sleep 0.5

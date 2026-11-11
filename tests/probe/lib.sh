@@ -32,13 +32,23 @@ registered_clairs() {
     $1 == "identifier:" && $2 == id { print path }' | sort -u
 }
 
-# Unregisters every copy of Clair but `$1` and installed ones in
-# /Applications, so XCUITest attaches to the test copy and never launches
-# another, such as the runner's build, with the owner's real profile.
+# The main executables of every running Clair, one per line.
+running_clairs() {
+  # Helpers run as ".../MacOS/Clair Helper --type=…"; the app as
+  # ".../MacOS/Clair" with or without "--" arguments.
+  ps -axo command= | sed -nE 's|^(/.*\.app)/Contents/MacOS/Clair( -.*)?$|\1|p' | sort -u
+}
+
+# Unregisters every copy of Clair but `$1`, installed ones in /Applications
+# and running ones (the owner's own test builds), so XCUITest attaches to the
+# test copy and never launches another, such as the runner's build, with the
+# owner's real profile.
 unregister_other_clairs() {
-  local keep="$1" app
+  local keep="$1" app running
+  running="$(running_clairs)"
   while IFS= read -r app; do
     [[ "$app" == "$keep" || "$app" == /Applications/* ]] && continue
+    grep -qxF "$app" <<<"$running" && continue
     "$lsregister" -u "$app" 2>/dev/null || true
   done < <(registered_clairs)
 }
