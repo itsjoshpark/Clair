@@ -34,6 +34,7 @@ clair/native-layer-hook.patch
 clair/versioning.patch
 clair/update-relaunch-hook.patch
 clair/native-window-hook.patch
+clair/peek-session.patch
 clair/settings-logo-icons.patch
 clair/page-cannot-move-window.patch
 clair/copy-url-shortcut.patch

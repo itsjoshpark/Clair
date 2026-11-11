@@ -10,7 +10,6 @@
 #include <set>
 #include <vector>
 
-#include "base/callback_list.h"
 #include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -92,8 +91,6 @@ class ClairPeeks : public TabStripModelObserver {
   void CloseSoon(tabs::TabInterface* peek);
   // Turns the Peek of `tab` into a normal, active tab (D8).
   void Expand(tabs::TabInterface* tab);
-  // Closes every Peek in the window, as before it closes or Clair quits (D9).
-  void CloseAll();
 
   // Moves `tab` to `to_index` in the tab strip, taking its Peek along, so that
   // `tab` ends at `to_index` and its Peek right after it.
@@ -159,9 +156,9 @@ class ClairPeeks : public TabStripModelObserver {
   // its Peek closing shows its Peek again (D4).
   void ActiveTabChanged(tabs::TabInterface* active);
   void ShowPeekOf(tabs::TabHandle parent);
-  // Whether every window can close without a beforeunload handler left to
-  // run, so a quit can't be cancelled by a leave-page confirmation (D9).
-  static bool NoBeforeUnloadPending();
+  // D9: records in the session that the Peek of `pair` is no longer one,
+  // as it stays a tab.
+  void Untag(tabs::TabHandle peek);
   // The tab list ClairUI shows changed.
   void Changed();
 
@@ -198,7 +195,6 @@ class ClairPeeks : public TabStripModelObserver {
   // Confirm (D6): the Peek it's armed for, and until when.
   std::optional<tabs::TabHandle> confirm_peek_;
   base::TimeTicks confirm_until_;
-  base::CallbackListSubscription closing_all_subscription_;
   base::WeakPtrFactory<ClairPeeks> weak_factory_{this};
 };
 

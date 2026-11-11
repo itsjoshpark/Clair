@@ -267,6 +267,18 @@ final class PeekTests: NativeWindowTestCase {
     XCTAssertTrue(peekGone, "The Peek stayed behind after its parent moved")
     let parentOpen = try await browser.target(endingWith: "peek.html") != nil
     XCTAssertTrue(parentOpen, "Moving the parent closed it")
+
+    // Reopen Closed Window brings the parent back without its Peek (D9).
+    try await openPeek("plain", in: links, browser: browser, suffix: "?plain")
+    browser.ui.typeKey("w", modifierFlags: [.command, .shift])
+    let closedWindow = await browser.waitForTarget("peek.html", open: false)
+    try require(closedWindow, "Cmd+Shift+W didn't close the parent's window")
+    browser.ui.typeKey("t", modifierFlags: [.command, .shift])
+    let reopened = await browser.waitForTarget("peek.html", seconds: 30)
+    XCTAssertTrue(reopened, "Reopen Closed Window didn't bring the parent back")
+    try await Task.sleep(for: .seconds(2))
+    let peekReopened = try await browser.target(endingWith: "?plain") != nil
+    XCTAssertFalse(peekReopened, "Reopen Closed Window brought the Peek back")
   }
 
   func testEscapeTheLinksSettingAndQuitting() async throws {

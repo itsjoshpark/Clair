@@ -1,0 +1,96 @@
+# Peeks end with the session (add-peek design D9). Clair tags a Peek in what
+# Chromium saves for the session and for Reopen Closed Window, and both leave
+# tagged tabs out when they restore, so a Peek never comes back, whether the
+# window closed, Clair quit, a page's leave-page confirmation held things up,
+# or Clair crashed. Expanding a Peek clears its tag.
+#
+# - session_service_base.cc: the session file's rebuild writes the tag again;
+#   it otherwise keeps no tab extra data.
+# - session_restore.cc: drops tagged tabs before restoring windows.
+# - browser_live_tab_context.cc: tags a Peek's extra data for tab restore.
+# - tab_restore_service_helper.cc: a closing window's entry leaves tagged tabs
+#   out. The key is spelled out here, since components can't include chrome.
+
+--- a/chrome/browser/sessions/session_service_base.cc
++++ b/chrome/browser/sessions/session_service_base.cc
+@@ -20,6 +20,7 @@
+ #include "base/task/sequenced_task_runner.h"
+ #include "build/build_config.h"
+ #include "chrome/browser/apps/app_service/web_contents_app_id_utils.h"
++#include "chrome/browser/clair/window/clair_peek_session.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/sessions/session_service_base_observer.h"
+@@ -632,6 +633,14 @@
+       sessions::CreateLastActiveTimeCommand(session_id,
+                                             tab->GetLastActiveTime()));
+ 
++  // Clair: a Peek keeps its tag through a rebuild, so session restore leaves
++  // it out (add-peek design D9).
++  if (clair::IsPeekTab(tab)) {
++    command_storage_manager()->AppendRebuildCommand(
++        sessions::CreateAddTabExtraDataCommand(
++            session_id, clair::kPeekSessionKey, "1"));
++  }
++
+   // TODO(stahon@microsoft.com) This might be movable to SessionService
+   // when Chrome OS uses AppSessionService for app restores.
+   // For now it needs to stay to support SessionService restoring apps.
+--- a/chrome/browser/sessions/session_restore.cc
++++ b/chrome/browser/sessions/session_restore.cc
+@@ -39,6 +39,7 @@
+ #include "base/token.h"
+ #include "build/build_config.h"
+ #include "chrome/browser/after_startup_task_utils.h"
++#include "chrome/browser/clair/window/clair_peek_session.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/buildflags.h"
+ #include "chrome/browser/prefs/session_startup_pref.h"
+@@ -766,6 +767,8 @@
+     DVLOG(1) << "ProcessSessionWindows " << windows->size();
+ 
+     PruneWindows(windows);
++    // Clair: Peeks end with the session (add-peek design D9).
++    clair::DropPeeks(windows);
+ 
+     if (windows->empty()) {
+       // Restore was unsuccessful. The cookie/storage systems can also delete
+--- a/chrome/browser/ui/browser_live_tab_context.cc
++++ b/chrome/browser/ui/browser_live_tab_context.cc
+@@ -17,6 +17,7 @@
+ #include "base/uuid.h"
+ #include "base/values.h"
+ #include "chrome/browser/apps/app_service/web_contents_app_id_utils.h"
++#include "chrome/browser/clair/window/clair_peek_session.h"
+ #include "chrome/browser/glic/glic_tab_restore_helper.h"
+ #include "chrome/browser/performance_manager/public/background_tab_loading_policy.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -200,6 +201,8 @@
+ 
+   glic::PopulateGlicExtraData(tab_strip_model_->GetTabAtIndex(index),
+                               &extra_data);
++  // Clair: Reopen Closed Window leaves a Peek out (add-peek design D9).
++  clair::AddPeekExtraData(tab_strip_model_->GetTabAtIndex(index), &extra_data);
+ 
+   return extra_data;
+ }
+--- a/components/sessions/core/tab_restore_service_helper.cc
++++ b/components/sessions/core/tab_restore_service_helper.cc
+@@ -325,6 +325,17 @@
+     auto tab = std::make_unique<Tab>();
+     PopulateTab(tab.get(), tab_index, context,
+                 context->GetLiveTabAt(tab_index));
++    // Clair: a Peek, tagged by chrome/browser/clair/window/clair_peek_session,
++    // isn't restored with its window; its parent, just before it, is selected
++    // in its place (add-peek design D9).
++    if (auto peek = tab->extra_data.find("clair_peek");
++        peek != tab->extra_data.end() && peek->second == "1") {
++      if (tab_index <= context->GetSelectedIndex()) {
++        window->selected_tab_index =
++            std::max(0, window->selected_tab_index - 1);
++      }
++      continue;
++    }
+     if (tab->navigations.empty()) {
+       continue;
+     }

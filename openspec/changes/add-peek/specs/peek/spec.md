@@ -136,11 +136,15 @@ Closing a tab that has a Peek SHALL close its Peek with it. A leave-page confirm
 - **THEN** the tab and its Peek close, and no Peek is left in the window
 
 ### Requirement: Peeks end with the session
-Peeks SHALL NOT outlive the session. Quitting Clair or closing a window SHALL close the Peeks in it, and session restore and Reopen Closed Window SHALL restore their parent tabs without them. A close or quit that a page's leave-page confirmation cancels SHALL leave the Peeks open.
+Peeks SHALL NOT outlive the session. Session restore, after a quit or a crash, and Reopen Closed Window SHALL restore a Peek's parent tab without its Peek. A close or quit that a page's leave-page confirmation cancels SHALL leave the Peeks open. An expanded Peek is a normal tab and SHALL be restored as one.
 
 #### Scenario: Quit with a Peek open
 - **WHEN** a tab has a Peek open, and the user quits and relaunches Clair with session restore on
 - **THEN** the tab is restored without its Peek, and no tab for the Peek's page is restored
+
+#### Scenario: Reopening a closed window
+- **WHEN** a window with a tab that has a Peek open is closed, and the user reopens it with Reopen Closed Window
+- **THEN** the tab comes back without its Peek
 
 #### Scenario: Staying on a page that asks
 - **WHEN** a window has a tab with a Peek and a page that asks before it's left, and the user closes the window and chooses to stay

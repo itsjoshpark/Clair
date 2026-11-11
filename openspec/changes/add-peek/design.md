@@ -118,13 +118,15 @@ Expand only unlinks, since the Peek already sits at its parent's index + 1 (spec
 
 ### D9. Peeks end with the session
 
-Before Chromium starts closing a native window's tabs, the window closes its Peeks, but only when no leave-page confirmation can still cancel the close, which would otherwise lose them:
-- **Closing a window:** in `Close`, when `UnloadController::GetBrowserClosingStatus()` permits the close. Otherwise the Peeks close with the window's other tabs once every page has agreed.
-- **Quitting:** from the close-all callback, which runs before session data is written for the quit, when no window has a beforeunload handler left to run.
+Peeks don't come back: Chromium saves them like any tab, tagged, and restores everything but tagged tabs. Closing Peeks early instead, before Chromium saves a closing window or a quit, depended on timing, and a page's leave-page confirmation could still leave them in the saved data.
 
-A runtime test checks that relaunching restores the parent alone.
+- **Tagging:** linking a Peek writes `clair_peek = "1"` into the session as tab extra data (`SessionService::AddTabExtraData`). Expanding it, or moving it away on its own, writes `"0"`.
+- **The session file's rebuild:** Chromium rebuilds the file from the open tabs from time to time and keeps no tab extra data then, so `patches/clair/peek-session.patch` has `BuildCommandsForTab` write the tag again for a Peek.
+- **Session restore:** the patch has `ProcessSessionWindows` drop tagged tabs before restoring windows. A dropped selected tab hands the selection to the tab before it, its parent. This covers relaunching after a quit and after a crash.
+- **Reopen Closed Window:** `BrowserLiveTabContext::GetExtraDataForTab` tags a Peek, and the patch has `TabRestoreServiceHelper::BrowserClosing` leave tagged tabs out of the window's entry. Components can't include Chrome code, so the key is spelled out there.
+- **Closing:** a window's Peeks close with its other tabs, as orphans once their parents have gone (D8), and a quit closes none early. When a page asks before a window closes or Clair quits, staying keeps the window and its Peeks open; leaving closes them, and the Peeks aren't restored.
 
-*Alternative, if the session still records them:* tag Peeks with `SessionService::AddTabExtraData` and drop tagged tabs on restore. That needs a patch in session restore, so it's the fallback rather than the first choice. After a crash, a Peek comes back as a normal tab below its parent; that's accepted.
+Runtime tests check that relaunching after a quit, and Reopen Closed Window, restore the parent alone.
 
 ### D10. Preference and Settings
 
@@ -140,8 +142,7 @@ The status capsule lays out against the Peek container's bottom-leading corner w
 
 ## Risks / Trade-offs
 
-- **[Session restore records a Peek before D9 closes it]** → A runtime test quits with a Peek open; the fallback is D9's extra data.
-- **[A close or quit that a page asks about]** → The Peeks stay open until it's certain, so declining keeps them; confirming may record them, and they come back as normal tabs from session restore or Reopen Closed Window. Rare, and nothing is lost.
+- **[Session data from before a Peek's tag]** → Linking writes the tag at once and the rebuild writes it again, so a session file always has it; runtime tests cover quitting and Reopen Closed Window.
 - **[Chromium picks a different tab after the Peek closes]** → D4 activates the parent explicitly, and the runtime test checks it.
 - **[Scaling the parent with a layer transform blurs it or misplaces hit testing]** → The click catcher covers the parent, so it takes no input. If the blur shows, inset the frame instead and accept one reflow.
 - **[Extensions or pages enumerating tabs see the Peek as a tab]** → Accepted. `chrome.tabs` lists it as the tab it is, and that keeps extensions working inside a Peek.
