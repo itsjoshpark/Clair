@@ -233,10 +233,6 @@ After Clair quits and relaunches, each restored tab SHALL return to its Space at
 - **WHEN** the user quits with a window showing "Work", which has three tabs, while "Home" has two, and relaunches
 - **THEN** the window shows "Work" with its three tabs in order, and switching to "Home" lists its two
 
-#### Scenario: Tabs from a second window
-- **WHEN** the user quits with two windows open, the last active showing "Work" and the other showing "Home" with two tabs, and relaunches
-- **THEN** one window opens showing "Work", and switching to "Home" lists its two tabs
-
 #### Scenario: Reopen Closed Tab
 - **WHEN** the user closes a tab of "Work", switches to "Home" and chooses Restore Last Closed Tab
 - **THEN** the tab comes back in "Work", and the window shows "Work"

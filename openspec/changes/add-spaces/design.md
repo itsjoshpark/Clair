@@ -64,7 +64,7 @@ Each native browser has a shown Space, set by `-[ClairBrowser showSpace:]`. The 
 - If another tab becomes active for any reason (Chromium's choice after a page closed itself, an extension, "Switch to Tab", Restore Last Closed Tab), the browser's shown Space becomes that tab's Space.
 - Showing a Space activates the tab last active in it in this browser, or else opens a new tab page with the command bar.
 
-So which Space a window shows needs no storage of its own: after a relaunch it is its active tab's Space, which is the one last shown in the window that was active (D11). A new browser shows the Space of the browser that was active when it opened, or `clair.last_space`.
+So which Space a window shows needs no storage of its own: after a relaunch it is its active tab's Space. A new browser shows the Space of the browser that was active when it opened, or `clair.last_space`.
 
 ### D4. The next tab is chosen before a close starts
 
@@ -85,16 +85,10 @@ Each browser remembers one **came-from** tab: set when the user selects a tab wh
 - `browser_live_tab_context.cc`: add them for Reopen Closed Tab and Window.
 - `browser_tabrestore.cc`, in `CreateRestoredTab`: read them onto the new `WebContents`, before it joins a strip.
 
-### D11. Tabs are restored at launch, into one window
+### D11. Tabs are restored at launch
 
-Chromium restores tabs only as part of restoring windows, so two things make "the tabs come back, the windows don't":
+`clair::RegisterProfilePrefOverrides`, which already sets Clair's defaults for the password and autofill prefs, also sets the default of `session.restore_on_startup` to Chromium's "continue where you left off" value. It is a default, not a forced value: "On startup" in `chrome://settings` still changes it. It is a profile pref, so it holds for every profile `add-profiles` creates. Nothing else about Chromium's session restore changes: the tabs keep their `clair_space` and `clair_order` tags, so each lands in its Space at its place (D2, D6).
 
-- **Session restore is the default.** `clair::RegisterProfilePrefOverrides`, which already sets Clair's defaults for the password and autofill prefs, also sets the default of `session.restore_on_startup` to Chromium's "continue where you left off" value. It is a default, not a forced value: "On startup" in `chrome://settings` still changes it. It is a profile pref, so it holds for every profile `add-profiles` creates.
-- **The session's windows are merged before any is created.** `space-session.patch` adds a call in `session_restore.cc`'s `ProcessSessionWindows`, beside `clair::DropPeeks`, to `clair::MergeRestoredWindows`: among the normal windows it keeps the one that was active, moves every other window's tabs into it, and drops the emptied windows. The tabs keep their `clair_space` and `clair_order` tags, so each lands in its Space at its place (D2, D6), and the kept window keeps its bounds and its selected tab.
-
-Reopen Closed Window goes through Chromium's tab restore service, not this path, and still reopens a window.
-
-- **Why merge in the session data:** no browser is created for a window that won't show, and no tab has to move between live windows, which this change doesn't otherwise do.
 - **Why a default override and not the `--restore-last-session` switch:** the switch can't be turned off by the user and doesn't show in settings.
 
 ### D7. Moving a tab to another Space, and reordering Spaces
