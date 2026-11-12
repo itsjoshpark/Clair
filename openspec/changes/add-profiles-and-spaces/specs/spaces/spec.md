@@ -18,7 +18,7 @@ Clair SHALL keep an ordered list of Spaces. Each Space SHALL have a name, an opt
 - **THEN** the Spaces "Home", "Work" and "Travel" exist in that order, each with its name, icon and profile
 
 ### Requirement: Space header
-Above the tab list, the sidebar SHALL show the current Space's icon, if it has one, and its name. Right-clicking the header SHALL open a menu offering Change Space Icon…, Rename Space…, Set Profile and Delete Space, as in Arc. An incognito or guest window SHALL show no Space header.
+Above the tab list, the sidebar SHALL show the current Space's icon, if it has one, and its name. Right-clicking the header SHALL open a menu offering Change Space Icon…, Rename Space…, Set Profile, Manage Spaces… and Delete Space, as in Arc. An incognito or guest window SHALL show no Space header.
 
 #### Scenario: Header shows the Space
 - **WHEN** a window shows the Space "Work", whose icon is 💼
@@ -119,7 +119,7 @@ Change Space Icon…, and the icon button in the New Space form, SHALL open macO
 - **THEN** the header shows the name alone, and the switcher shows a dot for the Space
 
 ### Requirement: Changing a Space's profile
-Set Profile SHALL list every profile, with a checkmark on the Space's, and "New Profile…". Choosing another profile for a Space with no tabs SHALL apply at once. For a Space with tabs, Clair SHALL first ask for confirmation, saying that the tabs will reload and may be signed out; on confirmation each tab SHALL reopen at its URL in the new profile, in the same order.
+Set Profile SHALL list every profile, with a checkmark on the Space's, and "New Profile…". Choosing another profile for a Space with no tabs SHALL apply at once. For a Space with tabs, Clair SHALL first ask for confirmation in a dialog, saying that the tabs will reload and may be signed out; on confirmation each tab SHALL reopen at its URL in the new profile, in the same order.
 
 #### Scenario: Empty Space
 - **WHEN** the user sets the profile of a Space with no tabs to "Work"
@@ -134,7 +134,7 @@ Set Profile SHALL list every profile, with a checkmark on the Space's, and "New 
 - **THEN** the Space keeps its profile and its tabs are untouched
 
 ### Requirement: Deleting a Space
-Delete Space SHALL be disabled for the only Space. Deleting a Space with no tabs SHALL happen at once. For a Space with tabs, Clair SHALL first ask for confirmation, saying that its tabs will close; on confirmation its tabs SHALL close in every window. Each window that showed the Space SHALL then show the Space before it, or the one after when it was first.
+Delete Space SHALL be disabled for the only Space. Deleting a Space with no tabs SHALL happen at once. For a Space with tabs, Clair SHALL first ask for confirmation in a dialog, saying that its tabs will close; on confirmation its tabs SHALL close in every window. Each window that showed the Space SHALL then show the Space before it, or the one after when it was first.
 
 #### Scenario: The only Space
 - **WHEN** there is one Space and the user opens its header's menu
@@ -173,6 +173,40 @@ With more than one Space, a tab row's context menu SHALL offer "Move to Space" w
 #### Scenario: One Space
 - **WHEN** there is one Space
 - **THEN** the tab's menu has no "Move to Space"
+
+### Requirement: Manage Spaces dialog
+Manage Spaces…, in the Spaces menu and the Space header's menu, SHALL open a dialog in the window, with every Space in order on the left, each with its icon, name and number of tabs, and the selected Space's name, icon and profile on the right. It SHALL open with the window's Space selected, and "Done" or Esc SHALL close it.
+
+#### Scenario: Opening
+- **WHEN** a window shows "Work" and the user chooses Manage Spaces…
+- **THEN** the dialog lists every Space in order with "Work" selected, and shows its name, icon and profile
+
+#### Scenario: Closing
+- **WHEN** the user clicks "Done"
+- **THEN** the dialog closes and the window shows the Space it showed before, unless that Space was removed
+
+### Requirement: Editing Spaces in the dialog
+In the Manage Spaces dialog the user SHALL be able to add a Space, remove the selected one, drag Spaces to reorder them, and edit the selected Space's name, icon and profile. Each change SHALL apply at once, in every window. Removing a Space, or changing the profile of one, SHALL follow the same rules and confirmations as the Space header's menu.
+
+#### Scenario: Reordering
+- **WHEN** the user drags the last Space to the top of the list
+- **THEN** it is first in the list and in every window's switcher
+
+#### Scenario: Renaming
+- **WHEN** the user changes the selected Space's name to "Research"
+- **THEN** its row, the sidebar's header and the Spaces menu show "Research"
+
+#### Scenario: Adding
+- **WHEN** the user clicks Add
+- **THEN** a new Space is last in the list, selected, with its name field focused, using the profile of the Space selected before
+
+#### Scenario: Removing a Space with tabs
+- **WHEN** the user selects a Space with tabs and clicks Remove
+- **THEN** Clair asks for confirmation as Delete Space does, and on confirmation the Space leaves the list
+
+#### Scenario: The only Space
+- **WHEN** there is one Space
+- **THEN** Remove is disabled
 
 ### Requirement: Tabs belong to a Space
 Every tab outside incognito and guest windows SHALL belong to exactly one Space. A new tab SHALL join the Space its window shows, whether it comes from Cmd+T, a link, an extension or another app. A tab SHALL use its Space's profile.

@@ -195,7 +195,7 @@ Pushes stay coalesced to once per run-loop turn per tab and per Space.
 - **Sidebar:** `SpaceHeaderView` above the tab list; `SpaceSwitcher` in `SidebarFooter`; `NewSpaceForm` in place of the header and list.
 - **The slide:** the content between the URL field and the footer is a pager. On `shownSpaceDidChange:from:` the window that is now shown draws the earlier Space's header and rows from `SpacesModel` and slides to the new one, so a cross-profile swap animates in the incoming window. Start from an interpolating spring that covers about 80% of the distance in 100 ms and settles by 300 ms, then tune against Arc.
 - **Icons:** a Space's icon is one emoji, chosen with macOS's emoji picker. `SpaceIconField` is a one-character text field where the icon shows, in the header and in the form. Change Space Icon… and the form's icon button make it first responder and call `NSApp.orderFrontCharacterPalette`. It keeps the first emoji of whatever is entered, ignores text that isn't an emoji, and clears on Delete; Return, Esc or losing focus ends the edit. The store keeps the string, so a later change can add glyphs, such as a grid of SF Symbols, under a prefix without changing the schema.
-- **Sheets:** `ProfileSheets` holds the new, rename and delete sheets, used from Settings and from "New Profile…" in the form and the Set Profile menu.
+- **Dialogs:** `ProfileDialogs` holds the new, rename and delete dialogs, used from Settings and from "New Profile…" in the form, the Set Profile menu and Manage Spaces. `ManageSpacesDialog` is D21's. All are `ClairDialog`s (D20).
 - **Settings:** `SettingsPage` gains `profiles` after `general`; `ProfilesSettingsView` is the page, 684 pt wide, where the other pages stay 520.
 
 ### D15. Profiles and Spaces stay consistent without a cascade
@@ -227,6 +227,31 @@ If the tab is active here, the overlay first activates the next tab as D9 does f
 
 `moveSpace:toIndex:` rewrites `clair.spaces`' `order` and notifies observers. `SpaceSwitcher` handles the drag; the Spaces menu rebuilds from the observer.
 
+### D20. `ClairDialog`: Clair's own dialog
+
+`ClairDialog.swift` adds one reusable SwiftUI component and a `.clairDialog(item:)` modifier, used on a browser window's root view and on the Settings window's content. It draws a dimmed layer over the window's content and a rounded, shadowed card centred on it, layered above the page as the command bar is.
+
+- **Parts:** an optional icon, a title, a message, a content slot (a field, or D21's two columns), and a button row built from roles: cancel (Esc), default (Return) and destructive default (red). The buttons show their key in a small capsule, as Arc's do.
+- **Blocking its window:** the dimmed layer takes every click, and the dialog holds first responder inside a focus scope, so keys don't reach the page; the browser window gives up the page's focus first, as it does for the command bar, and restores it on closing. It is modal to its window only.
+- **One at a time per window, with one level on top:** a confirmation opened from a dialog (Remove in Manage Spaces, "New Profile…" in its profile popup) shows over it and returns to it.
+- **Accessibility:** the card is a modal accessibility element titled by its title, with stable identifiers on its buttons for the runtime suite.
+
+- **Why not `NSAlert` or a sheet:** their layout, corners, buttons and key hints can't be styled to match Arc's, and a sheet can't hold D21's two columns well.
+- **Why in the window and not a child window:** it moves, resizes and goes full screen with its window for free, and needs no window ordering code.
+- **Scope:** every dialog this change adds. `ExtensionPromptSheets` and the update prompts stay as they are; a later change moves them.
+
+### D21. Manage Spaces
+
+`ManageSpacesDialog.swift` is a `ClairDialog` with two columns in its content slot, shown in the window it was opened from:
+
+- **Left:** the Spaces from `SpacesModel` in order, each row with icon, name and tab count; drag to reorder (`moveSpace:toIndex:`); Add and Remove under the list.
+- **Right:** the selected Space's name field, its `SpaceIconField` and its profile popup with "New Profile…".
+- Add creates a Space named "New Space" on the selected Space's profile and focuses its name. An emptied name reverts when the field loses focus.
+- Remove and a profile change on a Space with tabs use the same confirmations as the header's menu.
+- Its one button is "Done"; Esc closes it too.
+
+It needs no contract of its own: every action is a host call D13 already lists. With no browser window open, Manage Spaces… is disabled.
+
 ## Risks / Trade-offs
 
 - **[Hidden members during session restore]** Chromium may show a restored window before its first tagged tab arrives. → Task 5.6 tests it; the fallback hides non-shown members when session restore finishes.
@@ -236,10 +261,11 @@ If the tab is active here, the overlay first activates the next tab as D9 does f
 - **[Two windows on one tab move it on every focus change]** → Accepted; Arc does the same.
 - **[A window can close when a page closes its only tab]** → Accepted (D9); it needs a close Clair didn't start.
 - **[Reopen Closed Window brings back an empty window]** when its tabs moved to another window. → Accepted.
+- **[A hand-built dialog must get keyboard and VoiceOver behaviour right]** that `NSAlert` gives for free. → D20 lists them, and the `dialogs` spec's scenarios are tested in the runtime suite.
 - **[The contract change is large]** Every `ClairUI` test double changes. → Group 1 lands the contract and fakes first, so `ClairUI` work can proceed against `FakeHost` while the engine builds.
 - **[Engine build time]** One engine build covers groups 2 to 5; fixes rebuild incrementally.
 
 ## Open Questions
 
 - The first Space's name, "Home". It changes one string.
-- The slide's exact curve, tuned in task 6.4 against a recording on real hardware.
+- The slide's exact curve, tuned in task 6.5 against a recording on real hardware.

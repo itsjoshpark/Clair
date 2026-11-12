@@ -55,7 +55,7 @@ The list SHALL be headed "Your Profiles" and show each profile's name and how ma
 - **THEN** the row for "Work" shows "2 Spaces"
 
 ### Requirement: Adding a profile
-Add, and "New Profile…" wherever profiles are listed, SHALL ask for the new profile's name in a sheet, as in Arc, with "Create Profile" disabled until a name is typed. Creating SHALL add a profile with that name and no Spaces, and select it where it was asked for.
+Add, and "New Profile…" wherever profiles are listed, SHALL ask for the new profile's name in a dialog, as in Arc, with "Create Profile" disabled until a name is typed. Creating SHALL add a profile with that name and no Spaces, and select it where it was asked for.
 
 #### Scenario: Adding from Settings
 - **WHEN** the user clicks Add, types "Client" and presses Return
@@ -66,18 +66,18 @@ Add, and "New Profile…" wherever profiles are listed, SHALL ask for the new pr
 - **THEN** no profile is created
 
 ### Requirement: Renaming a profile
-Rename SHALL ask for the selected profile's new name in a sheet that says the names of its Spaces won't change. Saving a non-empty name SHALL rename the profile everywhere it is listed, at once, including while windows show its Spaces.
+Rename SHALL ask for the selected profile's new name in a dialog that says the names of its Spaces won't change. Saving a non-empty name SHALL rename the profile everywhere it is listed, at once, including while windows show its Spaces.
 
 #### Scenario: Renaming the profile in use
 - **WHEN** a window shows a Space using "Work", and the user renames "Work" to "Office"
 - **THEN** the Profiles list and every Set Profile menu show "Office", the Space keeps its name, and the window keeps showing its page
 
 #### Scenario: Empty name
-- **WHEN** the user clears the name in the sheet
+- **WHEN** the user clears the name in the dialog
 - **THEN** "Save" is disabled
 
 ### Requirement: Removing a profile
-Remove SHALL be enabled only for a profile that no Space uses. It SHALL ask for confirmation in a sheet that says the profile's cookies, history, preferences and logins will be permanently removed, and SHALL enable "Delete" only once the user has typed the profile's name. Confirming SHALL delete the profile and its data.
+Remove SHALL be enabled only for a profile that no Space uses. It SHALL ask for confirmation in a dialog that says the profile's cookies, history, preferences and logins will be permanently removed, and SHALL enable "Delete" only once the user has typed the profile's name. Confirming SHALL delete the profile and its data.
 
 #### Scenario: Profile in use
 - **WHEN** the user selects a profile that one Space uses
@@ -92,7 +92,7 @@ Remove SHALL be enabled only for a profile that no Space uses. It SHALL ask for 
 - **THEN** "Client" leaves the list and every profile menu, and its data folder is deleted
 
 #### Scenario: Wrong name
-- **WHEN** the user types "client 2" in the sheet for "Client"
+- **WHEN** the user types "client 2" in the dialog for "Client"
 - **THEN** "Delete" stays disabled
 
 ### Requirement: Download location
