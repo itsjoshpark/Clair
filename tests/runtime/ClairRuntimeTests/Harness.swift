@@ -34,18 +34,17 @@ struct Fixture: Decodable {
 enum Harness {
   static let bundleID = "dev.joshuapark.Clair"
 
-  /// Drags from the middle of one element to the middle of another at a
-  /// hand's speed, for SwiftUI drag gestures, which need to see the drag
-  /// move. With the mouse's own events where the runner may post them, which
-  /// is what a gesture gets from a user; otherwise with XCUITest's slow drag.
-  /// Returns which it used, for a failure's message.
+  /// Drags from the middle of one element to the middle of another: with the
+  /// mouse's own events, at a hand's speed, where the runner may post them,
+  /// which is what a user's drag sends; otherwise with XCUITest's drag, as on
+  /// hosted runners. Returns which it used, for a failure's message.
   @MainActor
   @discardableResult
-  static func slowDrag(from: XCUIElement, to: XCUIElement) -> String {
+  static func drag(from: XCUIElement, to: XCUIElement) -> String {
     guard CGPreflightPostEventAccess() else {
+      // The call the tab list's drag test uses.
       from.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
-        forDuration: 0.3, thenDragTo: to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
-        withVelocity: .slow, thenHoldForDuration: 0.3)
+        forDuration: 0.4, thenDragTo: to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
       return "XCUITest's drag"
     }
     let start = CGPoint(x: from.frame.midX, y: from.frame.midY)
