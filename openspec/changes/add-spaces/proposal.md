@@ -18,7 +18,7 @@ This is the first of three changes that bring Arc's Spaces and Profiles: `share-
 - **BREAKING (`ClairHost.h`):** the host gains Spaces, their tab lists and an observer; `ClairTab` gains its Space and the window that holds it; `ClairBrowser` gains the shown Space; and tab lists come from the host, per Space, in place of each window's own.
 
 **Out of scope:**
-- One tab list shared by every window, the dimmed still, and keeping a closed window's tabs: `share-tabs-across-windows`. Until then, a window lists only its own tabs of the Space.
+- One tab list shared by every window, the dimmed still, and keeping a closed window's tabs: `share-tabs-across-windows`. Until then, a window lists only its own tabs of the Space. How tabs come back at launch with several windows open is also left to that change; here Chromium's behaviour stands.
 - Profiles, Set Profile and the Profiles page in Settings: `add-profiles`. Until then, every Space uses the one profile.
 - The two-finger swipe between Spaces. The footer switcher, menu and shortcuts animate.
 - Glyph icons for Spaces, such as a grid of SF Symbols like Arc's "Icon" tab. Glyphs are a possible later addition.
