@@ -30,6 +30,7 @@ See proposal.md, "Why", and `arc-reference.md` for what Arc does. What shapes th
 - Hosting two profiles' browsers in one `NSWindow`.
 - A tab that lives in no window.
 - An interactive swipe that follows the fingers.
+- Clair's own icon picker. macOS's emoji picker is the only one; a grid of SF Symbols may follow.
 
 ## Decisions
 
@@ -50,7 +51,7 @@ At start-up the overlay sets `kBrowserProfilePickerAvailabilityOnStartup` to dis
 clair.spaces      { "version": 1,
                     "order": ["<uuid>", …],
                     "spaces": { "<uuid>": { "name": "Work",
-                                            "icon": "briefcase.fill",   // an SF Symbol name, or absent
+                                            "icon": "💼",              // one emoji, or absent
                                             "profile": "Profile 1" } } }
 clair.windows     { "<group uuid>": "<space uuid>" }    // the Space each window shows
 clair.last_space  "<space uuid>"                        // the Space last shown in a key window
@@ -193,7 +194,7 @@ Pushes stay coalesced to once per run-loop turn per tab and per Space.
 - **`SpacesModel`** (app-wide, `@Observable`) holds what the host's observer sends: profiles, Spaces and each Space's tabs. Every window's `BrowserWindowModel` reads its rows from it for its `shownSpaceID`.
 - **Sidebar:** `SpaceHeaderView` above the tab list; `SpaceSwitcher` in `SidebarFooter`; `NewSpaceForm` in place of the header and list.
 - **The slide:** the content between the URL field and the footer is a pager. On `shownSpaceDidChange:from:` the window that is now shown draws the earlier Space's header and rows from `SpacesModel` and slides to the new one, so a cross-profile swap animates in the incoming window. Start from an interpolating spring that covers about 80% of the distance in 100 ms and settles by 300 ms, then tune against Arc.
-- **Icons:** `SpaceIcon` lists a fixed set of SF Symbol names, shown as a grid in a popover. The store keeps the name.
+- **Icons:** a Space's icon is one emoji, chosen with macOS's emoji picker. `SpaceIconField` is a one-character text field where the icon shows, in the header and in the form. Change Space Icon… and the form's icon button make it first responder and call `NSApp.orderFrontCharacterPalette`. It keeps the first emoji of whatever is entered, ignores text that isn't an emoji, and clears on Delete; Return, Esc or losing focus ends the edit. The store keeps the string, so a later change can add glyphs, such as a grid of SF Symbols, under a prefix without changing the schema.
 - **Sheets:** `ProfileSheets` holds the new, rename and delete sheets, used from Settings and from "New Profile…" in the form and the Set Profile menu.
 - **Settings:** `SettingsPage` gains `profiles` after `general`; `ProfilesSettingsView` is the page, 684 pt wide, where the other pages stay 520.
 

@@ -7,7 +7,7 @@ Spaces separate a user's tabs into named sets, as in Arc, each using one profile
 ## ADDED Requirements
 
 ### Requirement: Spaces
-Clair SHALL keep an ordered list of Spaces. Each Space SHALL have a name, an optional icon and exactly one profile, and several Spaces MAY use the same profile. There SHALL always be at least one Space. Spaces, their order and their profiles SHALL persist across launches.
+Clair SHALL keep an ordered list of Spaces. Each Space SHALL have a name, an optional icon, which is one emoji, and exactly one profile, and several Spaces MAY use the same profile. There SHALL always be at least one Space. Spaces, their order and their profiles SHALL persist across launches.
 
 #### Scenario: First launch
 - **WHEN** Clair launches with no stored Spaces
@@ -21,8 +21,8 @@ Clair SHALL keep an ordered list of Spaces. Each Space SHALL have a name, an opt
 Above the tab list, the sidebar SHALL show the current Space's icon, if it has one, and its name. Right-clicking the header SHALL open a menu offering Change Space Icon…, Rename Space…, Set Profile, New Space… and Delete Space. An incognito or guest window SHALL show no Space header.
 
 #### Scenario: Header shows the Space
-- **WHEN** a window shows the Space "Work", which has a briefcase icon
-- **THEN** the sidebar shows the briefcase and "Work" above the "New Tab" row
+- **WHEN** a window shows the Space "Work", whose icon is 💼
+- **THEN** the sidebar shows 💼 and "Work" above the "New Tab" row
 
 #### Scenario: Incognito window
 - **WHEN** the user opens an incognito window
@@ -88,8 +88,8 @@ Spaces › New Space… and the footer's plus menu SHALL replace the sidebar's c
 - **WHEN** the user chooses "New Profile…" in the form's profile popup and creates the profile "Client"
 - **THEN** the form's popup shows "Client" selected
 
-### Requirement: Renaming a Space and changing its icon
-Rename Space… SHALL turn the header's name into a field with its text selected; Return or "Done" SHALL keep a non-empty name and Esc SHALL discard the edit. Change Space Icon… SHALL offer a fixed grid of icons and the choice of no icon. The switcher SHALL show a Space's icon, or a dot for a Space without one.
+### Requirement: Renaming a Space
+Rename Space… SHALL turn the header's name into a field with its text selected. Return or "Done" SHALL keep a non-empty name, and Esc SHALL discard the edit.
 
 #### Scenario: Renaming
 - **WHEN** the user chooses Rename Space…, types "Research" and presses Return
@@ -99,9 +99,24 @@ Rename Space… SHALL turn the header's name into a field with its text selected
 - **WHEN** the user clears the name and presses Return
 - **THEN** the Space keeps its earlier name
 
+### Requirement: Space icon
+Change Space Icon…, and the icon button in the New Space form, SHALL open macOS's emoji picker, and the emoji the user chooses SHALL become the Space's icon. Only one emoji SHALL be kept, and text that isn't an emoji SHALL be ignored. Deleting the icon SHALL leave the Space without one. The header SHALL show the icon before the name, and the switcher SHALL show a Space's icon, or a dot for a Space without one.
+
 #### Scenario: Choosing an icon
-- **WHEN** the user chooses Change Space Icon… and picks the book
-- **THEN** the header and the Space's item in the switcher show the book
+- **WHEN** the user chooses Change Space Icon… and picks 📚 in the emoji picker
+- **THEN** the header and the Space's item in the switcher show 📚
+
+#### Scenario: Replacing an icon
+- **WHEN** a Space's icon is 📚 and the user picks ✈️
+- **THEN** the Space's icon is ✈️ alone
+
+#### Scenario: Typing a letter
+- **WHEN** the user types "a" while choosing an icon
+- **THEN** the Space's icon doesn't change
+
+#### Scenario: Removing the icon
+- **WHEN** the user chooses Change Space Icon… and presses Delete
+- **THEN** the header shows the name alone, and the switcher shows a dot for the Space
 
 ### Requirement: Changing a Space's profile
 Set Profile SHALL list every profile, with a checkmark on the Space's, and "New Profile…". Choosing another profile for a Space with no tabs SHALL apply at once. For a Space with tabs, Clair SHALL first ask for confirmation, saying that the tabs will reload and may be signed out; on confirmation each tab SHALL reopen at its URL in the new profile, in the same order.

@@ -6,7 +6,7 @@ Arc users separate work, personal and project browsing with Spaces, and keep the
 
 ## What Changes
 
-- **Spaces.** A Space is a named set of tabs with an optional icon and one profile. The sidebar shows the current Space's name above its tabs, and a switcher in the footer moves between Spaces with Arc's sideways slide. Spaces are created from the footer's plus menu or the Spaces menu, in an inline form in the sidebar, and renamed, given an icon, moved to another profile or deleted from the Space's own menu.
+- **Spaces.** A Space is a named set of tabs with an optional emoji icon and one profile. The sidebar shows the current Space's name above its tabs, and a switcher in the footer moves between Spaces with Arc's sideways slide. Spaces are created from the footer's plus menu or the Spaces menu, in an inline form in the sidebar, and renamed, given an icon, moved to another profile or deleted from the Space's own menu.
 - **Profiles.** A profile is a Chromium profile: its own cookies, history, logins, extensions, permissions and downloads. Several Spaces can use one profile. Switching to a Space of another profile happens in the same window, with no visible window change.
 - **One sidebar for all windows, as in Arc.** Every window lists the tabs of the Space it shows, whichever window they were opened in. Clicking a tab that another window is showing brings it here; the other window keeps a dimmed still of the page until it is focused again. Closing a window keeps its tabs while another window is open.
 - **Arc's choice of the next tab.** Closing the active tab returns to the tab the user came from, or else to the row above, or else the row below.
@@ -17,7 +17,8 @@ Arc users separate work, personal and project browsing with Spaces, and keep the
 
 **Out of scope:**
 - The two-finger swipe between Spaces. The footer switcher, menu and shortcuts animate.
-- Space themes, emoji icons, Manage Spaces…, dragging a tab to another Space, and undoing Delete Space.
+- Glyph icons for Spaces, such as a grid of SF Symbols like Arc's "Icon" tab. Icons are emoji, chosen with macOS's own emoji picker; glyphs are a possible later addition.
+- Space themes, Manage Spaces…, dragging a tab to another Space, and undoing Delete Space.
 - Pinned tabs, favorites and folders, which will be per Space or per profile when they exist.
 - Arc's per-profile search suggestions, "Archive tabs after" and "New documents" settings.
 - Syncing Spaces or profiles.
