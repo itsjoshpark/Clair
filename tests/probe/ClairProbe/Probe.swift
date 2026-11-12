@@ -2,6 +2,7 @@
 // You can use, redistribute, and/or modify this source code under
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
+import AppKit
 import XCTest
 
 /// Drives Arc or Clair from a command file, for side-by-side comparisons
@@ -101,6 +102,13 @@ final class Probe: XCTestCase {
       app.typeKey(try Self.key(name), modifierFlags: try modifiers(1))
     case "type":
       app.typeText(rest)
+    case "paste":
+      // Puts the text on the pasteboard and presses Cmd+V: typeText isn't
+      // reliable for emoji.
+      guard !rest.isEmpty else { throw ProbeError.usage("paste <text>") }
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(rest, forType: .string)
+      app.typeKey("v", modifierFlags: .command)
     case "tree":
       return app.debugDescription + "\n"
     case "frame":

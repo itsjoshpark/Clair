@@ -87,6 +87,7 @@ Coordinates are in points from the top-left corner of the app's main window
 | `drag x1 y1 x2 y2` | press, then drag |
 | `key <name> [mods]` | a single character, or `return`, `escape`, `tab`, `space`, `delete`, `forwarddelete`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown` |
 | `type <text>` | type text |
+| `paste <text>` | put text on the pasteboard and press Cmd+V, for emoji, which `type` doesn't type reliably |
 | `tree` | the accessibility tree, with identifiers, labels and frames |
 | `frame` | the main window's frame |
 | `sleep <s>` | wait |
@@ -172,5 +173,9 @@ These come from the add-peek change (its design.md has the numbers):
   not `ZoomWindow`.
 - **Read a frame before clicking**: a button can disappear after the click,
   failing a later query.
+- **The emoji picker takes typing.** A field that opens macOS's emoji picker,
+  such as a Space's icon field, loses keys to it while it's open, as its
+  search field: `type`, `paste` and Return go to the picker. Send
+  `key escape` once to close it; the field keeps editing.
 - **The probe shares Clair's defaults**: the test copy uses the bundle ID's
   user defaults domain (sidebar width and state), as an installed Clair does.
