@@ -114,6 +114,11 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
   // D2: moves `tab`, with its Peek, to `index` in its Space's list: the tab
   // ends at `index` and its Peek right after it. Touches no strip.
   void MoveTab(tabs::TabInterface* tab, int index);
+  // D5: moves `tab`, with its Peek, to right after `anchor` and its Peek, or
+  // to right before `anchor`. Both are rows of the same Space.
+  void MoveTabBeside(tabs::TabInterface* tab,
+                     tabs::TabInterface* anchor,
+                     bool after);
   // D7: moves `tab`, with its Peek, to the top of `space`'s list.
   void SetSpace(tabs::TabInterface* tab, const std::string& space);
   // add-peek: `peek`, right after `parent` in the strip, became its Peek; it
@@ -125,8 +130,6 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
 
   // What to push at the end of this run-loop turn.
   void ListChanged(const std::string& space);
-  // The list holding `tab` changed, as when a Peek is linked or unlinked.
-  void ListChangedFor(tabs::TabInterface* tab);
   void TabChanged(content::WebContents* contents);
   // Pushes now.
   void Flush();
@@ -155,6 +158,9 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
   std::string Remove(const tabs::TabInterface* tab);
   // `tab` and its Peek, if it has one in the same window.
   std::vector<tabs::TabInterface*> FamilyOf(tabs::TabInterface* tab) const;
+  // Takes `tab`'s family out of `list` and returns its handles, in order.
+  std::vector<tabs::TabHandle> TakeFamily(std::vector<tabs::TabHandle>& list,
+                                          tabs::TabInterface* tab) const;
   // The window holding `model`, or null.
   ClairBrowserWindow* WindowFor(const TabStripModel* model) const;
 
@@ -181,7 +187,16 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
   base::WeakPtrFactory<ClairSpaceTabs> weak_factory_{this};
 };
 
+namespace infobars {
+class InfoBar;
+}  // namespace infobars
+
 namespace clair {
+
+// The IDs ClairUI knows a tab and an infobar by: what a snapshot carries and
+// what the bridge resolves.
+ClairTabID TabIDOf(content::WebContents* contents);
+NSInteger InfobarIDOf(const infobars::InfoBar* infobar);
 
 // The host's Space calls (add-spaces design D9), for clair_native_layer.mm.
 // They keep the store, the lists and the windows in step.

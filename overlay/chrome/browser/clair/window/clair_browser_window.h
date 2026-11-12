@@ -307,8 +307,12 @@ class ClairBrowserWindow : public BrowserWindow {
   // below. Returns false, changing nothing, when there's none.
   bool ShowNextRow(tabs::TabInterface* row);
   // D4: closes `tab`, with its leave-page confirmation, first showing the
-  // next row if it's the active one.
+  // next row if it's the active one. A page with unload handlers is asked
+  // first, and the next row shows once it agrees.
   void CloseTab(tabs::TabInterface* tab);
+  // D4: `contents` answered a close. If Clair started it and the page agreed,
+  // shows the next row before Chromium closes the tab.
+  void BeforeUnloadFired(content::WebContents* contents, bool proceed);
   // Closes the window's tabs below `tab` in its Space, from its Peek.
   void CloseTabsBelow(tabs::TabInterface* tab);
   // Activates `row`, or its Peek if it has one.
@@ -516,6 +520,8 @@ class ClairBrowserWindow : public BrowserWindow {
   // While Clair activates the next tab before a close, which sets no
   // came-from.
   bool choosing_next_ = false;
+  // D4: the active row Clair is closing, while its page is asked; or null.
+  tabs::TabHandle pending_close_;
   // Owned by the browser's FindBarController once created.
   raw_ptr<ClairFindBar> find_bar_ = nullptr;
   base::CallbackListSubscription zoom_subscription_;

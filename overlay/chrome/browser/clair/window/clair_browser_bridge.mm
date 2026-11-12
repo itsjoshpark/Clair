@@ -73,11 +73,6 @@
 
 namespace {
 
-ClairTabID TabIDOf(content::WebContents* contents) {
-  tabs::TabInterface* tab = tabs::TabInterface::MaybeGetFromContents(contents);
-  return tab ? tab->GetHandle().raw_value() : ClairTabIDNone;
-}
-
 WindowOpenDisposition DispositionFor(ClairOpenDisposition disposition) {
   switch (disposition) {
     case ClairOpenDispositionCurrentTab:
@@ -90,10 +85,6 @@ WindowOpenDisposition DispositionFor(ClairOpenDisposition disposition) {
       return WindowOpenDisposition::NEW_WINDOW;
   }
   return WindowOpenDisposition::CURRENT_TAB;
-}
-
-NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
-  return reinterpret_cast<NSInteger>(infobar);
 }
 
 }  // namespace
@@ -425,9 +416,8 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   if (!lists) {
     return;
   }
-  for (tabs::TabInterface* tab : _browserWindow->SpaceTabs()) {
-    lists->ListChangedFor(tab);
-  }
+  // A Peek is linked or unlinked on the active row, in the shown Space.
+  lists->ListChanged(_browserWindow->shown_space());
 }
 
 - (void)tabChanged:(content::WebContents*)contents {
@@ -509,7 +499,7 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 - (ClairTabID)activeTabID {
   TabStripModel* strip = self.tabStrip;
   content::WebContents* active = strip ? strip->GetActiveWebContents() : nullptr;
-  return active ? TabIDOf(active) : ClairTabIDNone;
+  return clair::TabIDOf(active);
 }
 
 - (NSView*)pageViewForTab:(ClairTabID)tabID {
@@ -866,7 +856,7 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   }
   infobars::InfoBar* infobar = nullptr;
   for (infobars::InfoBar* candidate : manager->infobars()) {
-    if (InfobarIDOf(candidate) == infobarID) {
+    if (clair::InfobarIDOf(candidate) == infobarID) {
       infobar = candidate;
     }
   }

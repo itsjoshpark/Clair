@@ -223,6 +223,17 @@ final class SpacesTests: NativeWindowTestCase {
     active = await browser.waitForActiveRow("Counter x")
     XCTAssertTrue(active, "Previous Tab didn't wrap within the Space")
     XCTAssertEqual(browser.spaceName, "Work", "A tab command left the Space")
+
+    // Ctrl+Shift+PageUp and PageDown move the active row, stopping at the
+    // ends.
+    browser.ui.typeKey(.pageUp, modifierFlags: [.control, .shift])
+    var moved = await browser.waitForTabs { $0 == ["Counter z", "Counter x", "Counter y"] }
+    XCTAssertTrue(moved, "Ctrl+Shift+PageUp didn't move the row up: \(browser.tabTitles)")
+    XCTAssertEqual(browser.activeRow, "Counter x", "Moving a row changed the active tab")
+    browser.ui.typeKey(.pageDown, modifierFlags: [.control, .shift])
+    browser.ui.typeKey(.pageDown, modifierFlags: [.control, .shift])
+    moved = await browser.waitForTabs { $0 == ["Counter z", "Counter y", "Counter x"] }
+    XCTAssertTrue(moved, "Ctrl+Shift+PageDown didn't move the row down, or went past the end: \(browser.tabTitles)")
   }
 
   func testRenameIconAndDelete() async throws {
@@ -431,6 +442,49 @@ final class SpacesTests: NativeWindowTestCase {
     browser.ui.typeKey("w", modifierFlags: .command)
     let home = await browser.waitForSpace("Home")
     XCTAssertTrue(home, "Closing Work's only tab didn't show Home")
+  }
+
+  /// A page that asks before it closes: Chromium's confirmation makes its
+  /// tab active again, so the tab shown after the close is chosen once the
+  /// page agrees (add-spaces D4).
+  func testClosingATabThatAsks() async throws {
+    let (browser, tab) = try await startWithPage("counter.html?I")
+    defer { tab.close() }
+    let a = try await browser.open(counter("A"))
+    let asking = try await browser.open(url("beforeunload.html"))
+    let b = try await browser.open(counter("B"))
+    defer {
+      a.close()
+      asking.close()
+      b.close()
+    }
+    let page = "Clair leave page"
+    let listed = await browser.waitForTabs { $0.starts(with: ["Counter B", page, "Counter A", "Counter I"]) }
+    try require(listed, "The rows aren't B, the page that asks, A, I: \(browser.tabTitles)")
+    browser.tabRow("Counter I")?.click()
+    browser.tabRow(page)?.click()
+    let selected = await browser.waitForActiveRow(page)
+    try require(selected, "The page that asks isn't active: \(browser.activeRow ?? "none")")
+    // The page asks only after a click.
+    _ = try await asking.evaluate("document.body.id = 'body'; 1")
+    try await asking.click("body")
+
+    browser.ui.typeKey("w", modifierFlags: .command)
+    let cancel = browser.ui.buttons["Cancel"]
+    try require(cancel.waitForExistence(timeout: 15), "Closing the tab didn't ask about the page")
+    cancel.click()
+    try await Task.sleep(for: .seconds(1))
+    XCTAssertEqual(browser.activeRow, page, "Staying on the page showed another tab")
+
+    browser.ui.typeKey("w", modifierFlags: .command)
+    let leave = browser.ui.buttons["Leave"]
+    try require(leave.waitForExistence(timeout: 15), "Closing the tab again didn't ask about the page")
+    leave.click()
+    let back = await browser.waitForActiveRow("Counter I")
+    XCTAssertTrue(back, "Leaving the page didn't go back to I, where it was selected from: \(browser.activeRow ?? "none")")
+    let closed = await browser.waitForTabs { $0.starts(with: ["Counter B", "Counter A", "Counter I"]) }
+    XCTAssertTrue(closed, "The page that asked didn't close: \(browser.tabTitles)")
+    XCTAssertEqual(browser.spaceName, "Home", "The close left the Space")
   }
 
   func testQuitAndRelaunchRestoresSpaces() async throws {

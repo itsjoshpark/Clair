@@ -930,7 +930,14 @@ void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
   // D4: Clair picks the next tab first; without one, Chromium's choice
   // stands and D3 moves the window to that tab's Space.
   if (IsActiveRow(tab)) {
-    ShowNextRow(tab);
+    if (tab->GetContents()->NeedToFireBeforeUnloadOrUnloadEvents()) {
+      // Chromium asks the page before it closes the tab, and its leave-page
+      // confirmation makes the tab active again. The choice waits for the
+      // page's answer, in BeforeUnloadFired().
+      pending_close_ = tab->GetHandle();
+    } else {
+      ShowNextRow(tab);
+    }
   }
   TabStripModel* strip = browser_->tab_strip_model();
   const int index = strip->GetIndexOfTab(tab);
@@ -938,6 +945,19 @@ void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
     strip->CloseWebContentsAt(index,
                               TabCloseTypes::CLOSE_USER_GESTURE |
                                   TabCloseTypes::CLOSE_CREATE_HISTORICAL_TAB);
+  }
+}
+
+void ClairBrowserWindow::BeforeUnloadFired(content::WebContents* contents,
+                                           bool proceed) {
+  tabs::TabInterface* tab = tabs::TabInterface::MaybeGetFromContents(contents);
+  if (!tab || tab->GetHandle() != pending_close_) {
+    return;
+  }
+  pending_close_ = tabs::TabHandle::Null();
+  // Staying on the page leaves everything as it was, the came-from row too.
+  if (proceed && IsActiveRow(tab)) {
+    ShowNextRow(tab);
   }
 }
 
@@ -1056,6 +1076,22 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
     return true;
   }
   switch (command) {
+    case IDC_MOVE_TAB_NEXT:
+    case IDC_MOVE_TAB_PREVIOUS: {
+      // One row down or up, stopping at the ends as Chromium does. The strip
+      // keeps its order, which means nothing to the user (D2).
+      const std::vector<tabs::TabInterface*> rows = Rows();
+      auto it = std::ranges::find(rows, active_row);
+      if (!space_tabs_ || it == rows.end()) {
+        return true;
+      }
+      const bool down = command == IDC_MOVE_TAB_NEXT;
+      if (down ? it + 1 != rows.end() : it != rows.begin()) {
+        space_tabs_->MoveTabBeside(active_row, down ? *(it + 1) : *(it - 1),
+                                   /*after=*/down);
+      }
+      return true;
+    }
     case IDC_CLOSE_TAB:
       // A Peek's Cmd+W is ClairPeeks'; it runs first.
       CloseTab(active);

@@ -88,18 +88,8 @@ std::set<ClairSpaceTabs*>& Instances() {
 
 // --- Snapshots (moved from clair_browser_bridge.mm) --------------------------
 
-ClairTabID TabIDOf(content::WebContents* contents) {
-  tabs::TabInterface* tab =
-      contents ? tabs::TabInterface::MaybeGetFromContents(contents) : nullptr;
-  return tab ? tab->GetHandle().raw_value() : ClairTabIDNone;
-}
-
 NSString* NSStringOrNil(const std::u16string& text) {
   return text.empty() ? nil : base::SysUTF16ToNSString(text);
-}
-
-NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
-  return reinterpret_cast<NSInteger>(infobar);
 }
 
 ClairTabIndicators IndicatorsOf(content::WebContents* contents) {
@@ -156,7 +146,7 @@ ClairTabIndicators IndicatorsOf(content::WebContents* contents) {
 - (instancetype)initWithInfobar:(infobars::InfoBar*)infobar
                        delegate:(ConfirmInfoBarDelegate*)delegate {
   if ((self = [super init])) {
-    _infobarID = InfobarIDOf(infobar);
+    _infobarID = clair::InfobarIDOf(infobar);
     _message = base::SysUTF16ToNSString(delegate->GetMessageText());
     _linkText = NSStringOrNil(delegate->GetLinkText());
     const int buttons = delegate->GetButtons();
@@ -215,7 +205,7 @@ ClairTabIndicators IndicatorsOf(content::WebContents* contents) {
     _spaceID = [spaceID copy];
     _browserID = browserID;
     const GURL& url = contents->GetVisibleURL();
-    _tabID = TabIDOf(contents);
+    _tabID = clair::TabIDOf(contents);
     _url = url.is_valid() ? net::NSURLWithGURL(url) : nil;
     _urlText = base::SysUTF16ToNSString(url_formatter::FormatUrl(
         url, url_formatter::kFormatUrlOmitNothing, base::UnescapeRule::NORMAL,
@@ -305,6 +295,13 @@ class ClairSpaceTabs::ProgressObserver : public content::WebContentsObserver {
   // Mixed content can be found after a load has finished.
   void DidChangeVisibleSecurityState() override {
     owner_->TabChanged(web_contents());
+  }
+  // D4: the page answered a close, before Chromium acts on the answer.
+  void BeforeUnloadFired(bool proceed) override {
+    if (ClairBrowserWindow* window =
+            ClairBrowserWindow::FromWebContents(web_contents())) {
+      window->BeforeUnloadFired(web_contents(), proceed);
+    }
   }
 
  private:
@@ -640,23 +637,50 @@ std::vector<tabs::TabInterface*> ClairSpaceTabs::FamilyOf(
   return family;
 }
 
+std::vector<tabs::TabHandle> ClairSpaceTabs::TakeFamily(
+    std::vector<tabs::TabHandle>& list,
+    tabs::TabInterface* tab) const {
+  std::vector<tabs::TabHandle> handles;
+  for (tabs::TabInterface* member : FamilyOf(tab)) {
+    handles.push_back(member->GetHandle());
+  }
+  std::erase_if(list, [&handles](const tabs::TabHandle& handle) {
+    return std::ranges::find(handles, handle) != handles.end();
+  });
+  return handles;
+}
+
 void ClairSpaceTabs::MoveTab(tabs::TabInterface* tab, int index) {
   const std::string space = SpaceOf(tab);
   if (space.empty()) {
     return;
   }
-  const std::vector<tabs::TabInterface*> family = FamilyOf(tab);
   std::vector<tabs::TabHandle>& list = lists_[space];
-  std::erase_if(list, [&family](const tabs::TabHandle& handle) {
-    return std::ranges::find(family, handle.Get()) != family.end();
-  });
+  const std::vector<tabs::TabHandle> handles = TakeFamily(list, tab);
   const size_t at = static_cast<size_t>(
       std::clamp(index, 0, static_cast<int>(list.size())));
-  std::vector<tabs::TabHandle> handles;
-  for (tabs::TabInterface* member : family) {
-    handles.push_back(member->GetHandle());
-  }
   list.insert(list.begin() + at, handles.begin(), handles.end());
+  ListChanged(space);
+}
+
+void ClairSpaceTabs::MoveTabBeside(tabs::TabInterface* tab,
+                                   tabs::TabInterface* anchor,
+                                   bool after) {
+  const std::string space = SpaceOf(tab);
+  if (space.empty() || !anchor || anchor == tab || SpaceOf(anchor) != space) {
+    return;
+  }
+  // The anchor's Peek directly follows it, so after the anchor is after its
+  // Peek.
+  const tabs::TabHandle beside =
+      (after ? FamilyOf(anchor).back() : anchor)->GetHandle();
+  std::vector<tabs::TabHandle>& list = lists_[space];
+  const std::vector<tabs::TabHandle> handles = TakeFamily(list, tab);
+  auto it = std::ranges::find(list, beside);
+  if (it != list.end() && after) {
+    ++it;
+  }
+  list.insert(it, handles.begin(), handles.end());
   ListChanged(space);
 }
 
@@ -727,12 +751,8 @@ void ClairSpaceTabs::ListChanged(const std::string& space) {
   PostFlush();
 }
 
-void ClairSpaceTabs::ListChangedFor(tabs::TabInterface* tab) {
-  ListChanged(SpaceOf(tab));
-}
-
 void ClairSpaceTabs::TabChanged(content::WebContents* contents) {
-  const ClairTabID tab_id = TabIDOf(contents);
+  const ClairTabID tab_id = clair::TabIDOf(contents);
   if (tab_id == ClairTabIDNone) {
     return;
   }
@@ -843,7 +863,7 @@ void ClairSpaceTabs::OnTabStripModelChanged(
         new_tag->space = old_tag->space;
         new_tag->rank = old_tag->rank;
       }
-      ListChangedFor(replace->tab);
+      ListChanged(SpaceOf(replace->tab));
       break;
     }
     case TabStripModelChange::kMoved:
@@ -911,11 +931,11 @@ void ClairSpaceTabs::OnInfoBarAdded(infobars::InfoBar* infobar) {
                     "show (identifier "
                  << static_cast<int>(infobar->delegate()->GetIdentifier())
                  << ")";
-    infobars::InfoBarManager* manager = infobar->owner();
+    // Its tab may close, taking the infobar and its manager, before then.
+    base::WeakPtr<infobars::InfoBar> weak_infobar = infobar->AsWeakPtr();
     dispatch_async(dispatch_get_main_queue(), ^{
-      if (manager && std::ranges::find(manager->infobars(), infobar) !=
-                         manager->infobars().end()) {
-        infobar->RemoveSelf();
+      if (weak_infobar && weak_infobar->owner()) {
+        weak_infobar->RemoveSelf();
       }
     });
     return;
@@ -967,6 +987,16 @@ class StoreWatcher : public ClairSpaceStore::Observer {
 };
 
 }  // namespace
+
+ClairTabID TabIDOf(content::WebContents* contents) {
+  tabs::TabInterface* tab =
+      contents ? tabs::TabInterface::MaybeGetFromContents(contents) : nullptr;
+  return tab ? tab->GetHandle().raw_value() : ClairTabIDNone;
+}
+
+NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
+  return reinterpret_cast<NSInteger>(infobar);
+}
 
 void AddSpacesObserver(id<ClairSpacesObserver> observer) {
   static base::NoDestructor<StoreWatcher> watcher;

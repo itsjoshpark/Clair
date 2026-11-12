@@ -215,8 +215,20 @@ When the user closes the active tab, the window SHALL show, in order: the tab th
 - **WHEN** the user closes the only tab of "Work" in a window that also has tabs in "Home"
 - **THEN** the window shows "Home"
 
+#### Scenario: Staying on a page that asks
+- **WHEN** the user closes the active tab, its page asks whether to leave, and the user cancels
+- **THEN** the tab stays active, and closing it again still returns to the tab the user selected it from
+
+#### Scenario: Leaving a page that asks
+- **WHEN** the rows are B, P, A, the user selects A, then P, closes P, and confirms leaving its page
+- **THEN** A is active, and the window shows the same Space
+
 ### Requirement: Tab commands follow the Space
-Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to Cmd+9 and Close Tabs Below SHALL act on the rows the sidebar lists, in its order, and never on a tab of another Space.
+Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to Cmd+9 and Close Tabs Below SHALL act on the rows the sidebar lists, in its order, and never on a tab of another Space. Ctrl+Shift+PageDown and Ctrl+Shift+PageUp SHALL move the active row one row down or up in the list, stopping at its ends.
+
+#### Scenario: Moving a row with the keyboard
+- **WHEN** a window shows "Work", whose rows are X, Y and Z, Z is active, and the user presses Ctrl+Shift+PageUp
+- **THEN** the rows are X, Z and Y, and Z is still active
 
 #### Scenario: Cmd+number
 - **WHEN** a window shows "Work", whose rows are X, Y and Z, and the user presses Cmd+2

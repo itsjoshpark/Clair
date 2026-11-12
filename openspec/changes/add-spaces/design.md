@@ -74,10 +74,11 @@ Each browser remembers one **came-from** tab: set when the user selects a tab wh
 
 - When the window has no other row in the Space, and for a close Clair doesn't start (`window.close()`, an extension), Chromium's own choice stands, and D3 moves the window to that tab's Space. A window whose only tab closes, closes, as today.
 - Moving the active tab to another Space (D7) uses the same choice.
+- A page with `beforeunload` or `unload` handlers is asked before it closes, and Chromium's leave-page confirmation makes its tab active again. For such a page the choice waits for the answer: `ClairBrowserWindow` remembers the tab it is closing, and when the page agrees (`WebContentsObserver::BeforeUnloadFired`, which runs before Chromium acts on the answer) it activates the next tab. If the user stays on the page, nothing changes, the came-from tab included.
 
 ### D5. Tab commands run over the rows
 
-`ExecuteCommand` in `clair_native_window.mm` runs `IDC_SELECT_NEXT_TAB`, `IDC_SELECT_PREVIOUS_TAB`, `IDC_CYCLE_TO_NEXT_TAB` and `IDC_CYCLE_TO_PREV_TAB` (Ctrl+Tab), `IDC_SELECT_TAB_0`…`7`, `IDC_SELECT_LAST_TAB`, `IDC_WINDOW_CLOSE_TABS_TO_RIGHT`, `IDC_WINDOW_CLOSE_OTHER_TABS` and `IDC_CLOSE_TAB` over the window's rows of the shown Space, through `ClairBrowserWindow::ExecuteTabCommand`, where a tab and its Peek are one stop. `ClairPeeks` keeps only the commands of an active Peek, and runs first. `closeTabsBelowTab:` and `moveTab:toIndex:` use the Space's list.
+`ExecuteCommand` in `clair_native_window.mm` runs `IDC_SELECT_NEXT_TAB`, `IDC_SELECT_PREVIOUS_TAB`, `IDC_CYCLE_TO_NEXT_TAB` and `IDC_CYCLE_TO_PREV_TAB` (Ctrl+Tab), `IDC_SELECT_TAB_0`…`7`, `IDC_SELECT_LAST_TAB`, `IDC_WINDOW_CLOSE_TABS_TO_RIGHT`, `IDC_WINDOW_CLOSE_OTHER_TABS` and `IDC_CLOSE_TAB` over the window's rows of the shown Space, through `ClairBrowserWindow::ExecuteTabCommand`, where a tab and its Peek are one stop. `IDC_MOVE_TAB_NEXT` and `IDC_MOVE_TAB_PREVIOUS` (Ctrl+Shift+PageDown and PageUp) move the active row one row down or up in the Space's list, stopping at the ends, and leave the strip alone. `ClairPeeks` keeps only the commands of an active Peek, and runs first. `closeTabsBelowTab:` and `moveTab:toIndex:` use the Space's list.
 
 ### D6. Sessions carry two tags per tab
 
