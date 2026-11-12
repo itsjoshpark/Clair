@@ -46,11 +46,11 @@ Clair SHALL check for updates to installed extensions whose update URL is the Ch
 - **THEN** Clair makes no extension update requests to Google
 
 ### Requirement: Install confirmation as a native sheet
-Before an extension is installed, Clair SHALL ask in a native alert sheet on the window. The alert SHALL show the extension's icon, the title "Add "<name>" to Clair?", the heading "It can:" followed by the extension's permissions as a list, and the buttons "Add Extension" (default, Return) and "Cancel" (Esc). The window SHALL stay blocked until the user answers.
+Before an extension is installed, Clair SHALL ask in a Clair dialog (`dialogs`) on the window. The dialog SHALL show the extension's icon, the title "Add “<name>” to Clair?", the heading "It can:" followed by the extension's permissions as a list, and the buttons "Add Extension" (default, Return) and "Cancel" (Esc). The window SHALL stay blocked until the user answers.
 
 #### Scenario: Confirming an install
 - **WHEN** the user clicks "Add to Clair" on a store page
-- **THEN** a sheet asks "Add "<name>" to Clair?" with the extension's permissions under "It can:", and pressing Return installs the extension
+- **THEN** a sheet asks "Add “<name>” to Clair?" with the extension's permissions under "It can:", and pressing Return installs the extension
 
 #### Scenario: Cancelling an install
 - **WHEN** the install sheet is shown and the user presses Esc or clicks "Cancel"
@@ -60,6 +60,10 @@ Before an extension is installed, Clair SHALL ask in a native alert sheet on the
 - **WHEN** the extension being installed asks for no permissions
 - **THEN** the sheet shows the title and buttons without the "It can:" list
 
+#### Scenario: Many permissions
+- **WHEN** the extension being installed asks for more permissions than fit
+- **THEN** the list scrolls inside the dialog, and the buttons stay visible
+
 ### Requirement: Other install prompts as native sheets
 Chromium's other install prompts, such as re-enabling an extension whose update asks for new permissions or an extension asking for optional permissions, SHALL use the same kind of sheet. Each SHALL show Chromium's own title, permissions and button labels for that prompt, and answering it SHALL have the effect Chromium's prompt has.
 
@@ -68,7 +72,7 @@ Chromium's other install prompts, such as re-enabling an extension whose update 
 - **THEN** a sheet shows Chromium's request text and the permission, and accepting grants it while cancelling leaves it denied
 
 ### Requirement: Remove confirmation as a native sheet
-When an extension is removed through a path that asks for confirmation, such as the store's "Remove from Clair" button, Clair SHALL ask in a native alert sheet on the window. The alert SHALL have the title "Remove "<name>" from Clair?", the extension's icon, a destructive "Remove Extension" button (Return) and "Cancel" (Esc), and no "report abuse" option.
+When an extension is removed through a path that asks for confirmation, such as the store's "Remove from Clair" button, Clair SHALL ask in a Clair dialog (`dialogs`) on the window. The dialog SHALL have the title "Remove “<name>” from Clair?", the extension's icon, a "Remove Extension" button (default, Return) that isn't marked destructive, as Arc's isn't, "Cancel" (Esc), and no "report abuse" option.
 
 #### Scenario: Removing from the store
 - **WHEN** the user clicks "Remove from Clair" on an installed extension's store page and clicks "Remove Extension"
