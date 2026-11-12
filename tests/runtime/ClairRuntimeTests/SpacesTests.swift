@@ -83,6 +83,19 @@ final class SpacesTests: NativeWindowTestCase {
     browser.ui.typeKey(.escape, modifierFlags: [])
   }
 
+  /// The emoji picker the icon field opens takes the typing, as its search
+  /// field, while it's open: Esc closes it and leaves the field editing.
+  func closeEmojiPicker(in browser: Browser) async throws {
+    let opened = await Harness.wait(for: 3) {
+      try Harness.run("/usr/bin/pgrep", ["-x", "CharacterPalette"]).status == 0
+    }
+    if opened {
+      try await Task.sleep(for: .seconds(0.5))
+      browser.ui.typeKey(.escape, modifierFlags: [])
+      try await Task.sleep(for: .seconds(0.5))
+    }
+  }
+
   func testFirstLaunchHasOneSpaceAndNoSwitcher() async throws {
     let (browser, tab) = try await startWithPage("counter.html?a")
     defer { tab.close() }
@@ -243,6 +256,7 @@ final class SpacesTests: NativeWindowTestCase {
     browser.ui.menuItems["Change Space Icon…"].click()
     let icon = browser.element("clair.spaceIconField")
     try require(icon.waitForExistence(timeout: 5), "Change Space Icon… didn't show the icon field")
+    try await closeEmojiPicker(in: browser)
     icon.typeText("a")
     XCTAssertEqual(icon.value as? String ?? "", "", "A letter became the icon")
     NSPasteboard.general.clearContents()
@@ -255,6 +269,7 @@ final class SpacesTests: NativeWindowTestCase {
     browser.element("clair.spaceHeader").rightClick()
     browser.ui.menuItems["Change Space Icon…"].click()
     try require(icon.waitForExistence(timeout: 5), "The icon field didn't show again")
+    try await closeEmojiPicker(in: browser)
     icon.typeKey(.delete, modifierFlags: [])
     icon.typeKey(.return, modifierFlags: [])
     let removed = await Harness.wait(for: 5) { browser.spacesMenuSpaces.contains("Research") }

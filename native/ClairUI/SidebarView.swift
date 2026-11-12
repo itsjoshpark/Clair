@@ -146,12 +146,12 @@ struct SidebarView: View {
     }
   }
 
-  /// Under the URL field or the pinned extensions: 4 pt above the Space
-  /// header, or 8 pt above the list in a guest window.
+  /// Under the URL field or the pinned extensions: the Space name's text
+  /// starts 17 pt below, as in Arc, or the list 8 pt below in a guest window.
   private var tabListTopPadding: CGFloat {
     switch model.profileKind {
     case .incognito: 0
-    case .regular: 4
+    case .regular: 9
     default: 8
     }
   }

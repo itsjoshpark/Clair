@@ -28,13 +28,15 @@ struct NewSpaceFormView: View {
     VStack(alignment: .center, spacing: 0) {
       NewSpaceIllustration()
         .padding(.top, 40)
-      VStack(alignment: .center, spacing: 6) {
+      VStack(alignment: .center, spacing: 12) {
         Text("Create a Space")
           .font(.system(size: 17, weight: .semibold))
         Text("Separate your tabs for life, work, projects, and more.")
           .font(.system(size: 13))
-          .foregroundStyle(.primary.opacity(0.75))
+          .foregroundStyle(.primary.opacity(0.85))
           .multilineTextAlignment(.center)
+          // Arc's line wraps after "life,".
+          .frame(maxWidth: 175)
           .fixedSize(horizontal: false, vertical: true)
       }
       .padding(.top, 14)
@@ -83,7 +85,7 @@ struct NewSpaceFormView: View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
           .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.75))
           .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.05), radius: 0.5, y: 0.5))
-      .padding(.top, 22)
+      .padding(.top, 36)
       Spacer(minLength: 16)
       Button(action: create) {
         Text("Create Space")

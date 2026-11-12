@@ -47,11 +47,12 @@ struct SpaceIconField: NSViewRepresentable {
     field.isEditable = isEditing
     field.isSelectable = isEditing
     if isEditing, !context.coordinator.wasEditing {
-      // Once the field is in a window, as when it has just appeared.
-      DispatchQueue.main.async { [weak field] in
-        guard let field, field.window != nil else { return }
-        field.beginPicking()
-      }
+      // Now if the field is in a window, or else once SwiftUI puts it in
+      // one, as when editing makes the field appear.
+      field.wantsPicking = true
+      DispatchQueue.main.async { [weak field] in field?.beginPickingIfWanted() }
+    } else if !isEditing {
+      field.wantsPicking = false
     }
     context.coordinator.wasEditing = isEditing
   }
@@ -116,8 +117,17 @@ struct SpaceIconField: NSViewRepresentable {
 /// The field behind `SpaceIconField`: it selects its emoji on focus, so the
 /// next one picked replaces it, and opens the emoji picker.
 final class IconTextField: NSTextField {
-  func beginPicking() {
-    guard let window, window.makeFirstResponder(self) else { return }
+  /// An edit started, and the field takes focus once it's in a window.
+  var wantsPicking = false
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    DispatchQueue.main.async { [weak self] in self?.beginPickingIfWanted() }
+  }
+
+  func beginPickingIfWanted() {
+    guard wantsPicking, let window, window.makeFirstResponder(self) else { return }
+    wantsPicking = false
     currentEditor()?.selectAll(nil)
     NSApp.orderFrontCharacterPalette(self)
   }
