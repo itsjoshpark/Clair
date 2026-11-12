@@ -20,20 +20,24 @@ struct NewSpaceFormView: View {
 
   @FocusState private var nameFocused: Bool
   @State private var editsIcon = false
+  @Environment(\.colorScheme) private var colorScheme
 
   private var form: NewSpaceFormState { model.newSpaceForm ?? NewSpaceFormState() }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .center, spacing: 0) {
+      NewSpaceIllustration()
+        .padding(.top, 40)
+      VStack(alignment: .center, spacing: 6) {
         Text("Create a Space")
           .font(.system(size: 17, weight: .semibold))
         Text("Separate your tabs for life, work, projects, and more.")
           .font(.system(size: 13))
-          .foregroundStyle(.secondary)
+          .foregroundStyle(.primary.opacity(0.75))
+          .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
       }
-      .padding(.top, 18)
+      .padding(.top, 14)
       HStack(spacing: 6) {
         Button {
           editsIcon = true
@@ -41,14 +45,23 @@ struct NewSpaceFormView: View {
           Group {
             if editsIcon || form.icon != nil {
               SpaceIconField(
-                icon: form.icon, size: 16, isEditing: editsIcon,
+                icon: form.icon, size: 15, isEditing: editsIcon,
                 onChange: { model.newSpaceForm?.icon = $0 },
                 onEnd: {
                   editsIcon = false
                   nameFocused = true
                 })
             } else {
-              Image(systemName: "face.smiling").foregroundStyle(.secondary)
+              // Arc's icon button: a "+" in a dashed square.
+              Image(systemName: "plus")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+                .overlay {
+                  RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                    .foregroundStyle(.secondary)
+                }
             }
           }
           .frame(width: 24, height: 24)
@@ -65,8 +78,12 @@ struct NewSpaceFormView: View {
       }
       .padding(.horizontal, 8)
       .frame(height: Self.fieldHeight)
-      .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.06)))
-      .padding(.top, 16)
+      // Arc's field is nearly white in Light Mode.
+      .background(
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.75))
+          .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.05), radius: 0.5, y: 0.5))
+      .padding(.top, 22)
       Spacer(minLength: 16)
       Button(action: create) {
         Text("Create Space")
@@ -109,5 +126,28 @@ struct NewSpaceFormView: View {
   private func create() {
     guard form.canCreate else { return }
     actions?.createSpace(named: SpacesLogic.cleanName(form.name), icon: form.icon)
+  }
+}
+
+/// Arc's picture above the form: three cards fanned out, with an emoji each.
+struct NewSpaceIllustration: View {
+  static let cards: [(emoji: String, angle: Double, x: CGFloat)] = [("🌴", -14, -18), ("📚", 14, 18), ("💻", 0, 0)]
+
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    ZStack {
+      ForEach(Self.cards, id: \.emoji) { card in
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+          .fill(colorScheme == .dark ? Color(white: 0.3) : .white)
+          .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+          .overlay(Text(card.emoji).font(.system(size: 16)))
+          .frame(width: 28, height: 34)
+          .rotationEffect(.degrees(card.angle))
+          .offset(x: card.x)
+      }
+    }
+    .frame(height: 40)
+    .accessibilityHidden(true)
   }
 }

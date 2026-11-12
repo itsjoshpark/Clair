@@ -53,9 +53,12 @@ enum SpacesLogic {
     }
   }
 
-  /// One item per Space, in order, or none with one Space.
-  static func switcherItems(_ spaces: [any ClairSpace], shown: SpaceID) -> [SwitcherItem] {
-    guard spaces.count > 1 else { return [] }
+  /// One item per Space, in order, or none with one Space unless
+  /// `includingOne`, as while the New Space form shows.
+  static func switcherItems(_ spaces: [any ClairSpace], shown: SpaceID, includingOne: Bool = false)
+    -> [SwitcherItem]
+  {
+    guard spaces.count > 1 || (includingOne && !spaces.isEmpty) else { return [] }
     return spaces.enumerated().map { index, space in
       SwitcherItem(
         spaceID: space.spaceID, name: space.name, icon: space.icon, isCurrent: space.spaceID == shown,

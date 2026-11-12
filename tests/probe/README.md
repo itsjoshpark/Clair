@@ -90,7 +90,7 @@ Coordinates are in points from the top-left corner of the app's main window
 | `tree` | the accessibility tree, with identifiers, labels and frames |
 | `frame` | the main window's frame |
 | `sleep <s>` | wait |
-| `menu <title>` | click a menu item |
+| `menu <title>` | click a menu item; with several of that title, the one in the open menu |
 | `quit` | stop the probe |
 
 ## Recording and measuring

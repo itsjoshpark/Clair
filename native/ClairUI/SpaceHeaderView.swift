@@ -44,10 +44,14 @@ struct SpaceHeaderView: View {
   weak var actions: (any SpaceActions)?
 
   static let height: CGFloat = 32
+  /// Room under the header, so the name's centre sits 41 pt above the "New
+  /// Tab" row's, as in Arc.
+  static let bottomGap: CGFloat = 4.5
   static let leading: CGFloat = 13
   static let iconSize: CGFloat = 26
   static let nameGap: CGFloat = 2
-  static let nameFont = Font.system(size: 14, weight: .semibold)
+  /// Arc's name: 13 pt semibold, in the sidebar's secondary grey.
+  static let nameFont = Font.system(size: 13, weight: .semibold)
 
   @State private var draft = ""
   @FocusState private var nameFocused: Bool
@@ -80,7 +84,7 @@ struct SpaceHeaderView: View {
         Text(space?.name ?? "")
           .font(Self.nameFont)
           .lineLimit(1)
-          .foregroundStyle(.primary.opacity(0.85))
+          .foregroundStyle(.secondary)
           .accessibilityIdentifier("clair.spaceName")
         Spacer(minLength: 0)
       }
@@ -89,6 +93,7 @@ struct SpaceHeaderView: View {
     .padding(.trailing, 13)
     .frame(height: Self.height)
     .contentShape(Rectangle())
+    .padding(.bottom, Self.bottomGap)
     .overlay {
       if edit == nil {
         RowClickCatcher(onMiddleClick: {}, menuItems: menuItems)

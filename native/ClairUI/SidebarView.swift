@@ -90,17 +90,20 @@ struct SidebarView: View {
       TopRow(model: model, actions: actions)
         // The row's empty space acts as the window's title bar.
         .background { TitleBarArea { actions?.titleBarDoubleClicked() } }
-      URLField(
-        model: model, actions: actions,
-        showsButtons: (isHovered && model.isWindowKey) || model.isSiteControlCenterOpen)
-        .padding(.horizontal, 8)
-        .padding(.top, 6)
-      if !model.pinnedExtensionActions.isEmpty {
+      // The New Space form takes the URL field's place too, as in Arc.
+      if model.newSpaceForm == nil {
+        URLField(
+          model: model, actions: actions,
+          showsButtons: (isHovered && model.isWindowKey) || model.isSiteControlCenterOpen)
+          .padding(.horizontal, 8)
+          .padding(.top, 6)
+      }
+      if !model.pinnedExtensionActions.isEmpty && model.newSpaceForm == nil {
         ToolsRow(model: model, actions: actions)
           .padding(.horizontal, 8)
           .padding(.top, 8)
       }
-      if model.profileKind == .incognito {
+      if model.profileKind == .incognito && model.newSpaceForm == nil {
         // Arc's row: 37 pt from 8 pt below the URL field.
         IncognitoBadge()
           .padding(.leading, 14)
@@ -508,7 +511,11 @@ struct SidebarFooter: View {
     // While the New Space form shows, the footer shows only the Spaces and a
     // dot for the new one, as in Arc.
     let creating = model.newSpaceForm != nil
-    let items = model.showsSpaces ? SpacesLogic.switcherItems(model.spaces.spaces, shown: model.shownSpaceID) : []
+    // The form's dot follows every Space's, even the only one's.
+    let items =
+      model.showsSpaces
+      ? SpacesLogic.switcherItems(
+        model.spaces.spaces, shown: model.shownSpaceID, includingOne: creating) : []
     HStack(spacing: 0) {
       DownloadsButton(progress: model.downloadProgress, hasUnseen: model.hasUnseenDownloads) {
         model.isDownloadsListOpen.toggle()
@@ -520,12 +527,14 @@ struct SidebarFooter: View {
       }
       .opacity(creating ? 0 : 1)
       .allowsHitTesting(!creating)
-      Spacer(minLength: 4)
+      // Arc's strip runs from 2 pt after the downloads button to 2 pt before
+      // the plus.
+      Spacer(minLength: 2)
       if !items.isEmpty || (creating && model.showsSpaces) {
         SpaceSwitcher(
           items: creating ? items.map { $0.notCurrent } : items, showsNewSpaceDot: creating, actions: actions,
           spaces: model.spaces.spaces)
-        Spacer(minLength: 4)
+        Spacer(minLength: 2)
       }
       // Arc's plus also offers folders, Easels and Boosts, which Clair hasn't.
       IconMenu(help: "New") {
@@ -560,9 +569,11 @@ struct SpacePager: View {
   /// first frame.
   @State private var animatedSlide: UUID?
 
-  /// Arc's slide covers about 80% of the distance in 100 ms and settles by
-  /// 300 ms (add-spaces design D10): a critically damped spring of 0.21 s.
-  static let slide = Animation.spring(response: 0.21, dampingFraction: 1)
+  /// Arc's slide, recorded at 60 fps on an M1 Pro (add-spaces task 3.4):
+  /// about 90% of the way within two frames, settled by about 100 ms. A
+  /// critically damped spring of 0.08 s is 90% there at 50 ms and settled by
+  /// 85 ms.
+  static let slide = Animation.spring(response: 0.08, dampingFraction: 1)
 
   var body: some View {
     ZStack(alignment: .topLeading) {
@@ -572,11 +583,15 @@ struct SpacePager: View {
         let slide = model.spaceSlide
         let direction: CGFloat = slide?.fromTrailing == false ? -1 : 1
         let progress = slide != nil && slide?.id != animatedSlide ? 0 : self.progress
-        if let slide, progress < 1 {
+        // The earlier Space stays for the whole slide, and goes without a
+        // transition of its own once it's out: removed inside the slide's
+        // animation, it would fade where it was instead of sliding out.
+        if let slide {
           SpacePage(model: model, space: slide.fromSpace, tabs: slide.fromTabs, actions: nil)
             .offset(x: -direction * width * progress)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+            .transition(.identity)
         }
         SpacePage(
           model: model, space: model.shownSpace, tabs: model.tabs, actions: actions,
@@ -596,7 +611,9 @@ struct SpacePager: View {
         progress = 1
       } completion: {
         if model.spaceSlide?.id == id {
-          model.spaceSlide = nil
+          var done = Transaction()
+          done.disablesAnimations = true
+          withTransaction(done) { model.spaceSlide = nil }
         }
       }
     }

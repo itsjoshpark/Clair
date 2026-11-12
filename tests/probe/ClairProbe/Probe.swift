@@ -109,7 +109,13 @@ final class Probe: XCTestCase {
       guard let seconds = Double(rest) else { throw ProbeError.usage("sleep <seconds>") }
       Thread.sleep(forTimeInterval: seconds)
     case "menu":
-      app.menuItems[rest].click()
+      // An open menu's item when several share the title, as a menu bar
+      // item and a context or pop-up menu's can.
+      let items = app.menuItems.matching(NSPredicate(format: "title == %@", rest)).allElementsBoundByIndex
+      guard let item = items.first(where: { $0.isHittable }) ?? items.first else {
+        throw ProbeError.usage("no menu item titled \(rest)")
+      }
+      item.click()
     default:
       throw ProbeError.usage("unknown command")
     }

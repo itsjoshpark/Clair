@@ -19,15 +19,18 @@ struct SpaceSwitcher: View {
 
   static let itemWidth: CGFloat = 36
   static let itemHeight: CGFloat = 34
+  /// Arc's items overlap by 2 pt: a 34 pt pitch, narrowing with every Space
+  /// once they no longer fit.
+  static let spacing: CGFloat = -2
   /// Items narrow down to this as Spaces are added, before the strip clips.
   static let minimumItemWidth: CGFloat = 14
-  static let dotSize: CGFloat = 6
+  static let dotSize: CGFloat = 8
   static let iconSize: CGFloat = 15
 
   @State private var dragged: SpaceID?
 
   var body: some View {
-    HStack(spacing: 0) {
+    HStack(spacing: Self.spacing) {
       ForEach(items) { item in
         SpaceSwitcherItem(item: item) { actions?.showSpace(item.spaceID) }
           .frame(minWidth: Self.minimumItemWidth, idealWidth: Self.itemWidth, maxWidth: Self.itemWidth)
@@ -75,7 +78,7 @@ struct SpaceSwitcherItem: View {
             .saturation(isCurrent ? 1 : 0.2)
         } else {
           Circle()
-            .fill(Color.primary.opacity(isCurrent ? 0.6 : 0.2))
+            .fill(Color.primary.opacity(isCurrent ? 0.6 : 0.3))
             .frame(width: SpaceSwitcher.dotSize, height: SpaceSwitcher.dotSize)
         }
       }
