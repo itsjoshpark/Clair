@@ -1,0 +1,33 @@
+# Opt+Cmd+Right and Left switch Spaces in Clair, as in Arc, and Next and
+# Previous Tab move to Opt+Cmd+Down and Up (add-spaces design D8, as decided in
+# ship-plain-ungoogled-build's clair-menus.md). Chromium's own shortcut table
+# maps the first two to Next and Previous Tab and is checked before the main
+# menu's key equivalents, so ClairUI's Spaces menu items never got them. The
+# window runs Next and Previous Tab over the sidebar's rows of the shown Space.
+# Opt+Cmd+Down and Up focused the next and previous pane, which a native window
+# doesn't have.
+
+--- a/chrome/browser/global_keyboard_shortcuts_mac.mm
++++ b/chrome/browser/global_keyboard_shortcuts_mac.mm
+@@ -118,8 +118,10 @@
+       {true,  true,  false, false, kVK_ANSI_LeftBracket,  IDC_SELECT_PREVIOUS_TAB},
+       {false, false, true,  false, kVK_PageDown,          IDC_SELECT_NEXT_TAB},
+       {false, false, true,  false, kVK_PageUp,            IDC_SELECT_PREVIOUS_TAB},
+-      {true,  false, false, true,  kVK_RightArrow,        IDC_SELECT_NEXT_TAB},
+-      {true,  false, false, true,  kVK_LeftArrow,         IDC_SELECT_PREVIOUS_TAB},
++      // Clair: Opt+Cmd+Right and Left are Spaces > Next and Previous Space, as
++      // in Arc; Next and Previous Tab move to Opt+Cmd+Down and Up.
++      {true,  false, false, true,  kVK_DownArrow,         IDC_SELECT_NEXT_TAB},
++      {true,  false, false, true,  kVK_UpArrow,           IDC_SELECT_PREVIOUS_TAB},
+       {false, true,  true,  false, kVK_PageDown,          IDC_MOVE_TAB_NEXT},
+       {false, true,  true,  false, kVK_PageUp,            IDC_MOVE_TAB_PREVIOUS},
+ 
+@@ -148,8 +150,6 @@
+       // Clair: Shift+Cmd+C is Edit > Copy URL, as in Arc; Opt+Cmd+C still
+       // inspects an element.
+       {true,  false, false, true,  kVK_ANSI_C,            IDC_DEV_TOOLS_INSPECT},
+-      {true,  false, false, true,  kVK_DownArrow,         IDC_FOCUS_NEXT_PANE},
+-      {true,  false, false, true,  kVK_UpArrow,           IDC_FOCUS_PREVIOUS_PANE},
+       {true,  true,  false, true,  kVK_ANSI_A,            IDC_FOCUS_INACTIVE_POPUP_FOR_ACCESSIBILITY},
+       {true,  false, false, true,  kVK_ANSI_R,            IDC_SHOW_READING_MODE_KEYBOARD},
+     });

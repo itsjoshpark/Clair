@@ -13,11 +13,14 @@
 #include "base/no_destructor.h"
 #include "base/values.h"
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/common/pref_names.h"
 #import "chrome/browser/clair/ClairHost.h"
 #include "chrome/browser/clair/clair_native_layer.h"
+#include "chrome/browser/clair/clair_space_store.h"
 #include "chrome/browser/clair/window/clair_browser_window.h"
 #import "chrome/browser/clair/window/clair_native_window.h"
 #include "chrome/browser/clair/window/clair_peeks.h"
+#include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -30,6 +33,7 @@
 #include "components/download/public/common/download_item.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/pref_registry/pref_registry_syncable.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/browser/page_navigator.h"
@@ -294,6 +298,14 @@ void RegisterProfilePrefOverrides(user_prefs::PrefRegistrySyncable* registry) {
   for (const char* pref : kOffPrefs) {
     registry->SetDefaultPrefValue(pref, base::Value(false));
   }
+  // add-spaces D11: tabs come back at launch, as in Arc.
+  registry->SetDefaultPrefValue(
+      prefs::kRestoreOnStartup,
+      base::Value(static_cast<int>(SessionStartupPref::kPrefValueLast)));
+}
+
+void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
+  ClairSpaceStore::RegisterPrefs(registry);
 }
 
 void ApplyPasswordAndAutofillOverrides(Profile* profile) {

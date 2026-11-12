@@ -10,7 +10,9 @@ import os
 /// One native browser window (`ClairWindow`, design D3 and D4). Chromium
 /// creates the `NSWindow` and the browser; this styles the window, fills it,
 /// and keeps `BrowserWindowModel` up to date with what Chromium reports.
-final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, OverlayActions, PeekActions {
+final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, OverlayActions, PeekActions,
+  SpacesModelListener
+{
   static let toastDuration: Duration = .seconds(3)
 
   /// Every window's controller, for app-wide menus such as Extensions.
@@ -51,8 +53,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   private var statusState = StatusCapsuleState()
   private var statusTimer: Task<Void, Never>?
 
+  /// `spaces` is the app's model of Spaces, the running native layer's when
+  /// nil.
   init(
-    browser: any ClairBrowser, preferences: SidebarPreferences = SidebarPreferences(),
+    browser: any ClairBrowser, spaces: SpacesModel? = nil, preferences: SidebarPreferences = SidebarPreferences(),
     dragPreference: WindowDragPreference = WindowDragPreference(),
     peekPreference: PeekPreference = PeekPreference()
   ) {
@@ -61,7 +65,10 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     self.preferences = preferences
     self.dragPreference = dragPreference
     self.peekPreference = peekPreference
-    let model = BrowserWindowModel(profileKind: browser.profileKind, sidebar: preferences.initialState)
+    let spaces = spaces ?? NativeLayer.current?.spaces ?? .detached
+    let model = BrowserWindowModel(
+      profileKind: browser.profileKind, sidebar: preferences.initialState, browserID: browser.browserID,
+      shownSpaceID: browser.shownSpaceID, spaces: spaces)
     self.model = model
     sidebarHost = NSHostingView.edgeToEdge(rootView: SidebarView(model: model, actions: nil))
     rootView = BrowserRootView(model: model, sidebar: sidebarHost)
@@ -106,7 +113,8 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     observeWindow()
     observeOverlays()
     setUpWindowDrag()
-    model.setTabs(browser.tabs)
+    spaces.addListener(self)
+    model.reloadTabs()
     model.setExtensionActions(browser.extensionActions)
     model.setDownloads(browser.downloads, progress: browser.downloadProgress)
     activeTabDidChange(browser.activeTabID)
@@ -374,15 +382,36 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.peekConfirm.show(for: duration)
   }
 
-  func tabsDidChange(_ tabs: [any ClairTab]) {
-    model.setTabs(tabs)
+  // MARK: Spaces and their tabs (add-spaces design D10)
+
+  func shownSpaceDidChange(_ spaceID: SpaceID, from previousSpaceID: SpaceID?) {
+    model.setShownSpace(spaceID)
+    tabsChanged()
+  }
+
+  func spaceTabsDidChange(_ spaceID: SpaceID) {
+    guard spaceID == model.shownSpaceID else { return }
+    model.reloadTabs()
+    tabsChanged()
+  }
+
+  func spaceTabDidChange(_ tab: any ClairTab) {
+    guard tab.browserID == model.browserID, tab.spaceID == model.shownSpaceID else { return }
+    tabChanged(tab)
+  }
+
+  func spacesDidChange() {}
+
+  /// The window's rows were added, closed or moved, or it shows another
+  /// Space.
+  private func tabsChanged() {
     // A Peek opened, closed or expanded.
     showPages()
     model.reloadStop.loadingChanged(model.activeTab?.isLoading == true)
     rootView.loadingIndicator.loadingChanged(model.activeTab?.isLoading == true)
   }
 
-  func tabDidChange(_ tab: any ClairTab) {
+  private func tabChanged(_ tab: any ClairTab) {
     model.updateTab(tab)
     if tab.tabID == model.activeTabID {
       model.reloadStop.loadingChanged(tab.isLoading)
@@ -617,6 +646,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   func browserDidClose() {
     // The pages belong to Chromium; let go of them and of the browser.
+    model.spaces.removeListener(self)
     model.commandBar?.cancel()
     closeExtensionPopup()
     dialogs.cancelAll()

@@ -17,6 +17,9 @@ final class NativeLayer {
 
   let host: any ClairHost
 
+  /// Every Space and its tabs, as the host reports them (add-spaces D10).
+  let spaces: SpacesModel
+
   /// Sparkle, once the layer is running inside Clair.app.
   private(set) var updates: UpdateController?
 
@@ -33,6 +36,7 @@ final class NativeLayer {
 
   init(host: any ClairHost) {
     self.host = host
+    spaces = SpacesModel(host: host)
   }
 
   /// Runs what only makes sense inside the app: not in a unit test's process,

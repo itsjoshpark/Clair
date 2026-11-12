@@ -108,8 +108,9 @@ NSMenuItem* FindMenuItem(NSMenu* menu, NSInteger tag) {
 
 // Runs `command` for the native window's browser, as BrowserNativeWidgetMac's
 // ExecuteCommand does. In a native window, New Tab opens the command bar
-// instead (D10), and the tab commands skip Peeks (add-peek D7). Returns
-// whether the command ran.
+// instead (D10), and the tab commands run over the sidebar's rows of the
+// shown Space, skipping Peeks (add-peek D7, add-spaces D5). Returns whether
+// the command ran.
 bool ExecuteCommand(ClairBrowserWindow* window,
                     int command,
                     WindowOpenDisposition disposition,
@@ -134,8 +135,13 @@ bool ExecuteCommand(ClairBrowserWindow* window,
   if (ClairIsRemovedCommand(command)) {
     return true;
   }
-  // add-peek D7: tab commands treat a tab and its Peek as one.
+  // add-peek D7: the active Peek's tab commands.
   if (window->peeks() && window->peeks()->ExecuteCommand(command)) {
+    return true;
+  }
+  // add-spaces D5: the tab commands run over the rows of the shown Space,
+  // where a tab and its Peek are one.
+  if (window->ExecuteTabCommand(command)) {
     return true;
   }
   chrome::ExecuteCommandWithDisposition(browser, command, disposition);

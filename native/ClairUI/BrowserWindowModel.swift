@@ -13,10 +13,30 @@ import Observation
 @Observable
 final class BrowserWindowModel {
   let profileKind: ProfileKind
+  /// The window's ID, which its tabs carry.
+  let browserID: BrowserID
+  /// Every Space and its tabs, app-wide (add-spaces design D10).
+  let spaces: SpacesModel
 
-  /// The window's tabs in Chromium's order, which is the sidebar's.
+  /// The Space the window shows (add-spaces design D3).
+  private(set) var shownSpaceID: SpaceID
+
+  /// The window's tabs in the Space it shows, in the Space's order, which is
+  /// the sidebar's, Peeks included.
   private(set) var tabs: [any ClairTab] = []
   private(set) var activeTabID: TabID = ClairTabIDNone
+
+  /// The Space the window shows, or nil in an incognito or guest window,
+  /// whose Space isn't one of the user's.
+  var shownSpace: (any ClairSpace)? {
+    spaces.space(shownSpaceID)
+  }
+
+  /// Whether the window shows the user's Spaces: not in incognito and guest
+  /// windows.
+  var showsSpaces: Bool {
+    profileKind == .regular
+  }
 
   var activeTab: (any ClairTab)? {
     tabs.first { $0.tabID == activeTabID }
@@ -73,13 +93,30 @@ final class BrowserWindowModel {
   /// What the reload button shows (arc-navigation-feedback design D2).
   let reloadStop = ReloadStopState(doubleClickInterval: NSEvent.doubleClickInterval)
 
-  init(profileKind: ProfileKind, sidebar: SidebarState) {
+  init(
+    profileKind: ProfileKind, sidebar: SidebarState, browserID: BrowserID = 0, shownSpaceID: SpaceID = "",
+    spaces: SpacesModel = .detached
+  ) {
     self.profileKind = profileKind
     self.sidebar = sidebar
+    self.browserID = browserID
+    self.shownSpaceID = shownSpaceID
+    self.spaces = spaces
   }
 
   func setTabs(_ tabs: [any ClairTab]) {
     self.tabs = tabs
+  }
+
+  /// Shows another Space's rows, read from `spaces`.
+  func setShownSpace(_ spaceID: SpaceID) {
+    shownSpaceID = spaceID
+    reloadTabs()
+  }
+
+  /// Reads the window's rows of its Space again from `spaces`.
+  func reloadTabs() {
+    tabs = spaces.tabs(inSpace: shownSpaceID, browser: browserID)
   }
 
   /// Replaces the snapshot of one tab; a tab the list doesn't have is ignored,

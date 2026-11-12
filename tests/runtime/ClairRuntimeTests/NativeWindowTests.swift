@@ -240,7 +240,8 @@ final class PageHostingTests: NativeWindowTestCase {
     try await Task.sleep(for: .seconds(3))
     try await browser.quit()
 
-    try await browser.start(arguments: ["--restore-last-session"])
+    // With no switch: tabs come back at launch by default (add-spaces D11).
+    try await browser.start()
     for (search, size) in expected {
       var target: Browser.Target?
       let restored = await Harness.wait(for: 60) {

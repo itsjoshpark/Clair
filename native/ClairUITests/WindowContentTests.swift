@@ -17,7 +17,7 @@ struct WindowContentTests {
       browser.addTab(title: "Tab \(index)", url: "https://\(index).example/", at: index, activate: index == 0)
     }
     let controller = BrowserWindowController(
-      browser: browser, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function)!))
+      browser: browser, spaces: browser.spaces, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function)!))
     browser.clairWindow = controller
     return (browser, controller)
   }

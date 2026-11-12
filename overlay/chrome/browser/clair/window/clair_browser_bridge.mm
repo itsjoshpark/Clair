@@ -5,6 +5,7 @@
 #import "chrome/browser/clair/window/clair_browser_bridge.h"
 
 #include <algorithm>
+#include <climits>
 #include <memory>
 #include <optional>
 #include <set>
@@ -24,6 +25,7 @@
 #include "chrome/browser/clair/window/clair_downloads.h"
 #include "chrome/browser/clair/window/clair_extensions.h"
 #include "chrome/browser/clair/window/clair_peeks.h"
+#import "chrome/browser/clair/clair_space_tabs.h"
 #include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
@@ -76,10 +78,6 @@ ClairTabID TabIDOf(content::WebContents* contents) {
   return tab ? tab->GetHandle().raw_value() : ClairTabIDNone;
 }
 
-NSString* NSStringOrNil(const std::u16string& text) {
-  return text.empty() ? nil : base::SysUTF16ToNSString(text);
-}
-
 WindowOpenDisposition DispositionFor(ClairOpenDisposition disposition) {
   switch (disposition) {
     case ClairOpenDispositionCurrentTab:
@@ -94,336 +92,9 @@ WindowOpenDisposition DispositionFor(ClairOpenDisposition disposition) {
   return WindowOpenDisposition::CURRENT_TAB;
 }
 
-ClairTabIndicators IndicatorsOf(content::WebContents* contents) {
-  ClairTabIndicators indicators = ClairTabIndicatorsNone;
-  scoped_refptr<MediaStreamCaptureIndicator> capture =
-      MediaCaptureDevicesDispatcher::GetInstance()
-          ->GetMediaStreamCaptureIndicator();
-  if (capture) {
-    if (capture->IsCapturingVideo(contents)) {
-      indicators |= ClairTabIndicatorsCamera;
-    }
-    if (capture->IsCapturingAudio(contents)) {
-      indicators |= ClairTabIndicatorsMicrophone;
-    }
-    if (capture->IsBeingMirrored(contents) || capture->IsCapturingTab(contents) ||
-        capture->IsCapturingWindow(contents) ||
-        capture->IsCapturingDisplay(contents)) {
-      indicators |= ClairTabIndicatorsScreenCapture;
-    }
-  }
-  auto* settings = content_settings::PageSpecificContentSettings::GetForFrame(
-      contents->GetPrimaryMainFrame());
-  if (settings) {
-    if (settings->IsContentAllowed(ContentSettingsType::GEOLOCATION)) {
-      indicators |= ClairTabIndicatorsLocation;
-    }
-    for (ContentSettingsType type :
-         {ContentSettingsType::GEOLOCATION, ContentSettingsType::NOTIFICATIONS,
-          ContentSettingsType::MEDIASTREAM_CAMERA,
-          ContentSettingsType::MEDIASTREAM_MIC}) {
-      if (settings->IsContentBlocked(type)) {
-        indicators |= ClairTabIndicatorsBlockedPermission;
-      }
-    }
-  }
-  return indicators;
-}
-
 NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
   return reinterpret_cast<NSInteger>(infobar);
 }
-
-}  // namespace
-
-// --- Snapshots ---------------------------------------------------------------
-
-@interface ClairChromiumInfobar : NSObject <ClairInfobar>
-- (instancetype)initWithInfobar:(infobars::InfoBar*)infobar
-                       delegate:(ConfirmInfoBarDelegate*)delegate;
-@end
-
-@implementation ClairChromiumInfobar
-@synthesize infobarID = _infobarID;
-@synthesize message = _message;
-@synthesize linkText = _linkText;
-@synthesize okButtonLabel = _okButtonLabel;
-@synthesize cancelButtonLabel = _cancelButtonLabel;
-@synthesize icon = _icon;
-
-- (instancetype)initWithInfobar:(infobars::InfoBar*)infobar
-                       delegate:(ConfirmInfoBarDelegate*)delegate {
-  if ((self = [super init])) {
-    _infobarID = InfobarIDOf(infobar);
-    _message = base::SysUTF16ToNSString(delegate->GetMessageText());
-    _linkText = NSStringOrNil(delegate->GetLinkText());
-    const int buttons = delegate->GetButtons();
-    if (buttons & ConfirmInfoBarDelegate::BUTTON_OK) {
-      _okButtonLabel = base::SysUTF16ToNSString(
-          delegate->GetButtonLabel(ConfirmInfoBarDelegate::BUTTON_OK));
-    }
-    if (buttons & ConfirmInfoBarDelegate::BUTTON_CANCEL) {
-      _cancelButtonLabel = base::SysUTF16ToNSString(
-          delegate->GetButtonLabel(ConfirmInfoBarDelegate::BUTTON_CANCEL));
-    }
-  }
-  return self;
-}
-@end
-
-@interface ClairChromiumTab : NSObject <ClairTab>
-- (instancetype)initWithContents:(content::WebContents*)contents
-                    peekParentID:(ClairTabID)peekParentID
-                          peekID:(ClairTabID)peekID;
-@end
-
-@implementation ClairChromiumTab
-@synthesize tabID = _tabID;
-@synthesize title = _title;
-@synthesize url = _url;
-@synthesize urlText = _urlText;
-@synthesize displayHost = _displayHost;
-@synthesize isNewTabPage = _isNewTabPage;
-@synthesize isNotSecure = _isNotSecure;
-@synthesize favicon = _favicon;
-@synthesize isLoading = _isLoading;
-@synthesize loadProgress = _loadProgress;
-@synthesize canGoBack = _canGoBack;
-@synthesize canGoForward = _canGoForward;
-@synthesize isAudible = _isAudible;
-@synthesize isMuted = _isMuted;
-@synthesize isCrashed = _isCrashed;
-@synthesize indicators = _indicators;
-@synthesize infobars = _infobars;
-@synthesize peekParentID = _peekParentID;
-@synthesize peekID = _peekID;
-
-- (instancetype)initWithContents:(content::WebContents*)contents
-                    peekParentID:(ClairTabID)peekParentID
-                          peekID:(ClairTabID)peekID {
-  if ((self = [super init])) {
-    _peekParentID = peekParentID;
-    _peekID = peekID;
-    const GURL& url = contents->GetVisibleURL();
-    _tabID = TabIDOf(contents);
-    _url = url.is_valid() ? net::NSURLWithGURL(url) : nil;
-    _urlText = base::SysUTF16ToNSString(url_formatter::FormatUrl(
-        url, url_formatter::kFormatUrlOmitNothing, base::UnescapeRule::NORMAL,
-        nullptr, nullptr, nullptr));
-    _displayHost = url.has_host() ? base::SysUTF16ToNSString(
-                                        url_formatter::IDNToUnicode(url.host()))
-                                  : nil;
-    _isNewTabPage = url.SchemeIs(content::kChromeUIScheme) &&
-                    (url.host() == chrome::kChromeUINewTabHost ||
-                     url.host() == chrome::kChromeUINewTabPageHost);
-    const security_state::SecurityLevel security_level =
-        chrome_security_state::GetSecurityLevel(contents);
-    _isNotSecure = security_level == security_state::WARNING ||
-                   security_level == security_state::DANGEROUS;
-    std::u16string title = contents->GetTitle();
-    _title = base::SysUTF16ToNSString(title.empty() ? url_formatter::FormatUrl(url)
-                                                    : title);
-    if (auto* favicons =
-            favicon::ContentFaviconDriver::FromWebContents(contents);
-        favicons && favicons->FaviconIsValid()) {
-      gfx::Image image = favicons->GetFavicon();
-      _favicon = image.IsEmpty() ? nil : image.ToNSImage();
-    }
-    // Chromium's toolbar and tab strip state (design D1): a frame loading on
-    // its own or a same-document navigation doesn't show stop.
-    _isLoading = contents->IsLoading() && contents->ShouldShowLoadingUI();
-    _loadProgress = contents->GetLoadProgress();
-    _canGoBack = contents->GetController().CanGoBack();
-    _canGoForward = contents->GetController().CanGoForward();
-    auto* audible = RecentlyAudibleHelper::FromWebContents(contents);
-    _isAudible = contents->IsCurrentlyAudible() ||
-                 (audible && audible->WasRecentlyAudible());
-    _isMuted = contents->IsAudioMuted();
-    _isCrashed = contents->IsCrashed();
-    _indicators = IndicatorsOf(contents);
-    NSMutableArray<id<ClairInfobar>>* infobars = [NSMutableArray array];
-    if (auto* manager =
-            infobars::ContentInfoBarManager::FromWebContents(contents)) {
-      for (infobars::InfoBar* infobar : manager->infobars()) {
-        if (ConfirmInfoBarDelegate* delegate =
-                infobar->delegate()->AsConfirmInfoBarDelegate()) {
-          [infobars addObject:[[ClairChromiumInfobar alloc]
-                                  initWithInfobar:infobar
-                                         delegate:delegate]];
-        }
-      }
-    }
-    _infobars = [infobars copy];
-  }
-  return self;
-}
-@end
-
-// --- Observation -------------------------------------------------------------
-
-namespace {
-
-// Tells the bridge when a tab's load progress or security state changes (design
-// D4), so it rides the tab's coalesced push.
-class ProgressObserver : public content::WebContentsObserver {
- public:
-  ProgressObserver(ClairChromiumBrowser* bridge, content::WebContents* contents)
-      : content::WebContentsObserver(contents), bridge_(bridge) {}
-
-  // content::WebContentsObserver:
-  void LoadProgressChanged(double progress) override {
-    [bridge_ tabChanged:web_contents()];
-  }
-  // Mixed content can be found after a load has finished.
-  void DidChangeVisibleSecurityState() override {
-    [bridge_ tabChanged:web_contents()];
-  }
-
- private:
-  ClairChromiumBrowser* __weak bridge_;
-};
-
-// Watches the tab strip, and each tab's infobars and load progress, for the
-// bridge.
-class BridgeObserver : public TabStripModelObserver,
-                       public infobars::InfoBarManager::Observer {
- public:
-  BridgeObserver(ClairChromiumBrowser* bridge, TabStripModel* model)
-      : bridge_(bridge), model_(model) {
-    model_->AddObserver(this);
-    for (int i = 0; i < model_->count(); ++i) {
-      Watch(model_->GetWebContentsAt(i));
-    }
-  }
-
-  ~BridgeObserver() override {
-    infobar_observations_.RemoveAllObservations();
-    progress_observers_.clear();
-    if (model_) {
-      model_->RemoveObserver(this);
-    }
-  }
-
-  // TabStripModelObserver:
-  void OnTabStripModelChanged(TabStripModel* model,
-                              const TabStripModelChange& change,
-                              const TabStripSelectionChange& selection) override {
-    switch (change.type()) {
-      case TabStripModelChange::kInserted:
-        for (const auto& inserted : change.GetInsert()->contents) {
-          Watch(inserted.contents);
-        }
-        [bridge_ tabListChanged];
-        break;
-      case TabStripModelChange::kRemoved:
-        for (const auto& removed : change.GetRemove()->contents) {
-          Unwatch(removed.contents);
-        }
-        [bridge_ tabListChanged];
-        break;
-      case TabStripModelChange::kReplaced:
-        Unwatch(change.GetReplace()->old_contents);
-        Watch(change.GetReplace()->new_contents);
-        [bridge_ tabListChanged];
-        break;
-      case TabStripModelChange::kMoved:
-        [bridge_ tabListChanged];
-        break;
-      case TabStripModelChange::kSelectionOnly:
-        break;
-    }
-  }
-
-  void OnTabChangedAt(tabs::TabInterface* tab,
-                      TabChangeType change_type) override {
-    [bridge_ tabChanged:tab->GetContents()];
-  }
-
-  void OnTabStripModelDestroyed(TabStripModel* model) override {
-    model_ = nullptr;
-  }
-
-  // infobars::InfoBarManager::Observer:
-  void OnInfoBarAdded(infobars::InfoBar* infobar) override {
-    if (!infobar->delegate()->AsConfirmInfoBarDelegate()) {
-      // D8: only confirm infobars have a native bar. Others are logged and
-      // dismissed once the manager has finished adding this one.
-      LOG(WARNING) << "Clair: dismissing an infobar the native window can't "
-                      "show (identifier "
-                   << static_cast<int>(infobar->delegate()->GetIdentifier()) << ")";
-      infobars::InfoBarManager* manager = infobar->owner();
-      dispatch_async(dispatch_get_main_queue(), ^{
-        if (manager && std::ranges::find(manager->infobars(), infobar) !=
-                           manager->infobars().end()) {
-          infobar->RemoveSelf();
-        }
-      });
-      return;
-    }
-    Changed(infobar);
-  }
-
-  void OnInfoBarRemoved(infobars::InfoBar* infobar, bool animate) override {
-    Changed(infobar);
-  }
-
-  void OnInfoBarReplaced(infobars::InfoBar* old_infobar,
-                         infobars::InfoBar* new_infobar) override {
-    Changed(new_infobar);
-  }
-
-  void OnManagerWillBeDestroyed(infobars::InfoBarManager* manager) override {
-    if (infobar_observations_.IsObservingSource(manager)) {
-      infobar_observations_.RemoveObservation(manager);
-    }
-  }
-
- private:
-  void Watch(content::WebContents* contents) {
-    auto* manager = infobars::ContentInfoBarManager::FromWebContents(contents);
-    if (manager && !infobar_observations_.IsObservingSource(manager)) {
-      infobar_observations_.AddObservation(manager);
-    }
-    if (FindProgressObserver(contents) == progress_observers_.end()) {
-      progress_observers_.push_back(
-          std::make_unique<ProgressObserver>(bridge_, contents));
-    }
-  }
-
-  void Unwatch(content::WebContents* contents) {
-    auto* manager = infobars::ContentInfoBarManager::FromWebContents(contents);
-    if (manager && infobar_observations_.IsObservingSource(manager)) {
-      infobar_observations_.RemoveObservation(manager);
-    }
-    if (auto it = FindProgressObserver(contents);
-        it != progress_observers_.end()) {
-      progress_observers_.erase(it);
-    }
-  }
-
-  std::vector<std::unique_ptr<ProgressObserver>>::iterator FindProgressObserver(
-      content::WebContents* contents) {
-    return std::ranges::find_if(
-        progress_observers_,
-        [contents](const std::unique_ptr<ProgressObserver>& observer) {
-          return observer->web_contents() == contents;
-        });
-  }
-
-  void Changed(infobars::InfoBar* infobar) {
-    if (content::WebContents* contents =
-            infobars::ContentInfoBarManager::WebContentsFromInfoBar(infobar)) {
-      [bridge_ tabChanged:contents];
-    }
-  }
-
-  ClairChromiumBrowser* __weak bridge_;
-  raw_ptr<TabStripModel> model_;
-  base::ScopedMultiSourceObservation<infobars::InfoBarManager,
-                                     infobars::InfoBarManager::Observer>
-      infobar_observations_{this};
-  std::vector<std::unique_ptr<ProgressObserver>> progress_observers_;
-};
 
 }  // namespace
 
@@ -676,19 +347,17 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 @implementation ClairChromiumBrowser {
   ClairBrowserWindow* _browserWindow;  // Weak; owns this bridge.
   id<ClairWindow> __weak _window;
-  std::unique_ptr<BridgeObserver> _observer;
   BOOL _flushPosted;
-  BOOL _tabListChanged;
   BOOL _activeTabChanged;
-  std::set<int32_t> _changedTabs;
+  // add-spaces D3: the Space the window showed before the change ClairUI
+  // hasn't heard of yet.
+  std::optional<std::string> _previousSpace;
   ClairChromiumHistoryMenu* __weak _historyMenu;
 }
 
 - (instancetype)initWithBrowserWindow:(ClairBrowserWindow*)browserWindow {
   if ((self = [super init])) {
     _browserWindow = browserWindow;
-    _observer = std::make_unique<BridgeObserver>(
-        self, browserWindow->browser()->tab_strip_model());
   }
   return self;
 }
@@ -699,7 +368,6 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 
 - (void)detach {
   [_historyMenu close];
-  _observer.reset();
   _browserWindow = nullptr;
   _window = nil;
 }
@@ -735,20 +403,8 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 }
 
 - (id<ClairTab>)snapshotOf:(content::WebContents*)contents {
-  ClairTabID peekParentID = ClairTabIDNone;
-  ClairTabID peekID = ClairTabIDNone;
-  tabs::TabInterface* tab = tabs::TabInterface::MaybeGetFromContents(contents);
-  if (ClairPeeks* peeks = self.peeks; peeks && tab) {
-    if (tabs::TabInterface* peek = peeks->ShownPeekOf(tab)) {
-      peekID = peek->GetHandle().raw_value();
-    }
-    if (std::optional<int32_t> parent = peeks->ParentIDOf(tab)) {
-      peekParentID = *parent;
-    }
-  }
-  return [[ClairChromiumTab alloc] initWithContents:contents
-                                       peekParentID:peekParentID
-                                             peekID:peekID];
+  ClairSpaceTabs* lists = _browserWindow ? _browserWindow->space_tabs() : nullptr;
+  return lists ? lists->Snapshot(contents) : nil;
 }
 
 // --- Posting changes ---
@@ -765,16 +421,26 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 }
 
 - (void)tabListChanged {
-  _tabListChanged = YES;
-  [self postFlush];
+  ClairSpaceTabs* lists = _browserWindow ? _browserWindow->space_tabs() : nullptr;
+  if (!lists) {
+    return;
+  }
+  for (tabs::TabInterface* tab : _browserWindow->SpaceTabs()) {
+    lists->ListChangedFor(tab);
+  }
 }
 
 - (void)tabChanged:(content::WebContents*)contents {
-  const ClairTabID tabID = TabIDOf(contents);
-  if (tabID == ClairTabIDNone) {
-    return;
+  if (ClairSpaceTabs* lists =
+          _browserWindow ? _browserWindow->space_tabs() : nullptr) {
+    lists->TabChanged(contents);
   }
-  _changedTabs.insert(static_cast<int32_t>(tabID));
+}
+
+- (void)shownSpaceChangedFrom:(const std::string&)previousSpace {
+  if (!_previousSpace) {
+    _previousSpace = previousSpace;
+  }
   [self postFlush];
 }
 
@@ -786,23 +452,23 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 
 - (void)flush {
   _flushPosted = NO;
+  // The tab lists first, so ClairUI knows a tab before it becomes active
+  // (add-spaces D9).
+  ClairSpaceTabs::FlushAll();
   id<ClairWindow> window = _window;
-  TabStripModel* strip = self.tabStrip;
-  if (!window || !strip) {
-    _changedTabs.clear();
-    _tabListChanged = _activeTabChanged = NO;
+  if (!window || !_browserWindow) {
+    _previousSpace.reset();
+    _activeTabChanged = NO;
     return;
   }
-  if (_tabListChanged) {
-    _tabListChanged = NO;
-    [window tabsDidChange:self.tabs];
-  }
-  std::set<int32_t> changed = std::move(_changedTabs);
-  _changedTabs.clear();
-  for (int32_t raw : changed) {
-    const int index = [self indexOfTab:raw];
-    if (index != TabStripModel::kNoTab) {
-      [window tabDidChange:[self snapshotOf:strip->GetWebContentsAt(index)]];
+  if (_previousSpace) {
+    const std::string previous = *_previousSpace;
+    _previousSpace.reset();
+    if (previous != _browserWindow->shown_space()) {
+      [window shownSpaceDidChange:self.shownSpaceID
+                             from:previous.empty()
+                                      ? nil
+                                      : base::SysUTF8ToNSString(previous)];
     }
   }
   if (_activeTabChanged) {
@@ -830,13 +496,14 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
                                    : ClairProfileKindRegular;
 }
 
-- (NSArray<id<ClairTab>>*)tabs {
-  TabStripModel* strip = self.tabStrip;
-  NSMutableArray<id<ClairTab>>* tabs = [NSMutableArray array];
-  for (int i = 0; strip && i < strip->count(); ++i) {
-    [tabs addObject:[self snapshotOf:strip->GetWebContentsAt(i)]];
-  }
-  return tabs;
+- (ClairBrowserID)browserID {
+  Browser* browser = self.browser;
+  return browser ? browser->GetSessionID().id() : 0;
+}
+
+- (ClairSpaceID)shownSpaceID {
+  return _browserWindow ? base::SysUTF8ToNSString(_browserWindow->shown_space())
+                        : @"";
 }
 
 - (ClairTabID)activeTabID {
@@ -911,6 +578,14 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   return ClairDownloads::Progress();
 }
 
+// --- ClairBrowser: Spaces ---
+
+- (void)showSpace:(ClairSpaceID)spaceID {
+  if (_browserWindow && spaceID) {
+    _browserWindow->ShowSpace(base::SysNSStringToUTF8(spaceID));
+  }
+}
+
 // --- ClairBrowser: tabs ---
 
 - (void)activateTab:(ClairTabID)tabID {
@@ -923,42 +598,27 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 }
 
 - (void)closeTab:(ClairTabID)tabID {
-  const int index = [self indexOfTab:tabID];
-  if (index != TabStripModel::kNoTab) {
-    self.tabStrip->CloseWebContentsAt(
-        index, TabCloseTypes::CLOSE_USER_GESTURE |
-                   TabCloseTypes::CLOSE_CREATE_HISTORICAL_TAB);
+  // add-spaces D4: Clair picks the next tab before the close.
+  if (tabs::TabInterface* tab = [self tabWithID:tabID]) {
+    _browserWindow->CloseTab(tab);
   }
 }
 
 - (void)closeTabsBelowTab:(ClairTabID)tabID {
-  // Below the tab's Peek, which goes only with the tab (add-peek D8).
-  tabs::TabInterface* tab = [self tabWithID:tabID];
-  if (ClairPeeks* peeks = self.peeks; peeks && tab) {
-    tab = peeks->LastOfFamily(tab);
-  }
-  const int index = tab ? self.tabStrip->GetIndexOfTab(tab)
-                        : TabStripModel::kNoTab;
-  if (index != TabStripModel::kNoTab) {
-    self.tabStrip->ExecuteContextMenuCommand(index,
-                                             tabs::CommandCloseTabsToRight);
+  // Below it in its Space, from its Peek (add-peek D8, add-spaces D5).
+  if (tabs::TabInterface* tab = [self tabWithID:tabID]) {
+    _browserWindow->CloseTabsBelow(tab);
   }
 }
 
 - (void)moveTab:(ClairTabID)tabID toIndex:(NSInteger)toIndex {
-  const int index = [self indexOfTab:tabID];
-  TabStripModel* strip = self.tabStrip;
-  if (index == TabStripModel::kNoTab || toIndex < 0 ||
-      toIndex >= strip->count()) {
-    return;
+  // In the Space's list, with its Peek; no strip changes (add-spaces D2).
+  tabs::TabInterface* tab = [self tabWithID:tabID];
+  ClairSpaceTabs* lists = _browserWindow ? _browserWindow->space_tabs() : nullptr;
+  if (tab && lists && toIndex >= 0) {
+    lists->MoveTab(tab, static_cast<int>(
+                            std::min<NSInteger>(toIndex, INT_MAX)));
   }
-  // A tab and its Peek move together (add-peek D8).
-  if (ClairPeeks* peeks = self.peeks) {
-    peeks->MoveTab(strip->GetTabAtIndex(index), static_cast<int>(toIndex));
-    return;
-  }
-  strip->MoveWebContentsAt(index, static_cast<int>(toIndex),
-                           /*select_after_move=*/false);
 }
 
 - (void)duplicateTab:(ClairTabID)tabID {

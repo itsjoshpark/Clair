@@ -10,6 +10,7 @@
 #ifndef CHROME_BROWSER_CLAIR_WINDOW_CLAIR_BROWSER_WINDOW_H_
 #define CHROME_BROWSER_CLAIR_WINDOW_CLAIR_BROWSER_WINDOW_H_
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -27,6 +28,7 @@
 #include "chrome/browser/ui/find_bar/find_bar.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/status_bubble.h"
+#include "components/tabs/public/tab_interface.h"
 #include "components/web_modal/web_contents_modal_dialog_host.h"
 #include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/gfx/geometry/rect.h"
@@ -46,6 +48,7 @@ class ClairBrowserWindow;
 class ClairDownloads;
 class ClairExtensions;
 class ClairPeeks;
+class ClairSpaceTabs;
 
 namespace autofill {
 class AutofillBubbleHandler;
@@ -264,6 +267,8 @@ class ClairBrowserWindow : public BrowserWindow {
   static ClairBrowserWindow* FromBrowser(const BrowserWindowInterface* browser);
   // The native window showing `contents`, or null.
   static ClairBrowserWindow* FromWebContents(content::WebContents* contents);
+  // Every native window.
+  static std::vector<ClairBrowserWindow*> All();
 
   Browser* browser() const { return browser_; }
   base::WeakPtr<ClairBrowserWindow> GetWeakPtr() {
@@ -280,6 +285,39 @@ class ClairBrowserWindow : public BrowserWindow {
   ClairDownloads* downloads() const { return downloads_.get(); }
   // The window's Peeks (add-peek design D1); null once the window is going.
   ClairPeeks* peeks() const { return peeks_.get(); }
+  // The tab lists of the window's profile (add-spaces design D2).
+  ClairSpaceTabs* space_tabs() const { return space_tabs_; }
+
+  // --- Spaces (add-spaces design D3, D4, D5) ---
+  // The Space the window shows. Its active tab always belongs to it.
+  const std::string& shown_space() const { return shown_space_; }
+  // Shows `space`: activates the tab last active in it here, or else its
+  // first row here, or else opens a new tab page in it with the command bar.
+  // Ignored for an unknown Space and in incognito and guest windows.
+  void ShowSpace(const std::string& space);
+  // The window's tabs in its shown Space, in the Space's order: with Peeks,
+  // or only the rows the sidebar lists.
+  std::vector<tabs::TabInterface*> SpaceTabs() const;
+  std::vector<tabs::TabInterface*> Rows() const;
+  // Whether `tab` is the row the window shows: the active tab, or the parent
+  // of the active Peek.
+  bool IsActiveRow(const tabs::TabInterface* tab) const;
+  // D4: before the active row `row` leaves the Space, shows the row the user
+  // came from, if it's still listed, or else the row above, or else the row
+  // below. Returns false, changing nothing, when there's none.
+  bool ShowNextRow(tabs::TabInterface* row);
+  // D4: closes `tab`, with its leave-page confirmation, first showing the
+  // next row if it's the active one.
+  void CloseTab(tabs::TabInterface* tab);
+  // Closes the window's tabs below `tab` in its Space, from its Peek.
+  void CloseTabsBelow(tabs::TabInterface* tab);
+  // Activates `row`, or its Peek if it has one.
+  void ActivateRow(tabs::TabInterface* row);
+  // Opens a new tab page in the shown Space, optionally with the command bar.
+  void OpenNewTabPage(bool show_command_bar);
+  // D5: runs a tab command over the rows of the shown Space. Returns whether
+  // it ran; otherwise Chromium runs it.
+  bool ExecuteTabCommand(int command);
   ClairExclusiveAccessContext* exclusive_access_context() {
     return &exclusive_access_context_;
   }
@@ -448,6 +486,8 @@ class ClairBrowserWindow : public BrowserWindow {
   void ZoomChanged(bool can_show_bubble);
   // Tells ClairUI the browser closed and lets go of it, once.
   void DetachFromClairUI();
+  // D3: the window now shows `space`; ClairUI hears of it with the next push.
+  void SetShownSpace(const std::string& space);
   // The pages the card shows while `active` is the active tab: it and its
   // Peek or parent (add-peek D4).
   std::set<content::WebContents*> PagesShownWith(
@@ -465,6 +505,17 @@ class ClairBrowserWindow : public BrowserWindow {
   std::unique_ptr<ClairExtensions> extensions_;
   std::unique_ptr<ClairDownloads> downloads_;
   std::unique_ptr<ClairPeeks> peeks_;
+  // Owned by the profile.
+  raw_ptr<ClairSpaceTabs> space_tabs_ = nullptr;
+  // add-spaces D3: the Space the window shows, and the tab last active in
+  // each Space here.
+  std::string shown_space_;
+  std::map<std::string, tabs::TabHandle> last_active_;
+  // D4: the row the user selected the active tab from, or null.
+  tabs::TabHandle came_from_;
+  // While Clair activates the next tab before a close, which sets no
+  // came-from.
+  bool choosing_next_ = false;
   // Owned by the browser's FindBarController once created.
   raw_ptr<ClairFindBar> find_bar_ = nullptr;
   base::CallbackListSubscription zoom_subscription_;

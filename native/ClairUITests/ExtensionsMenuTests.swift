@@ -14,7 +14,7 @@ struct ExtensionsMenuTests {
   func window(_ actions: [FakeExtensionAction]) -> (FakeBrowser, BrowserWindowController) {
     let browser = FakeBrowser()
     let controller = BrowserWindowController(
-      browser: browser, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: "ExtensionsMenuTests")!))
+      browser: browser, spaces: browser.spaces, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: "ExtensionsMenuTests")!))
     browser.clairWindow = controller
     browser.addTab(title: "Page", url: "https://example.com/")
     browser.setExtensionActions(actions)

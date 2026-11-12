@@ -100,7 +100,7 @@ struct SettingsWindowTests {
   @Test func theWindowAnswersFromThePreferenceLive() {
     let browser = FakeBrowser()
     let controller = BrowserWindowController(
-      browser: browser, preferences: SidebarPreferences(defaults: defaults),
+      browser: browser, spaces: browser.spaces, preferences: SidebarPreferences(defaults: defaults),
       peekPreference: PeekPreference(defaults: defaults))
     #expect(controller.opensPeekOnShiftClick)
     defaults.set(false, forKey: PeekPreference.key)

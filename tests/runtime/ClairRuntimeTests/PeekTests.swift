@@ -356,7 +356,8 @@ final class PeekTests: NativeWindowTestCase {
     links.close()
     other.close()
     try await browser.quit()
-    try await browser.start(arguments: ["--restore-last-session"])
+    // With no switch: tabs come back at launch by default (add-spaces D11).
+    try await browser.start()
     let restored = await browser.waitForTarget("peek.html", seconds: 60)
     try require(restored, "The Peek's parent tab didn't come back")
     let peekRestored = try await browser.target(endingWith: "?plain") != nil
