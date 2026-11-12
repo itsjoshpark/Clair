@@ -14,7 +14,7 @@ This is the first of three changes that bring Arc's Spaces and Profiles: `share-
 - **Tabs belong to a Space.** A new tab joins the Space its window shows. A tab's menu moves it to another Space, keeping its page.
 - **Arc's choice of the next tab.** Closing the active tab returns to the tab the user came from, or else to the row above, or else the row below.
 - **A Spaces menu** in the menu bar: New Space…, Rename Space, Manage Spaces…, Next Space (Opt+Cmd+Right), Previous Space (Opt+Cmd+Left) and Space 1–9 (Ctrl+1…9). Next and Previous Tab move to Opt+Cmd+Down and Opt+Cmd+Up, as decided in `clair-menus.md`.
-- **Tabs come back at launch.** Clair reopens the windows and tabs that were open when it quit, as Arc does; today that needs a Chromium setting changed. Each tab returns to its Space and its place.
+- **Tabs come back at launch.** Clair reopens the tabs that were open when it quit, as Arc does; today that needs a Chromium setting changed. They come back in one window, each in its Space and its place. Reopening the windows themselves is a separate matter and isn't part of this.
 - **BREAKING (`ClairHost.h`):** the host gains Spaces, their tab lists and an observer; `ClairTab` gains its Space and the window that holds it; `ClairBrowser` gains the shown Space; and tab lists come from the host, per Space, in place of each window's own.
 
 **Out of scope:**
@@ -24,6 +24,7 @@ This is the first of three changes that bring Arc's Spaces and Profiles: `share-
 - Glyph icons for Spaces, such as a grid of SF Symbols like Arc's "Icon" tab. Glyphs are a possible later addition.
 - Arc's Library, including its Space manager. Manage Spaces… opens Clair's own, simpler dialog.
 - Space themes, dragging a tab onto another Space, and undoing Delete Space.
+- Reopening every window at launch, as Arc's "restore windows from the previous session" setting does.
 - Closing old tabs automatically, as Arc's "Archive tabs after" does. With tabs now restored at every launch, that is a likely later change.
 - Pinned tabs, favorites and folders.
 
@@ -38,10 +39,10 @@ This is the first of three changes that bring Arc's Spaces and Profiles: `share-
 - `sidebar`:
   - "Tab list" lists the window's tabs of the Space it shows.
   - "Sidebar footer" gains the Space switcher, and its plus menu gains New Space….
-- `browser-window`: adds restoring windows and tabs at launch by default.
+- `browser-window`: adds restoring tabs at launch by default, into one window, and "Window size and placement restored" restores that one window.
 - `chromium-engine`:
   - "Browser behavior as in ungoogled-chromium outside Clair's interface" excepts Spaces and the "On startup" default.
-  - "What Clair's Chromium hooks may do" allows hooks that register Clair's preferences, tag Clair's tabs in saved sessions, free shortcuts Clair reassigns and make session restore the default.
+  - "What Clair's Chromium hooks may do" allows hooks that register Clair's preferences, tag Clair's tabs in saved sessions, free shortcuts Clair reassigns and restore the previous session's tabs into one window by default.
 
 ## Impact
 

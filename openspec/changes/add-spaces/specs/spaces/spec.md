@@ -227,11 +227,15 @@ Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to 
 - **THEN** the first row of the same Space is active
 
 ### Requirement: Spaces restored after a relaunch
-After Clair quits and relaunches, each restored tab SHALL return to its Space at its place in the Space's order, and each window SHALL show the Space it showed. A tab whose Space no longer exists SHALL join the Space its window shows.
+After Clair quits and relaunches, each restored tab SHALL return to its Space at its place in the Space's order, and the window SHALL show the Space that was last shown. A tab whose Space no longer exists SHALL join the Space its window shows.
 
 #### Scenario: Relaunch
 - **WHEN** the user quits with a window showing "Work", which has three tabs, while "Home" has two, and relaunches
 - **THEN** the window shows "Work" with its three tabs in order, and switching to "Home" lists its two
+
+#### Scenario: Tabs from a second window
+- **WHEN** the user quits with two windows open, the last active showing "Work" and the other showing "Home" with two tabs, and relaunches
+- **THEN** one window opens showing "Work", and switching to "Home" lists its two tabs
 
 #### Scenario: Reopen Closed Tab
 - **WHEN** the user closes a tab of "Work", switches to "Home" and chooses Restore Last Closed Tab
