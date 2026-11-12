@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair counter page</title>
+<script>
+  // add-spaces runtime tests: the page's state, which moving its tab to
+  // another Space must keep. The title names the page by its query.
+  window.counter = 0;
+  document.title = "Counter " + (location.search.slice(1) || "page");
+</script>
+<button id="count" onclick="window.counter++">Count</button>

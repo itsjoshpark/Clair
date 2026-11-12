@@ -6,6 +6,8 @@ import AppKit
 import ClairHost
 import Foundation
 
+@testable import ClairUI
+
 /// A stand-in for Chromium's tab snapshot.
 final class FakeTab: NSObject, ClairTab {
   let tabID: TabID
@@ -27,16 +29,21 @@ final class FakeTab: NSObject, ClairTab {
   let infobars: [any ClairInfobar]
   let peekParentID: TabID
   let peekID: TabID
+  let spaceID: SpaceID
+  let browserID: BrowserID
 
   init(
     id: TabID, title: String = "", url: String? = nil, isLoading: Bool = false, loadProgress: Double = 0,
     canGoBack: Bool = false, canGoForward: Bool = false, isAudible: Bool = false, isMuted: Bool = false, isCrashed: Bool = false,
     indicators: TabIndicators = [], infobars: [any ClairInfobar] = [], isNotSecure: Bool = false,
-    peekParentID: TabID = ClairTabIDNone, peekID: TabID = ClairTabIDNone
+    peekParentID: TabID = ClairTabIDNone, peekID: TabID = ClairTabIDNone, spaceID: SpaceID = FakeHost.homeID,
+    browserID: BrowserID = 0
   ) {
     tabID = id
     self.peekParentID = peekParentID
     self.peekID = peekID
+    self.spaceID = spaceID
+    self.browserID = browserID
     self.title = title
     self.url = url.flatMap(URL.init(string:))
     urlText = url ?? ""
@@ -59,7 +66,7 @@ final class FakeTab: NSObject, ClairTab {
     title: String? = nil, url: String? = nil, isLoading: Bool? = nil, loadProgress: Double? = nil,
     isAudible: Bool? = nil, isMuted: Bool? = nil, canGoBack: Bool? = nil, canGoForward: Bool? = nil,
     isCrashed: Bool? = nil, indicators: TabIndicators? = nil, isNotSecure: Bool? = nil,
-    peekParentID: TabID? = nil, peekID: TabID? = nil
+    peekParentID: TabID? = nil, peekID: TabID? = nil, spaceID: SpaceID? = nil
   ) -> FakeTab {
     FakeTab(
       id: tabID, title: title ?? self.title, url: url ?? (self.url?.absoluteString),
@@ -68,7 +75,8 @@ final class FakeTab: NSObject, ClairTab {
       canGoForward: canGoForward ?? self.canGoForward, isAudible: isAudible ?? self.isAudible,
       isMuted: isMuted ?? self.isMuted, isCrashed: isCrashed ?? self.isCrashed,
       indicators: indicators ?? self.indicators, infobars: infobars, isNotSecure: isNotSecure ?? self.isNotSecure,
-      peekParentID: peekParentID ?? self.peekParentID, peekID: peekID ?? self.peekID)
+      peekParentID: peekParentID ?? self.peekParentID, peekID: peekID ?? self.peekID,
+      spaceID: spaceID ?? self.spaceID, browserID: browserID)
   }
 }
 
@@ -341,13 +349,19 @@ final class FakeWindow: NSWindow, ClairWindowControls {
   var windowControlsHidden = false
 }
 
+
 /// A stand-in for Chromium's `ClairBrowser`. Its helpers change the tabs and
-/// tell the window through the same `ClairWindow` calls Chromium makes, and
-/// it records the commands ClairUI sends.
+/// tell the host's observers and the window through the same calls Chromium
+/// makes, and it records the commands ClairUI sends. It keeps the engine's
+/// Space rules (add-spaces design D3, D4): the shown Space follows the active
+/// tab, a new tab joins the shown Space, and closing the active row shows the
+/// row the user came from, or the row above, or the row below.
 final class FakeBrowser: NSObject, ClairBrowser {
+  let host: FakeHost
   let window: NSWindow & ClairWindowControls
   let profileKind: ProfileKind
-  private(set) var tabs: [any ClairTab] = []
+  let browserID: BrowserID
+  private(set) var shownSpaceID: SpaceID
   private(set) var activeTabID: TabID = ClairTabIDNone
   private var pageViews: [TabID: NSView] = [:]
   private(set) var devToolsView: NSView?
@@ -358,7 +372,16 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   /// The window ClairUI returned for this browser.
   var clairWindow: (any ClairWindow)?
-  private var nextTabID: TabID = 1
+  private static var nextBrowserID: BrowserID = 1
+  /// Unique across browsers, as Chromium's tab handles are.
+  private static var nextTabID: TabID = 1
+
+  /// The row the user selected the active tab from (D4), or none.
+  private(set) var cameFromID: TabID = ClairTabIDNone
+  /// The tab last active in each Space, in this window.
+  private var lastActive: [SpaceID: TabID] = [:]
+  /// While Clair picks the next tab before a close, which sets no came-from.
+  private var isChoosingNext = false
 
   /// Every command ClairUI sent, in order, such as "activate 2".
   private(set) var commands: [String] = []
@@ -369,26 +392,79 @@ final class FakeBrowser: NSObject, ClairBrowser {
   var historyItems: [HistoryDirection: [FakeHistoryItem]] = [:]
   private(set) var isClosed = false
 
-  init(profileKind: ProfileKind = .regular) {
+  init(host: FakeHost = FakeHost(), profileKind: ProfileKind = .regular) {
+    self.host = host
     self.profileKind = profileKind
+    browserID = Self.nextBrowserID
+    Self.nextBrowserID += 1
+    // D3: a new window shows the Space last shown; incognito and guest
+    // windows have a Space of their own.
+    if profileKind == .regular {
+      shownSpaceID = host.isSpace(host.lastShownSpaceID) ? host.lastShownSpaceID : host.spaces[0].spaceID
+    } else {
+      shownSpaceID = "private-\(browserID)"
+    }
     window = FakeWindow(
       contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), styleMask: [.titled, .closable, .resizable],
       backing: .buffered, defer: true)
     window.isReleasedWhenClosed = false
+    super.init()
+    host.register(self)
+  }
+
+  /// The model ClairUI keeps for this browser's host.
+  var spaces: SpacesModel { host.spacesModel }
+
+  /// The window's tabs in the Space it shows, in the Space's order, Peeks
+  /// included: what its sidebar lists.
+  var tabs: [any ClairTab] { windowTabs(inSpace: shownSpaceID) }
+
+  /// Every tab the window holds, in any Space.
+  var allTabs: [FakeTab] { host.tabs(ofBrowser: browserID) }
+
+  private func windowTabs(inSpace spaceID: SpaceID) -> [FakeTab] {
+    host.list(spaceID).filter { $0.browserID == browserID }
+  }
+
+  private func tab(_ tabID: TabID) -> FakeTab? {
+    host.tab(tabID).flatMap { $0.browserID == browserID ? $0 : nil }
+  }
+
+  /// Changes a Space's list and tells the observers.
+  private func mutate(_ spaceID: SpaceID, _ change: (inout [FakeTab]) -> Void) {
+    var list = host.list(spaceID)
+    change(&list)
+    host.setList(list, inSpace: spaceID)
+  }
+
+  /// The index in a Space's list of the window's tab at `index`, counting
+  /// only the window's tabs: before it, or after the window's last.
+  private func spaceIndex(forWindowIndex index: Int, inSpace spaceID: SpaceID) -> Int {
+    let list = host.list(spaceID)
+    let mine = windowTabs(inSpace: spaceID)
+    if index <= 0 { return 0 }
+    if index < mine.count, let at = list.firstIndex(where: { $0.tabID == mine[index].tabID }) {
+      return at
+    }
+    if let last = mine.last, let at = list.firstIndex(where: { $0.tabID == last.tabID }) {
+      return at + 1
+    }
+    return list.count
   }
 
   // MARK: Helpers that change the browser as Chromium would
 
-  /// Adds a tab at `index` (default: the top, as Clair places new tabs) and
-  /// returns it. It becomes active if `activate` or if it's the only tab.
+  /// Adds a tab to the Space the window shows, at `index` among the window's
+  /// tabs there (default: the top, as Clair places new tabs), and returns it.
+  /// It becomes active if `activate` or if it's the window's only tab.
   @discardableResult
   func addTab(title: String = "", url: String? = nil, at index: Int = 0, activate: Bool = true) -> FakeTab {
-    let tab = FakeTab(id: nextTabID, title: title, url: url)
-    nextTabID += 1
-    tabs.insert(tab, at: min(index, tabs.count))
+    let tab = FakeTab(id: Self.nextTabID, title: title, url: url, spaceID: shownSpaceID, browserID: browserID)
+    Self.nextTabID += 1
     pageViews[tab.tabID] = NSView()
-    clairWindow?.tabsDidChange(tabs)
-    if activate || tabs.count == 1 {
+    let at = spaceIndex(forWindowIndex: index, inSpace: shownSpaceID)
+    mutate(shownSpaceID) { $0.insert(tab, at: min(at, $0.count)) }
+    if activate || allTabs.count == 1 {
       setActive(tab.tabID)
     }
     return tab
@@ -396,48 +472,138 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   /// Replaces a tab's snapshot and posts it.
   func change(_ tab: FakeTab) {
-    guard let index = tabs.firstIndex(where: { $0.tabID == tab.tabID }) else { return }
-    tabs[index] = tab
-    clairWindow?.tabDidChange(tab)
+    host.replace(tab)
   }
 
+  /// Moves a tab within its Space's list, alone, as an extension might.
   func moveTab(_ tabID: TabID, to index: Int) {
-    guard let from = tabs.firstIndex(where: { $0.tabID == tabID }) else { return }
-    let tab = tabs.remove(at: from)
-    tabs.insert(tab, at: min(index, tabs.count))
-    clairWindow?.tabsDidChange(tabs)
-  }
-
-  /// Closes a tab. If it was active, the tab below it becomes active, or the
-  /// one above when it was last, as Chromium chooses without an opener.
-  func closeTabNow(_ tabID: TabID) {
-    guard let index = tabs.firstIndex(where: { $0.tabID == tabID }) else { return }
-    tabs.remove(at: index)
-    pageViews[tabID] = nil
-    clairWindow?.tabsDidChange(tabs)
-    if activeTabID == tabID {
-      setActive(tabs.isEmpty ? ClairTabIDNone : tabs[min(index, tabs.count - 1)].tabID)
+    guard let tab = tab(tabID) else { return }
+    mutate(tab.spaceID) { list in
+      list.removeAll { $0.tabID == tabID }
+      list.insert(tab, at: max(0, min(index, list.count)))
     }
   }
 
+  /// Closes a tab as Chromium does on its own, as when its page closes
+  /// itself. If it was active, Chromium picks the tab after it in the strip,
+  /// or before it, which may be in another Space; the window then shows that
+  /// tab's Space (D3, D4).
+  func closeTabNow(_ tabID: TabID) {
+    guard let tab = tab(tabID) else { return }
+    var next = ClairTabIDNone
+    if activeTabID == tabID {
+      let strip = allTabs
+      if let index = strip.firstIndex(where: { $0.tabID == tabID }) {
+        let others = windowTabs(inSpace: tab.spaceID).filter { $0.tabID != tabID }
+        let inSpaceIndex = windowTabs(inSpace: tab.spaceID).firstIndex { $0.tabID == tabID } ?? 0
+        if !others.isEmpty {
+          next = others[min(inSpaceIndex, others.count - 1)].tabID
+        } else if strip.count > 1 {
+          next = strip[index + 1 < strip.count ? index + 1 : index - 1].tabID
+        }
+      }
+    }
+    pageViews[tabID] = nil
+    mutate(tab.spaceID) { $0.removeAll { $0.tabID == tabID } }
+    if cameFromID == tabID {
+      cameFromID = ClairTabIDNone
+    }
+    if activeTabID == tabID {
+      // A close that changes the active tab clears the came-from (D4).
+      cameFromID = ClairTabIDNone
+      isChoosingNext = true
+      setActive(next)
+      isChoosingNext = false
+    }
+  }
+
+  /// Makes a tab active, as Chromium does for any reason. The window shows
+  /// the tab's Space (D3), and remembers the row the user came from (D4).
   func setActive(_ tabID: TabID) {
+    let previous = activeTabID
     activeTabID = tabID
+    if let tab = tab(tabID) {
+      if !isChoosingNext, previous != ClairTabIDNone, previous != tabID, let from = self.tab(previous) {
+        let row = from.peekParentID != ClairTabIDNone ? from.peekParentID : from.tabID
+        if row != tabID && row != tab.peekParentID {
+          cameFromID = row
+        }
+      }
+      lastActive[tab.spaceID] = tabID
+      if tab.spaceID != shownSpaceID {
+        setShown(tab.spaceID)
+      }
+    }
     clairWindow?.activeTabDidChange(tabID)
   }
 
-  /// Opens a Peek of `parent` right after it and shows it, as a Shift+click
-  /// does in Chromium (add-peek design D1).
+  private func setShown(_ spaceID: SpaceID) {
+    let previous = shownSpaceID
+    shownSpaceID = spaceID
+    if profileKind == .regular {
+      host.lastShownSpaceID = spaceID
+    }
+    clairWindow?.shownSpaceDidChange(spaceID, from: previous)
+  }
+
+  /// D4: the row to show before the active row `rowID` leaves the Space: the
+  /// row the user came from, if it's still listed, or the row above, or the
+  /// row below.
+  func nextRow(leaving rowID: TabID) -> TabID? {
+    let rows = TabListLogic.rows(tabs).map(\.tabID)
+    guard let index = rows.firstIndex(of: rowID) else { return nil }
+    if cameFromID != ClairTabIDNone, cameFromID != rowID, rows.contains(cameFromID) {
+      return cameFromID
+    }
+    if index > 0 { return rows[index - 1] }
+    if index + 1 < rows.count { return rows[index + 1] }
+    return nil
+  }
+
+  /// Shows `row`, or its Peek, as Clair's choice of the next tab, which sets
+  /// no came-from.
+  private func choose(_ row: TabID) {
+    isChoosingNext = true
+    setActive(TabListLogic.tabToActivate(forRow: row, in: tabs))
+    isChoosingNext = false
+    cameFromID = ClairTabIDNone
+  }
+
+  /// Whether `tabID` is the row the window shows: the active tab, or the
+  /// parent of the active Peek.
+  private func isActiveRow(_ tabID: TabID) -> Bool {
+    TabListLogic.highlightedRow(activeTabID: activeTabID, in: tabs) == tabID
+  }
+
+  /// Before the active row moves to another Space (D7): shows the next row,
+  /// or a new tab page, so the window stays on its Space.
+  func leaveBeforeMoving(_ tabID: TabID) {
+    guard isActiveRow(tabID) else { return }
+    if let next = nextRow(leaving: tabID) {
+      choose(next)
+    } else {
+      isChoosingNext = true
+      addTab(url: "chrome://newtab/")
+      isChoosingNext = false
+      cameFromID = ClairTabIDNone
+    }
+  }
+
+  /// Opens a Peek of `parent` right after it in its Space and shows it, as a
+  /// Shift+click does in Chromium (add-peek design D1).
   @discardableResult
   func openPeek(of parent: TabID, title: String = "", url: String? = nil) -> FakeTab? {
-    guard let index = tabs.firstIndex(where: { $0.tabID == parent }), let parentTab = tabs[index] as? FakeTab else {
-      return nil
-    }
-    let peek = FakeTab(id: nextTabID, title: title, url: url, peekParentID: parent)
-    nextTabID += 1
-    tabs[index] = parentTab.with(peekID: peek.tabID)
-    tabs.insert(peek, at: index + 1)
+    guard let parentTab = tab(parent) else { return nil }
+    let peek = FakeTab(
+      id: Self.nextTabID, title: title, url: url, peekParentID: parent, spaceID: parentTab.spaceID,
+      browserID: browserID)
+    Self.nextTabID += 1
     pageViews[peek.tabID] = NSView()
-    clairWindow?.tabsDidChange(tabs)
+    mutate(parentTab.spaceID) { list in
+      guard let index = list.firstIndex(where: { $0.tabID == parent }) else { return }
+      list[index] = parentTab.with(peekID: peek.tabID)
+      list.insert(peek, at: index + 1)
+    }
     setActive(peek.tabID)
     return peek
   }
@@ -445,26 +611,27 @@ final class FakeBrowser: NSObject, ClairBrowser {
   /// Unlinks a Peek from its parent, as expanding it or Chromium's own moves
   /// do.
   func unlinkPeek(_ peekID: TabID) {
-    guard let index = tabs.firstIndex(where: { $0.tabID == peekID }), let peek = tabs[index] as? FakeTab else {
-      return
+    guard let peek = tab(peekID) else { return }
+    mutate(peek.spaceID) { list in
+      if let parentIndex = list.firstIndex(where: { $0.tabID == peek.peekParentID }) {
+        list[parentIndex] = list[parentIndex].with(peekID: ClairTabIDNone)
+      }
+      if let index = list.firstIndex(where: { $0.tabID == peekID }) {
+        list[index] = peek.with(peekParentID: ClairTabIDNone)
+      }
     }
-    if let parentIndex = tabs.firstIndex(where: { $0.tabID == peek.peekParentID }),
-      let parent = tabs[parentIndex] as? FakeTab {
-      tabs[parentIndex] = parent.with(peekID: ClairTabIDNone)
-    }
-    tabs[index] = peek.with(peekParentID: ClairTabIDNone)
-    clairWindow?.tabsDidChange(tabs)
   }
 
   /// Marks the Peek of `parent` as closing, as the engine does before it
   /// activates the parent: the parent stops reporting it, the Peek keeps its
   /// parent.
   func beginClosingPeek(of parent: TabID) {
-    guard let index = tabs.firstIndex(where: { $0.tabID == parent }), let tab = tabs[index] as? FakeTab else {
-      return
+    guard let tab = tab(parent) else { return }
+    mutate(tab.spaceID) { list in
+      if let index = list.firstIndex(where: { $0.tabID == parent }) {
+        list[index] = tab.with(peekID: ClairTabIDNone)
+      }
     }
-    tabs[index] = tab.with(peekID: ClairTabIDNone)
-    clairWindow?.tabsDidChange(tabs)
   }
 
   /// Keeps an Esc in the active Peek, as its page does with a dialog open.
@@ -474,9 +641,9 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   /// The Peek's ID for a parent or a Peek, or nil.
   private func peek(of tabID: TabID) -> FakeTab? {
-    guard let tab = tabs.first(where: { $0.tabID == tabID }) else { return nil }
+    guard let tab = tab(tabID) else { return nil }
     let peekID = tab.peekParentID != ClairTabIDNone ? tab.tabID : tab.peekID
-    return tabs.first { $0.tabID == peekID } as? FakeTab
+    return self.tab(peekID)
   }
 
   func setDevTools(_ view: NSView?, layout: DevToolsLayout) {
@@ -525,42 +692,63 @@ final class FakeBrowser: NSObject, ClairBrowser {
     pageViews[tabID]
   }
 
+  func showSpace(_ spaceID: SpaceID) {
+    record("showSpace \(spaceID)")
+    guard profileKind == .regular, host.isSpace(spaceID), spaceID != shownSpaceID else { return }
+    let mine = windowTabs(inSpace: spaceID)
+    let last = lastActive[spaceID].flatMap { id in mine.contains { $0.tabID == id } ? id : nil }
+    let first = TabListLogic.rows(mine).first.map { TabListLogic.tabToActivate(forRow: $0.tabID, in: mine) }
+    setShown(spaceID)
+    if let target = last ?? first {
+      setActive(target)
+    } else {
+      // D3: a Space with no tab here opens a new tab page with the command
+      // bar.
+      addTab(url: "chrome://newtab/")
+      clairWindow?.showCommandBar(mode: .currentTab)
+    }
+  }
+
   func activate(tab tabID: TabID) {
     record("activate \(tabID)")
-    if tabs.contains(where: { $0.tabID == tabID }) {
+    if tab(tabID) != nil {
       setActive(tabID)
     }
   }
 
   func close(tab tabID: TabID) {
     record("close \(tabID)")
+    // D4: Clair picks the next tab before it closes the active row.
+    if isActiveRow(tabID), let next = nextRow(leaving: tabID) {
+      choose(next)
+    }
     closeTabNow(tabID)
   }
 
   func closeTabs(below tabID: TabID) {
     record("closeBelow \(tabID)")
-    // As the engine: from the tab's Peek, which stays (ClairPeeks::LastOfFamily).
-    let last = tabs.first(where: { $0.tabID == tabID }).map { $0.peekID != ClairTabIDNone ? $0.peekID : tabID }
-    guard let last, let index = tabs.firstIndex(where: { $0.tabID == last }) else { return }
-    for tab in tabs[(index + 1)...] {
-      closeTabNow(tab.tabID)
+    // As the engine: from the tab's Peek, which stays (ClairPeeks::LastOfFamily),
+    // over the window's tabs of its Space.
+    guard let tab = tab(tabID) else { return }
+    let list = windowTabs(inSpace: tab.spaceID)
+    let last = tab.peekID != ClairTabIDNone ? tab.peekID : tabID
+    guard let index = list.firstIndex(where: { $0.tabID == last }) else { return }
+    for below in list[(index + 1)...] {
+      closeTabNow(below.tabID)
     }
   }
 
   func move(tab tabID: TabID, to index: Int) {
     record("move \(tabID) \(index)")
-    // As the engine: a tab and its Peek move as one, the tab ending at
-    // `index` and its Peek right after it (ClairPeeks::MoveTab).
-    guard let tab = tabs.first(where: { $0.tabID == tabID }), tab.peekID != ClairTabIDNone,
-      let peek = tabs.first(where: { $0.tabID == tab.peekID })
-    else {
-      moveTab(tabID, to: index)
-      return
+    // As the engine: a tab and its Peek move as one in the Space's list, the
+    // tab ending at `index` and its Peek right after it.
+    guard let tab = tab(tabID) else { return }
+    let peek = tab.peekID != ClairTabIDNone ? self.tab(tab.peekID) : nil
+    let family = [tab] + (peek.map { [$0] } ?? [])
+    mutate(tab.spaceID) { list in
+      list.removeAll { candidate in family.contains { $0.tabID == candidate.tabID } }
+      list.insert(contentsOf: family, at: max(0, min(index, list.count)))
     }
-    tabs.removeAll { $0.tabID == tabID || $0.tabID == peek.tabID }
-    let at = max(0, min(index, tabs.count))
-    tabs.insert(contentsOf: [tab, peek], at: at)
-    clairWindow?.tabsDidChange(tabs)
   }
 
   func closePeek(of tabID: TabID) {
@@ -662,17 +850,9 @@ final class RecordingWindow: NSObject, ClairWindow {
   var isSidebarHidden = false
   var opensPeekOnShiftClick = true
   private(set) var calls: [String] = []
-  private(set) var tabs: [any ClairTab] = []
-  private(set) var lastTab: (any ClairTab)?
 
-  func tabsDidChange(_ tabs: [any ClairTab]) {
-    self.tabs = tabs
-    calls.append("tabs \(tabs.map { String($0.tabID) }.joined(separator: ","))")
-  }
-
-  func tabDidChange(_ tab: any ClairTab) {
-    lastTab = tab
-    calls.append("tab \(tab.tabID)")
+  func shownSpaceDidChange(_ spaceID: SpaceID, from previousSpaceID: SpaceID?) {
+    calls.append("space \(spaceID) from \(previousSpaceID ?? "-")")
   }
 
   func activeTabDidChange(_ tabID: TabID) { calls.append("active \(tabID)") }
@@ -709,4 +889,25 @@ final class RecordingWindow: NSObject, ClairWindow {
   func downloadProgressDidChange(_ progress: DownloadProgress) { calls.append("progress \(progress.count)") }
   func browserDidClose() { calls.append("closed") }
   func peekDidKeepEscape(for duration: TimeInterval) { calls.append("keptEscape \(duration)") }
+}
+
+/// A `ClairSpacesObserver` test double that records what the host tells it.
+final class RecordingSpacesObserver: NSObject, ClairSpacesObserver {
+  private(set) var calls: [String] = []
+  private(set) var lastTab: (any ClairTab)?
+  private(set) var lists: [SpaceID: [any ClairTab]] = [:]
+
+  func spacesDidChange(_ spaces: [any ClairSpace]) {
+    calls.append("spaces \(spaces.map(\.name).joined(separator: ","))")
+  }
+
+  func tabsDidChange(_ tabs: [any ClairTab], inSpace spaceID: SpaceID) {
+    lists[spaceID] = tabs
+    calls.append("tabs \(spaceID) \(tabs.map { String($0.tabID) }.joined(separator: ","))")
+  }
+
+  func tabDidChange(_ tab: any ClairTab) {
+    lastTab = tab
+    calls.append("tab \(tab.tabID)")
+  }
 }

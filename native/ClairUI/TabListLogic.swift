@@ -118,6 +118,27 @@ enum TabListLogic {
     }
   }
 
+  /// The index in its Space's list that a tab of the window, dragged to
+  /// `index` among the window's tabs (as `stripIndex` gives it), asks for:
+  /// before the window's tab it lands on, or after the window's last. Other
+  /// windows' tabs of the Space keep their places (add-spaces D2). Nil when
+  /// the tab isn't listed.
+  static func spaceIndex(
+    movingTab tabID: TabID, toWindowIndex index: Int, windowTabs: [any ClairTab], spaceTabs: [any ClairTab]
+  ) -> Int? {
+    guard let tab = windowTabs.first(where: { $0.tabID == tabID }) else { return nil }
+    // The tab moves with its Peek.
+    let family: Set<TabID> = [tab.tabID, tab.peekID]
+    let windowRest = windowTabs.filter { !family.contains($0.tabID) }
+    let spaceRest = spaceTabs.filter { !family.contains($0.tabID) }
+    let target = min(max(index, 0), windowRest.count)
+    if target < windowRest.count {
+      return spaceRest.firstIndex { $0.tabID == windowRest[target].tabID }
+    }
+    guard let last = windowRest.last else { return 0 }
+    return spaceRest.firstIndex { $0.tabID == last.tabID }.map { $0 + 1 }
+  }
+
   /// The URL Copy Link puts on the pasteboard.
   static func link(of tab: any ClairTab) -> String? {
     if let url = tab.url {

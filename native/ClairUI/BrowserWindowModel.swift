@@ -13,10 +13,30 @@ import Observation
 @Observable
 final class BrowserWindowModel {
   let profileKind: ProfileKind
+  /// The window's ID, which its tabs carry.
+  let browserID: BrowserID
+  /// Every Space and its tabs, app-wide (add-spaces design D10).
+  let spaces: SpacesModel
 
-  /// The window's tabs in Chromium's order, which is the sidebar's.
+  /// The Space the window shows (add-spaces design D3).
+  private(set) var shownSpaceID: SpaceID
+
+  /// The window's tabs in the Space it shows, in the Space's order, which is
+  /// the sidebar's, Peeks included.
   private(set) var tabs: [any ClairTab] = []
   private(set) var activeTabID: TabID = ClairTabIDNone
+
+  /// The Space the window shows, or nil in an incognito or guest window,
+  /// whose Space isn't one of the user's.
+  var shownSpace: (any ClairSpace)? {
+    spaces.space(shownSpaceID)
+  }
+
+  /// Whether the window shows the user's Spaces: not in incognito and guest
+  /// windows.
+  var showsSpaces: Bool {
+    profileKind == .regular
+  }
 
   var activeTab: (any ClairTab)? {
     tabs.first { $0.tabID == activeTabID }
@@ -47,6 +67,12 @@ final class BrowserWindowModel {
   }
 
   // --- the window's own state ---
+  /// What the Space header is editing (add-spaces D10).
+  var spaceHeaderEdit: SpaceHeaderEdit?
+  /// The New Space form, while it shows in place of the header and list.
+  var newSpaceForm: NewSpaceFormState?
+  /// The slide from the Space shown before, while it runs.
+  var spaceSlide: SpaceSlide?
   var sidebar: SidebarState
   var commandBar: CommandBarModel?
   var find: FindState?
@@ -73,13 +99,26 @@ final class BrowserWindowModel {
   /// What the reload button shows (arc-navigation-feedback design D2).
   let reloadStop = ReloadStopState(doubleClickInterval: NSEvent.doubleClickInterval)
 
-  init(profileKind: ProfileKind, sidebar: SidebarState) {
+  init(
+    profileKind: ProfileKind, sidebar: SidebarState, browserID: BrowserID = 0, shownSpaceID: SpaceID = "",
+    spaces: SpacesModel = .detached
+  ) {
     self.profileKind = profileKind
     self.sidebar = sidebar
+    self.browserID = browserID
+    self.shownSpaceID = shownSpaceID
+    self.spaces = spaces
   }
 
-  func setTabs(_ tabs: [any ClairTab]) {
-    self.tabs = tabs
+  /// Shows another Space's rows, read from `spaces`.
+  func setShownSpace(_ spaceID: SpaceID) {
+    shownSpaceID = spaceID
+    reloadTabs()
+  }
+
+  /// Reads the window's rows of its Space again from `spaces`.
+  func reloadTabs() {
+    tabs = spaces.tabs(inSpace: shownSpaceID, browser: browserID)
   }
 
   /// Replaces the snapshot of one tab; a tab the list doesn't have is ignored,
@@ -114,6 +153,17 @@ final class BrowserWindowModel {
     else { return }
     appDownloadProgress = progress
   }
+}
+
+/// A slide from one Space to another (add-spaces D10): the earlier Space's
+/// header and rows, as they were, slide out while the new Space's slide in.
+struct SpaceSlide: Identifiable {
+  let id = UUID()
+  let fromSpace: (any ClairSpace)?
+  let fromTabs: [any ClairTab]
+  /// Whether the new Space comes in from the trailing side, being later in
+  /// the order.
+  let fromTrailing: Bool
 }
 
 /// A toast at the bottom of the card. Each has its own ID, so the same

@@ -55,6 +55,9 @@ struct ClairDialogPage {
   /// message and the buttons.
   var content: AnyView?
   var buttons: [ClairDialogButton]
+  /// Esc presses the default button when there's no cancelling one, as for
+  /// a dialog whose one button is "Done".
+  var escapePressesDefault = false
 }
 
 /// How a dialog was answered.
@@ -267,6 +270,8 @@ final class ClairDialogWindow: NSWindow {
   override func cancelOperation(_ sender: Any?) {
     if let cancel = dialog.page.buttons.first(where: { $0.role == .cancel }) {
       dialog.press(cancel)
+    } else if dialog.page.escapePressesDefault, let done = dialog.page.buttons.first(where: \.isDefault) {
+      dialog.press(done)
     }
   }
 

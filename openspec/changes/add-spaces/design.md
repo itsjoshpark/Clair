@@ -53,6 +53,8 @@ The store enforces that there is always one Space: with none stored it creates "
 - **Strip order no longer means anything to the user,** except that a Peek directly follows its parent in the strip, as today.
 - **Reordering** changes the Space's list and touches no strip.
 - **In this change a window lists only the rows it holds.** `ClairUI` filters a Space's list by `browserID`. `share-tabs-across-windows` removes the filter.
+- **An off-the-record profile has no Spaces.** Its `ClairSpaceTabs` puts every tab in one Space of its own (`private-<n>`), which isn't in the store, so an incognito or guest window lists its tabs through the same calls, by `browserID`, and its shown Space can't be switched.
+- **`ClairSpaceTabs` is the profile's user data,** and it also owns the tab snapshots and the infobar and load-progress observers that `clair_browser_bridge.mm` had.
 
 - **Why per profile and across windows now:** it is the shape the next change needs, and here it costs only the filter.
 - **Alternative:** Chromium tab groups as Spaces. Rejected: they can't be empty, extensions can edit them, and pinned tabs and folders will want them.
@@ -72,10 +74,11 @@ Each browser remembers one **came-from** tab: set when the user selects a tab wh
 
 - When the window has no other row in the Space, and for a close Clair doesn't start (`window.close()`, an extension), Chromium's own choice stands, and D3 moves the window to that tab's Space. A window whose only tab closes, closes, as today.
 - Moving the active tab to another Space (D7) uses the same choice.
+- A page with `beforeunload` or `unload` handlers is asked before it closes, and Chromium's leave-page confirmation makes its tab active again. For such a page the choice waits for the answer: `ClairBrowserWindow` remembers the tab it is closing, and when the page agrees (`WebContentsObserver::BeforeUnloadFired`, which runs before Chromium acts on the answer) it activates the next tab. If the user stays on the page, nothing changes, the came-from tab included.
 
 ### D5. Tab commands run over the rows
 
-`ExecuteCommand` in `clair_native_window.mm` runs `IDC_SELECT_NEXT_TAB`, `IDC_SELECT_PREVIOUS_TAB`, `IDC_SELECT_TAB_0`…`7`, `IDC_SELECT_LAST_TAB`, `IDC_WINDOW_CLOSE_TABS_TO_RIGHT` and `IDC_WINDOW_CLOSE_OTHER_TABS` over the window's rows of the shown Space, where it already steps over Peeks. `closeTabsBelowTab:` and `moveTab:toIndex:` use the Space's list.
+`ExecuteCommand` in `clair_native_window.mm` runs `IDC_SELECT_NEXT_TAB`, `IDC_SELECT_PREVIOUS_TAB`, `IDC_CYCLE_TO_NEXT_TAB` and `IDC_CYCLE_TO_PREV_TAB` (Ctrl+Tab), `IDC_SELECT_TAB_0`…`7`, `IDC_SELECT_LAST_TAB`, `IDC_WINDOW_CLOSE_TABS_TO_RIGHT`, `IDC_WINDOW_CLOSE_OTHER_TABS` and `IDC_CLOSE_TAB` over the window's rows of the shown Space, through `ClairBrowserWindow::ExecuteTabCommand`, where a tab and its Peek are one stop. `IDC_MOVE_TAB_NEXT` and `IDC_MOVE_TAB_PREVIOUS` (Ctrl+Shift+PageDown and PageUp) move the active row one row down or up in the Space's list, stopping at the ends, and leave the strip alone. `ClairPeeks` keeps only the commands of an active Peek, and runs first. `closeTabsBelowTab:` and `moveTab:toIndex:` use the Space's list.
 
 ### D6. Sessions carry two tags per tab
 
@@ -90,16 +93,17 @@ Each browser remembers one **came-from** tab: set when the user selects a tab wh
 `clair::RegisterProfilePrefOverrides`, which already sets Clair's defaults for the password and autofill prefs, also sets the default of `session.restore_on_startup` to Chromium's "continue where you left off" value. It is a default, not a forced value: "On startup" in `chrome://settings` still changes it. It is a profile pref, so it holds for every profile `add-profiles` creates. Nothing else about Chromium's session restore changes: the tabs keep their `clair_space` and `clair_order` tags, so each lands in its Space at its place (D2, D6).
 
 - **Why a default override and not the `--restore-last-session` switch:** the switch can't be turned off by the user and doesn't show in settings.
+- **Not in headless mode.** With a restore, Chromium opens the command line's URL through session restore, which never hands it to `--dump-dom` and the other headless commands, so the engine's headless smoke test never finished. Headless runs keep Chromium's default.
 
 ### D7. Moving a tab to another Space, and reordering Spaces
 
-- `moveTab:toSpace:` changes the tab's Space tag and puts it at the top of the target's list. The page isn't touched and the tab stays in its browser. If it is the active tab, the overlay first activates the next tab as D4 does, so the window stays on its Space.
+- `moveTab:toSpace:` changes the tab's Space tag and puts it at the top of the target's list. The page isn't touched and the tab stays in its browser. If it is the active tab, the overlay first activates the next tab as D4 does, so the window stays on its Space; with no other row there, it opens a new tab page in the Space. A Peek moves with its parent.
 - `moveSpace:toIndex:` rewrites `clair.spaces`' `order` and notifies observers.
 - `deleteSpace:` closes the Space's tabs in every browser, after moving each browser that shows it to the Space before it.
 
 ### D8. Menus and shortcuts
 
-- `ClairUI`'s `SpacesMenu` adds a Spaces menu after View, as `ExtensionsMenu` adds its menu: New Space…, Rename Space, Manage Spaces…, Next Space, Previous Space, and one item per Space. Its actions go up the responder chain to the key window's root view.
+- `ClairUI`'s `SpacesMenu` adds a Spaces menu after View, as `ExtensionsMenu` adds its menu: New Space…, Rename Space, Manage Spaces…, Next Space, Previous Space, and one item per Space. As `ExtensionsMenu`'s, its items act on the main window's `BrowserWindowController`, and validate against it: they're off without a window that shows Spaces.
 - `patches/clair/space-shortcuts.patch` removes Opt+Cmd+Left and Right from Chromium's own table in `global_keyboard_shortcuts_mac.mm` and puts Next and Previous Tab on Opt+Cmd+Down and Up, as `copy-url-shortcut.patch` did for Shift+Cmd+C.
 
 ### D9. The contract (`native/ClairHost.h`)
@@ -119,7 +123,9 @@ Pushes stay coalesced to once per run-loop turn per tab and per Space.
 
 - **`SpacesModel`** (app-wide, `@Observable`) holds what the host's observer sends: Spaces and each Space's tabs. Every window's `BrowserWindowModel` reads its rows from it for its `shownSpaceID`, filtered to its own `browserID`.
 - **Sidebar:** `SpaceHeaderView` above the tab list; `SpaceSwitcher` in `SidebarFooter`; `NewSpaceForm` in place of the header and list.
-- **The slide:** the content between the URL field and the footer is a pager. On `shownSpaceDidChange:from:` the window draws the earlier Space's header and rows from `SpacesModel` and slides to the new one. Start from an interpolating spring that covers about 80% of the distance in 100 ms and settles by 300 ms, then tune against Arc.
+- **Each window copies its rows.** A `BrowserWindowController` listens to `SpacesModel` and copies its own rows of its shown Space into its `BrowserWindowModel`, so a tab loading in one window doesn't redraw every sidebar. Views observe `SpacesModel.spaces` directly. A row dragged in the list is mapped from the window's rows to the Space's list, around other windows' tabs.
+- **The slide:** the content between the URL field and the footer is a pager (`SpacePager`). On `shownSpaceDidChange:from:` the window keeps the earlier Space's header and rows, as they were, and slides them out while the new Space's slide in, from the side the new Space is on in the order. Start from an interpolating spring that covers about 80% of the distance in 100 ms and settles by 300 ms (a critically damped spring with a 0.21 s response), then tune against Arc.
+  - **Tuned (task 3.4):** recorded side by side at 60 fps on the owner's M1 Pro, Arc's slide is about 90% of the way in its first moved frame and settled by about 100 ms; `arc-reference.md`'s slower numbers came from a virtual machine. Clair uses a critically damped spring with a 0.08 s response (90% at 50 ms, settled by 85 ms). Both Spaces slide for the whole slide, and the earlier one leaves with no transition of its own; removed inside the animation, it faded in place instead.
 - **Icons:** `SpaceIconField` is a one-character text field where the icon shows, in the header, the form and Manage Spaces. Change Space Icon… and the icon buttons make it first responder and call `NSApp.orderFrontCharacterPalette`. It keeps the first emoji of whatever is entered, ignores text that isn't an emoji, and clears on Delete; Return, Esc or losing focus ends the edit. The store keeps the string, so a later change can add glyphs under a prefix without changing the schema.
 - **Manage Spaces:** `ManageSpacesDialog` is a `ClairDialog` (`add-clair-dialogs`) with two columns in its content slot. Left: the Spaces in order, each with icon, name and tab count, drag to reorder, Add and Remove under the list. Right: the selected Space's name field and `SpaceIconField`. Add creates a Space named "New Space" and focuses its name; an emptied name reverts when the field loses focus. Remove on a Space with tabs asks by swapping the card's content. Its one button is "Done". It is disabled with no browser window open.
 - **Confirmation:** Delete Space on a Space with tabs asks in a `ClairDialog`.

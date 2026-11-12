@@ -2,6 +2,7 @@
 // You can use, redistribute, and/or modify this source code under
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
+import AppKit
 import XCTest
 
 /// Drives Arc or Clair from a command file, for side-by-side comparisons
@@ -95,12 +96,21 @@ final class Probe: XCTestCase {
     case "scroll":
       try point(0).scroll(byDeltaX: 0, deltaY: try number(2))
     case "drag":
-      try point(0).press(forDuration: 0.1, thenDragTo: try point(2))
+      // At a hand's speed, so the app sees the drag move rather than jump.
+      try point(0).press(
+        forDuration: 0.3, thenDragTo: try point(2), withVelocity: .slow, thenHoldForDuration: 0.3)
     case "key":
       guard let name = words.first else { throw ProbeError.usage("key <name> [mods]") }
       app.typeKey(try Self.key(name), modifierFlags: try modifiers(1))
     case "type":
       app.typeText(rest)
+    case "paste":
+      // Puts the text on the pasteboard and presses Cmd+V: typeText isn't
+      // reliable for emoji.
+      guard !rest.isEmpty else { throw ProbeError.usage("paste <text>") }
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(rest, forType: .string)
+      app.typeKey("v", modifierFlags: .command)
     case "tree":
       return app.debugDescription + "\n"
     case "frame":
@@ -109,7 +119,13 @@ final class Probe: XCTestCase {
       guard let seconds = Double(rest) else { throw ProbeError.usage("sleep <seconds>") }
       Thread.sleep(forTimeInterval: seconds)
     case "menu":
-      app.menuItems[rest].click()
+      // An open menu's item when several share the title, as a menu bar
+      // item and a context or pop-up menu's can.
+      let items = app.menuItems.matching(NSPredicate(format: "title == %@", rest)).allElementsBoundByIndex
+      guard let item = items.first(where: { $0.isHittable }) ?? items.first else {
+        throw ProbeError.usage("no menu item titled \(rest)")
+      }
+      item.click()
     default:
       throw ProbeError.usage("unknown command")
     }

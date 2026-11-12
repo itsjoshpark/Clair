@@ -138,7 +138,7 @@ struct PeekWindowTests {
   init() {
     let defaults = UserDefaults(suiteName: "ClairUITests.Peek.\(UUID().uuidString)")!
     controller = BrowserWindowController(
-      browser: browser, preferences: SidebarPreferences(defaults: defaults),
+      browser: browser, spaces: browser.spaces, preferences: SidebarPreferences(defaults: defaults),
       peekPreference: PeekPreference(defaults: defaults))
     browser.clairWindow = controller
   }

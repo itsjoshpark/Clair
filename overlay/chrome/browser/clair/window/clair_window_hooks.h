@@ -22,6 +22,7 @@
 class BrowserWindow;
 class BrowserWindowInterface;
 class ExtensionInstallPromptShowParams;
+class PrefRegistrySimple;
 class Profile;
 class TabStripModel;
 
@@ -151,9 +152,15 @@ std::unique_ptr<ExtensionPromptHandle> ShowExtensionRemovePrompt(
 bool ExtensionInstalled(BrowserWindowInterface* browser,
                         const extensions::Extension* extension);
 
-// browser_prefs.cc: Clair's defaults for passwords and autofill, which are off
-// (D17). Called after Chromium registers its profile prefs.
+// browser_prefs.cc: Clair's profile defaults, set after Chromium registers its
+// profile prefs: passwords and autofill are off (D17), and "On startup"
+// continues where the user left off (add-spaces D11). They're defaults, not
+// forced values: chrome://settings still changes them.
 void RegisterProfilePrefOverrides(user_prefs::PrefRegistrySyncable* registry);
+
+// browser_prefs.cc: Clair's own Local State prefs, which hold the Spaces
+// (add-spaces D1).
+void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 
 // render_view_context_menu_mac_cocoa.mm: whether `view` is in a native
 // window, where a page's context menu shows without a Views widget (D9).

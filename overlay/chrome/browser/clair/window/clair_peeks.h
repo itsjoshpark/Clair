@@ -100,8 +100,9 @@ class ClairPeeks : public TabStripModelObserver {
   // The tab Close Tabs Below counts from: `tab`'s Peek, if it has one.
   tabs::TabInterface* LastOfFamily(tabs::TabInterface* tab) const;
 
-  // D7: runs a tab command that treats a tab and its Peek as one. Returns
-  // whether it ran; otherwise Chromium runs it as usual.
+  // D7: runs a tab command for the active Peek. Returns whether it ran;
+  // otherwise the window runs it over its rows (add-spaces D5), or Chromium
+  // as usual.
   bool ExecuteCommand(int command);
 
   // D6: Esc while the active tab is a Peek.
@@ -162,10 +163,6 @@ class ClairPeeks : public TabStripModelObserver {
   // The tab list ClairUI shows changed.
   void Changed();
 
-  // The tabs that have a row in the sidebar: every tab but the Peeks.
-  std::vector<tabs::TabInterface*> Rows() const;
-  // Activates `row`, or its Peek if it has one.
-  void ActivateRow(tabs::TabInterface* row);
   void ActivateTab(tabs::TabInterface* tab);
 
   // Moves the tab at `from` to `to` without unlinking anything.

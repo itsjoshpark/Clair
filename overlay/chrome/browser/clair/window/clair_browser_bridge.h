@@ -7,6 +7,8 @@
 
 #import <AppKit/AppKit.h>
 
+#include <string>
+
 #import "chrome/browser/clair/ClairHost.h"
 
 class ClairBrowserWindow;
@@ -17,7 +19,8 @@ class WebContents;
 
 // Chromium's side of one native window's contract (design D3): ClairUI's
 // commands come in here, and Chromium's changes go out to the ClairWindow,
-// coalesced to once per run-loop turn for each tab. ClairUI gets value
+// coalesced to once per run-loop turn. The window's tabs reach ClairUI
+// through the host's Spaces observer (add-spaces D9). ClairUI gets value
 // snapshots and IDs, never anything wrapping a C++ object.
 @interface ClairChromiumBrowser : NSObject <ClairBrowser>
 
@@ -30,9 +33,12 @@ class WebContents;
 // more is posted.
 - (void)detach;
 
-// What changed, to post at the end of this run-loop turn.
+// What changed, to post at the end of this run-loop turn. Tab lists and tab
+// changes go through the profile's ClairSpaceTabs (add-spaces D9).
 - (void)tabListChanged;
 - (void)tabChanged:(content::WebContents*)contents;
+// The window shows another Space; `previousSpace` is the one it showed.
+- (void)shownSpaceChangedFrom:(const std::string&)previousSpace;
 - (void)activeTabChanged;
 // Tells ClairUI now, without waiting for the end of the turn.
 - (void)flush;
