@@ -32,17 +32,11 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   /// The sidebar's controls, in its hosting view's coordinates.
   private var controlFrames: [AnchorControl: CGRect] = [:]
   private var extensionPopup: ExtensionPopupWindow?
-  private lazy var extensionPrompts = ExtensionPromptSheets(
-    present: { [weak self] alert, respond in
-      guard let window = self?.window else { return }
-      alert.beginSheetModal(for: window) { response in
-        MainActor.assumeIsolated { respond(response) }
-      }
-    },
-    close: { [weak self] alert in self?.window.endSheet(alert.window) },
-    answer: { [weak self] promptID, accepted in
-      self?.browser?.answerExtensionPrompt(promptID, accepted: accepted)
-    })
+  /// The window's dialogs (add-clair-dialogs D1), for every dialog on it.
+  private(set) lazy var dialogs = ClairDialogPresenter(window: window)
+  private lazy var extensionPrompts = ExtensionPromptSheets(dialogs: dialogs) { [weak self] promptID, accepted in
+    self?.browser?.answerExtensionPrompt(promptID, accepted: accepted)
+  }
   nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
   /// Dragging the window from the top of the page (drag-window-from-page-top).
   private let dragPreference: WindowDragPreference
@@ -625,7 +619,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // The pages belong to Chromium; let go of them and of the browser.
     model.commandBar?.cancel()
     closeExtensionPopup()
-    extensionPrompts.cancelAll()
+    dialogs.cancelAll()
     rootView.card.show(page: nil)
     removeSafetyNet()
     stopCommandBarKeyMonitor()

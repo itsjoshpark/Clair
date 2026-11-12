@@ -3,9 +3,10 @@
 # probe (tests/probe/README.md), with a fresh throwaway profile and the mock
 # keychain, so the owner's Clair data and keychain item stay untouched.
 #
-#   launch-clair.sh [--port <n>] [url]
+#   launch-clair.sh [--port <n>] [--flag <switch>]... [url]
 #
-# --port opens the DevTools protocol on that port. Launching again quits the
+# --port opens the DevTools protocol on that port. --flag passes a switch to
+# Chromium, such as --flag --extension-mime-request-handling=always-prompt-for-install. Launching again quits the
 # previous test copy first; the probe stops with it, so start it again.
 #
 # Like scripts/run-local.sh, it needs the published engine for the
@@ -15,10 +16,13 @@ set -euo pipefail
 # shellcheck source=tests/probe/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-port="" url=""
+port="" url="" flags=()
 while (($# > 0)); do
   case "$1" in
     --port) port="${2-}"; shift 2 || die "--port needs a number" ;;
+    --flag)
+      [[ "${2-}" == --* ]] || die "--flag needs a switch starting with --"
+      flags+=("$2"); shift 2 ;;
     -h | --help) sed -n '/^#   launch-clair.sh/p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2; exit 2 ;;
     *) url="$1"; shift ;;
   esac
@@ -46,6 +50,7 @@ profile="$work/profile"
 rm -rf "$profile"
 args=(--user-data-dir="$profile" --use-mock-keychain --no-first-run --no-default-browser-check)
 [[ -n "$port" ]] && args+=(--remote-debugging-port="$port")
+((${#flags[@]} > 0)) && args+=("${flags[@]}")
 [[ -n "$url" ]] && args+=("$url")
 open -n "$app" --args "${args[@]}"
 

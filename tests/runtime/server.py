@@ -7,6 +7,9 @@ their updates, plus a download that stays in progress until it's told to finish.
     GET /slow-download         sends a chunk at a time until /slow-download/finish
     GET /slow-download/finish  lets every slow download end
     GET /download/clair.txt    a small text file, as a download
+
+A .crx file is served as an extension, which Clair offers to install when it
+runs with --extension-mime-request-handling=always-prompt-for-install.
 """
 
 import http.server
@@ -19,6 +22,10 @@ finished = threading.Event()
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    extensions_map = {
+        **http.server.SimpleHTTPRequestHandler.extensions_map,
+        ".crx": "application/x-chrome-extension",
+    }
 
     def do_GET(self):
         if self.path == "/slow-download/finish":

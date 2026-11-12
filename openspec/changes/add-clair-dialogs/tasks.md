@@ -5,7 +5,7 @@ This change is `ClairUI` only: the engine key doesn't change. "CI" is the merge 
 ## 1. The dialog
 
 - [ ] 1.1 Add `ClairDialog.swift` with `ClairDialogView` (D1): the card, its icon, title, message and content slot, and the button row from roles, with the Esc and Return capsules. Verify with unit tests in a new `ClairDialogTests` in CI: the roles map to Esc and Return, a destructive default is marked destructive, and a disabled default has no Return key equivalent.
-- [ ] 1.2 Add `ClairDialogPresenter` (D1, D2): the clear sheet window on its parent window, the queue that shows one at a time, dismissing without an answer, swapping a card's content and returning, and saving and restoring first responder. Verify with unit tests in CI (a second request waits for the first; a dismissed dialog isn't answered; `cancelAll` answers every pending request as cancelled), and by hand that the card shows with no system background behind it, on a browser window and on the Settings window. If macOS draws its own background, use the fallback in the design's risks and update `design.md`.
+- [ ] 1.2 Add `ClairDialogPresenter` (D1, D2): the clear sheet window on its parent window, the queue that shows one at a time, dismissing without an answer, swapping a card's content and returning, and saving and restoring first responder. Verify with unit tests in CI (a second request waits for the first; a dismissed dialog isn't answered; `cancelAll` answers every pending request as cancelled), and by hand that the card shows with no system background behind it on a browser window. Nothing shows a dialog on the Settings window yet, so the check there moves to the first change that does (`add-spaces` or `add-profiles`). If macOS draws its own background, use the fallback in the design's risks and update `design.md`.
 - [ ] 1.3 Check the card against Arc's dialogs by hand, side by side in Light and Dark Mode: corner radius, shadow, padding, the buttons' size and capsules, and the destructive colour. Check with VoiceOver that it is announced as a dialog with its title, and with the keyboard that Tab stays inside it. Verify by the owner accepting the comparison.
 
 ## 2. The extension prompts
@@ -15,5 +15,5 @@ This change is `ClairUI` only: the engine key doesn't change. "CI" is the merge 
 
 ## 3. Release notes and integration
 
-- [ ] 3.1 Add a Changie fragment (`changie new`, kind Changed) for the extension prompts' new look. Verify that it's in the PR.
+- [x] 3.1 Add a Changie fragment (`changie new`, kind Changed) for the extension prompts' new look. Verify that it's in the PR.
 - [ ] 3.2 Run `openspec validate --all --strict` and the merge gate. Verify that CI and the quality checks pass.
