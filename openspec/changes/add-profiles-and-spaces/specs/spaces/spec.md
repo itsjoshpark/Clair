@@ -18,7 +18,7 @@ Clair SHALL keep an ordered list of Spaces. Each Space SHALL have a name, an opt
 - **THEN** the Spaces "Home", "Work" and "Travel" exist in that order, each with its name, icon and profile
 
 ### Requirement: Space header
-Above the tab list, the sidebar SHALL show the current Space's icon, if it has one, and its name. Right-clicking the header SHALL open a menu offering Change Space Icon…, Rename Space…, Set Profile, New Space… and Delete Space. An incognito or guest window SHALL show no Space header.
+Above the tab list, the sidebar SHALL show the current Space's icon, if it has one, and its name. Right-clicking the header SHALL open a menu offering Change Space Icon…, Rename Space…, Set Profile and Delete Space, as in Arc. An incognito or guest window SHALL show no Space header.
 
 #### Scenario: Header shows the Space
 - **WHEN** a window shows the Space "Work", whose icon is 💼
@@ -29,7 +29,7 @@ Above the tab list, the sidebar SHALL show the current Space's icon, if it has o
 - **THEN** its sidebar shows "Incognito" and no Space header or Space switcher
 
 ### Requirement: Switching Spaces
-A window SHALL show one Space at a time. The user SHALL be able to switch with the footer's Space switcher, with Spaces › Next Space (Opt+Cmd+Right) and Previous Space (Opt+Cmd+Left), and with Spaces › the Space's name (Ctrl+1 to Ctrl+9 for the first nine). Next and Previous SHALL stop at the ends of the list. Switching SHALL work the same whether or not the two Spaces use the same profile, and SHALL keep the window's frame, sidebar width and sidebar visibility.
+A window SHALL show one Space at a time. The user SHALL be able to switch with the footer's Space switcher, with Spaces › Next Space (Opt+Cmd+Right) and Previous Space (Opt+Cmd+Left), and with Spaces › the Space's name (Ctrl+1 to Ctrl+9 for the first nine). Next and Previous SHALL wrap around at the ends of the list, as in Arc. Switching SHALL work the same whether or not the two Spaces use the same profile, and SHALL keep the window's frame, sidebar width and sidebar visibility.
 
 #### Scenario: Switching from the footer
 - **WHEN** a window shows "Home" and the user clicks "Work" in the footer's switcher
@@ -40,8 +40,8 @@ A window SHALL show one Space at a time. The user SHALL be able to switch with t
 - **THEN** the window shows the third Space
 
 #### Scenario: At the end of the list
-- **WHEN** a window shows the last Space and the user presses Opt+Cmd+Right
-- **THEN** the window stays on that Space
+- **WHEN** a window shows the last of three Spaces and the user presses Opt+Cmd+Right
+- **THEN** the window shows the first Space
 
 #### Scenario: Another profile
 - **WHEN** a window shows "Home" in the default profile and the user switches to "Work", which uses another profile
@@ -143,6 +143,36 @@ Delete Space SHALL be disabled for the only Space. Deleting a Space with no tabs
 #### Scenario: Space with tabs
 - **WHEN** the user deletes the second of three Spaces, which has two tabs, and confirms
 - **THEN** the two tabs close, the Space leaves the switcher, and the window shows the first Space
+
+### Requirement: Reordering Spaces
+The user SHALL be able to reorder Spaces by dragging a Space's item in the footer's switcher to another place in it. The new order SHALL show at once in every window's switcher and in the Spaces menu, and Ctrl+1 to Ctrl+9 and Next and Previous Space SHALL follow it.
+
+#### Scenario: Dragging a Space
+- **WHEN** the Spaces are "Home", "Work" and "Travel", and the user drags "Travel" before "Home" in the switcher
+- **THEN** the switcher and the Spaces menu show "Travel", "Home", "Work", and Ctrl+1 shows "Travel"
+
+#### Scenario: The order persists
+- **WHEN** the user reorders Spaces, quits Clair and relaunches it
+- **THEN** the Spaces are in the new order
+
+### Requirement: Moving a tab to another Space
+With more than one Space, a tab row's context menu SHALL offer "Move to Space" with every other Space. Choosing one SHALL put the tab at the top of that Space's list and remove it from this one, leaving the window on the Space it shows. A tab moved to a Space of the same profile SHALL keep its page as it is. A tab moved to a Space of another profile SHALL be opened there at its URL, since a page can't change profile.
+
+#### Scenario: Same profile
+- **WHEN** "Home" and "Research" use the same profile, and the user moves a tab with a half-filled form from "Home" to "Research"
+- **THEN** the tab is first in "Research" with the form as it was, and "Home" no longer lists it
+
+#### Scenario: Another profile
+- **WHEN** the user moves a tab from "Home" to "Work", which uses another profile
+- **THEN** "Work" lists a tab at the same URL, loaded in its profile, and "Home" no longer lists the tab
+
+#### Scenario: Moving the active tab
+- **WHEN** the user moves the active tab to another Space
+- **THEN** the window stays on its Space and shows the tab it would show had the moved tab been closed
+
+#### Scenario: One Space
+- **WHEN** there is one Space
+- **THEN** the tab's menu has no "Move to Space"
 
 ### Requirement: Tabs belong to a Space
 Every tab outside incognito and guest windows SHALL belong to exactly one Space. A new tab SHALL join the Space its window shows, whether it comes from Cmd+T, a link, an extension or another app. A tab SHALL use its Space's profile.

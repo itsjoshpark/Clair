@@ -17,6 +17,10 @@ Each profile SHALL be a Chromium profile with its own cookies, logins, history, 
 - **WHEN** the user signs in to a site in one Space and opens the same site in another Space using the same profile
 - **THEN** the site is signed in there
 
+#### Scenario: Extensions follow the profile
+- **WHEN** an extension is installed and pinned in the default profile, and the user switches to a Space using "Work"
+- **THEN** the sidebar and the Extensions menu show the extensions of "Work", without that one
+
 ### Requirement: No Chromium profile menu or picker
 The menu bar SHALL have no Profiles menu. Clair SHALL NOT show Chromium's profile picker at launch, however many profiles exist. A window SHALL open on a Space, never on a profile chosen in Chromium's own profile UI.
 
@@ -92,11 +96,23 @@ Remove SHALL be enabled only for a profile that no Space uses. It SHALL ask for 
 - **THEN** "Delete" stays disabled
 
 ### Requirement: Download location
-The selected profile's settings SHALL show the folder its downloads are saved to and let the user choose another with macOS's folder picker. The choice SHALL apply to that profile only, and to its next download.
+The selected profile's settings SHALL have a "Download location" popup, as in Arc. Closed, it SHALL show the folder the profile's downloads are saved to, or "Ask every time". Its menu SHALL offer that folder, "Other…", which chooses another folder with macOS's folder picker, and, after a divider, "Ask every time", which makes each download ask where to save. Choosing the folder or "Other…" SHALL turn asking off. The choice SHALL apply to that profile only, and to its next download.
+
+#### Scenario: Default
+- **WHEN** the user opens the popup for a profile that never changed it
+- **THEN** it shows "Downloads" checked, "Other…", a divider and "Ask every time"
 
 #### Scenario: Changing the folder
-- **WHEN** the user chooses "Documents" as the download location of "Work" and downloads a file in a Space using "Work"
-- **THEN** the file is saved to "Documents", and downloads in other profiles still go to their own folders
+- **WHEN** the user chooses "Other…" for "Work", picks "Documents", and downloads a file in a Space using "Work"
+- **THEN** the popup shows "Documents", the file is saved there, and downloads in other profiles still go to their own folders
+
+#### Scenario: Asking every time
+- **WHEN** the user chooses "Ask every time" for "Work" and downloads a file in a Space using "Work"
+- **THEN** Clair asks where to save the file, and downloads in other profiles don't ask
+
+#### Scenario: Back to a folder
+- **WHEN** "Ask every time" is chosen and the user chooses the folder in the menu
+- **THEN** the next download is saved to that folder without asking
 
 ### Requirement: Links to a profile's Chromium settings
 Below Download location, one group SHALL hold the rows Search Engine, Privacy and Security, Notifications and Clear Browsing Data, in that order. Choosing a row SHALL close the Settings window and open Chromium's page for it (`chrome://settings/search`, `/privacy`, `/content/notifications` and `/clearBrowserData`) in a new tab of a Space using the selected profile. The rows SHALL be disabled, with a note saying why, for a profile that no Space uses.

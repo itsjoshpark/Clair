@@ -90,7 +90,7 @@ While a group is in macOS full screen, one member, the **owner**, holds the full
 - The cover has square corners and hidden window controls, so the owner doesn't show at the corners.
 
 - **Why:** the prototype showed it is instant, where a second full-screen window costs a 0.6 s transition.
-- **Fallback, if it fails with real Chromium windows** (task 5.4): the group leaves full screen, then swaps.
+- **Fallback, if it fails with real Chromium windows** (task 5.5): the group leaves full screen, then swaps.
 
 ### D5. Each profile has one tab list per Space, and Clair owns its order
 
@@ -180,8 +180,8 @@ A restored browser joins the group named by its first tagged tab, when that tab 
   - `profiles`, `spaces` (in order) and `tabsInSpace:` (in order);
   - `addObserver:` for a `ClairSpacesObserver`: profiles changed, Spaces changed, a Space's tabs changed (added, closed, moved), one tab changed;
   - `createProfileNamed:completion:`, `renameProfile:to:`, `deleteProfile:`;
-  - `createSpaceNamed:icon:profile:` (returning its ID), `renameSpace:to:`, `setIcon:forSpace:`, `setProfile:forSpace:`, `deleteSpace:`;
-  - `downloadDirectoryForProfile:completion:` and `setDownloadDirectory:forProfile:`, which load the profile if needed;
+  - `createSpaceNamed:icon:profile:` (returning its ID), `renameSpace:to:`, `setIcon:forSpace:`, `setProfile:forSpace:`, `moveSpace:toIndex:`, `deleteSpace:`, and `moveTab:toSpace:`;
+  - `downloadSettingsForProfile:completion:` (the folder and whether it asks every time), `setDownloadDirectory:forProfile:` and `setAsksWhereToSave:forProfile:`, which load the profile if needed and use its `download.default_directory`, `savefile.default_directory` and `download.prompt_for_download` prefs;
   - `openURL:inProfile:`.
 - **`ClairTab` gains** `spaceID` and `browserID`, the browser that holds it.
 - **`ClairBrowser` gains** `browserID`, `shownSpaceID`, `showSpace:`, and `stillTabID` with `stillImage` (D8). `tabs` goes: rows come from the host. `moveTab:toIndex:` takes an index in the Space's list.
@@ -214,10 +214,23 @@ A new window shows the Space of the group that was active when it opened, or `cl
 
 `setProfile:forSpace:` updates the store, then, for each tab of the Space in list order, opens its URL in the target profile's member of the group that holds it, tagged with the Space at the same place in the list, and closes the original. Peeks close. `ClairUI` asks for confirmation first when the Space has tabs.
 
+### D18. Moving a tab to another Space
+
+`moveTab:toSpace:` has two cases, both in `ClairSpaceTabs`:
+
+- **Same profile:** the tab's Space tag changes and it moves to the top of the target's list. The page isn't touched. The tab stays in the browser that holds it.
+- **Another profile:** the tab's URL opens in the target profile, in the member of the same group (created hidden if needed), tagged with the target Space at the top of its list, and the original closes. This is D17's step for one tab.
+
+If the tab is active here, the overlay first activates the next tab as D9 does for a close, so the window stays on its Space.
+
+### D19. Reordering Spaces
+
+`moveSpace:toIndex:` rewrites `clair.spaces`' `order` and notifies observers. `SpaceSwitcher` handles the drag; the Spaces menu rebuilds from the observer.
+
 ## Risks / Trade-offs
 
-- **[Hidden members during session restore]** Chromium may show a restored window before its first tagged tab arrives. → Task 5.5 tests it; the fallback hides non-shown members when session restore finishes.
-- **[The cover in full screen]** Unproven with Chromium's windows, a page's own full screen, and the menu bar's reveal. → Task 5.4 proves it early; D4 names the fallback.
+- **[Hidden members during session restore]** Chromium may show a restored window before its first tagged tab arrives. → Task 5.6 tests it; the fallback hides non-shown members when session restore finishes.
+- **[The cover in full screen]** Unproven with Chromium's windows, a page's own full screen, and the menu bar's reveal. → Task 5.5 proves it early; D4 names the fallback.
 - **[A page copy can fail or come late]** → The still is optional: the card dims without it (D8).
 - **[Extensions see hidden members]** `chrome.windows` lists one window per profile of a group, and tabs move between windows as the user moves between windows. → Accepted; both are ordinary Chromium events.
 - **[Two windows on one tab move it on every focus change]** → Accepted; Arc does the same.
