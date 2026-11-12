@@ -34,6 +34,9 @@ final class NativeLayer {
   /// The menu bar's Extensions menu.
   private(set) var extensionsMenu: ExtensionsMenu?
 
+  /// The menu bar's Spaces menu (add-spaces D8).
+  private(set) var spacesMenu: SpacesMenu?
+
   init(host: any ClairHost) {
     self.host = host
     spaces = SpacesModel(host: host)
@@ -56,6 +59,9 @@ final class NativeLayer {
     let extensionsMenu = ExtensionsMenu()
     extensionsMenu.install(in: NSApp.mainMenu)
     self.extensionsMenu = extensionsMenu
+    let spacesMenu = SpacesMenu(spaces: spaces)
+    spacesMenu.install(in: NSApp.mainMenu)
+    self.spacesMenu = spacesMenu
 
     let updates = UpdateController(host: host, configuration: .current)
     updates.start()

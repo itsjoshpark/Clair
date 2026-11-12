@@ -385,6 +385,19 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   // MARK: Spaces and their tabs (add-spaces design D10)
 
   func shownSpaceDidChange(_ spaceID: SpaceID, from previousSpaceID: SpaceID?) {
+    // The earlier Space's header and rows slide out as the new one's slide
+    // in, unless Reduce Motion is on (D10).
+    if let previousSpaceID, previousSpaceID != spaceID, model.showsSpaces, window.isVisible,
+      !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    {
+      model.spaceSlide = SpaceSlide(
+        fromSpace: model.spaces.space(previousSpaceID), fromTabs: model.tabs,
+        fromTrailing: SpacesLogic.slidesFromTrailing(to: spaceID, from: previousSpaceID, in: model.spaces.spaces))
+    } else {
+      model.spaceSlide = nil
+    }
+    model.spaceHeaderEdit = nil
+    model.newSpaceForm = nil
     model.setShownSpace(spaceID)
     tabsChanged()
   }
@@ -689,7 +702,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func move(tab: TabID, to index: Int) {
-    browser?.move(tab: tab, to: index)
+    // The index counts the window's tabs; the engine counts the Space's,
+    // which other windows' tabs share (add-spaces D2).
+    let spaceTabs = model.spaces.tabs(inSpace: model.shownSpaceID)
+    guard
+      let spaceIndex = TabListLogic.spaceIndex(
+        movingTab: tab, toWindowIndex: index, windowTabs: model.tabs, spaceTabs: spaceTabs)
+    else { return }
+    browser?.move(tab: tab, to: spaceIndex)
   }
 
   func newTab() {
@@ -798,6 +818,125 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   func controlFramesChanged(_ frames: [AnchorControl: CGRect]) {
     controlFrames = frames
+  }
+
+  // MARK: SpaceActions (add-spaces D10)
+
+  private var host: (any ClairHost)? { model.spaces.host }
+
+  func showSpace(_ spaceID: SpaceID) {
+    guard model.showsSpaces else { return }
+    model.newSpaceForm = nil
+    browser?.showSpace(spaceID)
+  }
+
+  /// Next and Previous Space, wrapping around at the ends.
+  func showSpace(step: Int) {
+    guard model.showsSpaces,
+      let spaceID = SpacesLogic.neighbour(of: model.shownSpaceID, by: step, in: model.spaces.spaces)
+    else { return }
+    showSpace(spaceID)
+  }
+
+  /// Ctrl+1 to Ctrl+9.
+  func showSpace(number: Int) {
+    guard let spaceID = SpacesLogic.space(number: number, in: model.spaces.spaces) else { return }
+    showSpace(spaceID)
+  }
+
+  /// The form and the header's edits need the sidebar in its place.
+  private func showSidebarForEditing() {
+    if model.sidebar.isHidden {
+      toggleSidebar()
+    }
+  }
+
+  func beginNewSpace() {
+    guard model.showsSpaces else { return }
+    showSidebarForEditing()
+    model.spaceHeaderEdit = nil
+    model.newSpaceForm = NewSpaceFormState()
+  }
+
+  func cancelNewSpace() {
+    model.newSpaceForm = nil
+  }
+
+  func createSpace(named name: String, icon: String?) {
+    guard let spaceID = host?.createSpace(named: SpacesLogic.cleanName(name), icon: icon) else { return }
+    model.newSpaceForm = nil
+    // A Space with no tab here opens on a new tab page with the command bar.
+    browser?.showSpace(spaceID)
+  }
+
+  func beginRenamingSpace() {
+    guard model.shownSpace != nil else { return }
+    showSidebarForEditing()
+    model.newSpaceForm = nil
+    model.spaceHeaderEdit = .renaming
+  }
+
+  func beginChangingSpaceIcon() {
+    guard model.shownSpace != nil else { return }
+    showSidebarForEditing()
+    model.newSpaceForm = nil
+    model.spaceHeaderEdit = .icon
+  }
+
+  func endEditingSpaceHeader() {
+    model.spaceHeaderEdit = nil
+  }
+
+  func renameSpace(_ spaceID: SpaceID, to name: String) {
+    let name = SpacesLogic.cleanName(name)
+    guard !name.isEmpty else { return }
+    host?.renameSpace(spaceID, to: name)
+  }
+
+  func setIcon(_ icon: String?, forSpace spaceID: SpaceID) {
+    host?.setIcon(icon, forSpace: spaceID)
+  }
+
+  func deleteSpace(_ spaceID: SpaceID) {
+    guard model.spaces.spaces.count > 1, let space = model.spaces.space(spaceID) else { return }
+    let tabCount = model.spaces.rowCount(inSpace: spaceID)
+    guard SpacesLogic.deletionNeedsConfirmation(tabCount: tabCount) else {
+      host?.deleteSpace(spaceID)
+      return
+    }
+    let dialog = ClairDialog(Self.deletionPage(for: space, tabCount: tabCount))
+    dialogs.show(dialog) { [weak self] answer in
+      if answer == .accepted {
+        self?.host?.deleteSpace(spaceID)
+      }
+    }
+  }
+
+  /// The confirmation for deleting a Space with tabs (spaces spec, "Deleting
+  /// a Space"), worded for Clair: its tabs close.
+  static func deletionPage(
+    for space: any ClairSpace, tabCount: Int, confirm: (@MainActor (ClairDialog) -> Void)? = nil,
+    cancel: (@MainActor (ClairDialog) -> Void)? = nil
+  ) -> ClairDialogPage {
+    ClairDialogPage(
+      title: SpacesLogic.deletionTitle(space.name), message: SpacesLogic.deletionMessage(tabCount: tabCount),
+      buttons: [
+        ClairDialogButton(title: "Cancel", role: .cancel, action: cancel),
+        ClairDialogButton(title: "Delete Space", role: .destructive, action: confirm),
+      ])
+  }
+
+  func moveSpace(_ spaceID: SpaceID, to index: Int) {
+    host?.moveSpace(spaceID, to: index)
+  }
+
+  func moveTab(_ tab: TabID, toSpace spaceID: SpaceID) {
+    host?.move(tab: tab, toSpace: spaceID)
+  }
+
+  func manageSpaces() {
+    guard model.showsSpaces, dialogs.showing == nil else { return }
+    ManageSpacesDialog.show(for: self)
   }
 
   // MARK: OverlayActions

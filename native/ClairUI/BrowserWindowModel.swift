@@ -67,6 +67,12 @@ final class BrowserWindowModel {
   }
 
   // --- the window's own state ---
+  /// What the Space header is editing (add-spaces D10).
+  var spaceHeaderEdit: SpaceHeaderEdit?
+  /// The New Space form, while it shows in place of the header and list.
+  var newSpaceForm: NewSpaceFormState?
+  /// The slide from the Space shown before, while it runs.
+  var spaceSlide: SpaceSlide?
   var sidebar: SidebarState
   var commandBar: CommandBarModel?
   var find: FindState?
@@ -151,6 +157,17 @@ final class BrowserWindowModel {
     else { return }
     appDownloadProgress = progress
   }
+}
+
+/// A slide from one Space to another (add-spaces D10): the earlier Space's
+/// header and rows, as they were, slide out while the new Space's slide in.
+struct SpaceSlide: Identifiable {
+  let id = UUID()
+  let fromSpace: (any ClairSpace)?
+  let fromTabs: [any ClairTab]
+  /// Whether the new Space comes in from the trailing side, being later in
+  /// the order.
+  let fromTrailing: Bool
 }
 
 /// A toast at the bottom of the card. Each has its own ID, so the same

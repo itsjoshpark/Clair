@@ -23,7 +23,7 @@ Read `design.md` in full before starting. Verify every Chromium call it names ag
 - [ ] 2.7 Add `overlay/chrome/browser/clair/window/clair_space_session.{h,mm}` and `patches/clair/space-session.patch` (D6): write `clair_space` and `clair_order` when they change and in the session file's rebuild, add them for Reopen Closed Tab and Window, and read them in `CreateRestoredTab`. Add the patch to `patches/series` after `peek-session.patch`. Verify that the patch check applies it, and with the runtime tests in 3.11 that relaunch and that restore a closed tab.
 - [ ] 2.8 Restore tabs at launch by default (D11): set the default of `session.restore_on_startup` in `clair::RegisterProfilePrefOverrides`. Remove `--restore-last-session` from the runtime tests that relaunch, so they prove the default. Don't change which windows Chromium reopens or which tabs each holds; that is left to `share-tabs-across-windows`. Verify with the runtime tests in 3.11: a fresh data folder restores its tabs after a relaunch with no setting changed; and "Open the New Tab page" in `chrome://settings/onStartup` still opens one new tab page.
 - [ ] 2.9 Build the engine with `gh workflow run engine.yml -f ref=<branch>`. Verify that `chromium-engine-<key>` is published and CI's engine check passes.
-- [ ] 2.10 Update `docs/native-window.md` with the Space store, the per-profile tab lists and the shown-Space invariant, and where each lives. Verify that every file and decision it names exists.
+- [x] 2.10 Update `docs/native-window.md` with the Space store, the per-profile tab lists and the shown-Space invariant, and where each lives. Verify that every file and decision it names exists.
 
 ## 3. ClairUI
 
