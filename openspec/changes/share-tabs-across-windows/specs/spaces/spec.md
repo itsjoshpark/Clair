@@ -58,12 +58,20 @@ Closing a window while another window that isn't incognito or guest is open SHAL
 - **WHEN** one window is open and the user closes it
 - **THEN** its tabs close, and Reopen Closed Window brings them back
 
-### Requirement: A Peek closes when its tab moves
-When a tab with a Peek moves to another window, by being selected there or because its window closed, its Peek SHALL close.
+### Requirement: A Peek moves with its tab
+When a tab with a Peek moves to another window, by being selected there or because its window closed, its Peek SHALL move with it and stay open, as in Arc, with its page as it was. A window showing a still of that tab SHALL show the tab's own page in the still, without the Peek, and SHALL NOT show the Peek's badge on the tab's row.
 
 #### Scenario: Tab with a Peek taken by another window
 - **WHEN** window A shows a tab with a Peek and the user selects that tab in window B
-- **THEN** B shows the tab without a Peek
+- **THEN** B shows the tab with its Peek, without reloading either page
+
+#### Scenario: The still of a tab with a Peek
+- **WHEN** window A shows a tab with a Peek and the user selects that tab in window B
+- **THEN** A shows a dimmed still of the tab's page with no Peek over it, and the tab's row in A has no Peek badge
+
+#### Scenario: Peek's window closes
+- **WHEN** two windows are open and the user closes the one showing a tab with a Peek
+- **THEN** the tab's row in the other window still shows the Peek's badge, and selecting it shows the tab with its Peek
 
 ### Requirement: Stills end with the session
 After a relaunch with session restore, no window SHALL show a still, and no tab SHALL be listed twice.

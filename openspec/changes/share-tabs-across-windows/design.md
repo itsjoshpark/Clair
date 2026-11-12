@@ -33,7 +33,9 @@ See proposal.md, "Why", and `openspec/changes/archive/2026-11-12-add-spaces/arc-
 `-[ClairBrowser activateTab:]` on a tab another browser holds runs **take**:
 
 1. If the holder is showing the tab, start its still and placeholder (D2).
-2. Close the tab's Peek, if any, then detach the tab from the holder's strip and insert it into this strip, active.
+2. Detach the tab from the holder's strip and insert it into this strip, active. Its Peek, if any, moves with it: the overlay detaches both, inserts the Peek directly after its parent, moves their link from the holder's table to this browser's, and activates the Peek, as selecting its parent's row does (`add-peek` D3).
+
+`add-peek`'s bridge closes a Peek when its parent leaves the window. A take is the exception: the observer leaves a pair alone while the overlay moves it.
 
 A take changes the tab's `browserID`, which `ClairSpaceTabs` pushes as a tab change.
 
@@ -43,9 +45,9 @@ In `ClairUI`, a `BrowserWindowController` copies its shown Space's whole list, n
 
 When a browser's active tab is taken:
 
-1. The overlay asks for the page's copy with `CopyFromSurface`, with a 250 ms timeout, before the tab leaves.
+1. The overlay asks for the page's copy with `CopyFromSurface`, with a 250 ms timeout, before the tab leaves. For a tab with a Peek it copies the parent's page, never the Peek's, as Arc's still shows the page without its Peek. The parent stays visible under its Peek (`add-peek` D3), so the copy can be taken.
 2. It inserts a **placeholder**: a new tab page tab, marked as a placeholder in its `WebContents` user data, and activates it. A placeholder is in no Space list and has no row. It is the one exception to two `add-spaces` rules: `ClairSpaceTabs` doesn't put it in the Space its browser shows (D2 there), and while it is active the browser keeps its shown Space (D3 there).
-3. The browser records the taken tab's ID. `ClairUI` shows the still dimmed over the card, highlights the taken tab's row, empties the URL field and disables back, forward and reload. If the copy fails, it dims the card's background alone.
+3. The browser records the taken tab's ID. `ClairUI` shows the still dimmed over the card, highlights the taken tab's row without its Peek badge, as Arc does, empties the URL field and disables back, forward and reload. If the copy fails, it dims the card's background alone.
 
 The still ends when:
 
@@ -67,7 +69,7 @@ A placeholder carries no session tags, so it needs no session work: restored, it
 
 ### D4. Closing a window hands its tabs to another window
 
-When the user closes a window and another regular window is open, its tabs (not a placeholder) move to the most recently active other window, and the emptied browser closes. No tab closes, so no leave-page prompt shows. Closing the last regular window goes through Chromium's close flow, as today.
+When the user closes a window and another regular window is open, its tabs (not a placeholder) move to the most recently active other window, each Peek with its parent as in D1, and the emptied browser closes. No tab closes, so no leave-page prompt shows. Closing the last regular window goes through Chromium's close flow, as today.
 
 ### D5. The contract (`native/ClairHost.h`)
 
