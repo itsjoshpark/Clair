@@ -92,11 +92,24 @@ struct SpaceIconField: NSViewRepresentable {
       case .unchanged:
         field.stringValue = parent.icon ?? ""
       }
+      // Before the emoji again, so the next one picked comes first and
+      // replaces it.
+      field.currentEditor()?.selectedRange = NSRange(location: 0, length: 0)
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
       if selector == #selector(NSResponder.insertNewline(_:)) || selector == #selector(NSResponder.cancelOperation(_:)) {
         end(control)
+        return true
+      }
+      // The insertion point sits before the emoji, where Delete alone would
+      // find nothing to remove.
+      if selector == #selector(NSResponder.deleteBackward(_:)) || selector == #selector(NSResponder.deleteForward(_:)) {
+        textView.string = ""
+        control.stringValue = ""
+        if parent.icon != nil {
+          parent.onChange(nil)
+        }
         return true
       }
       return false
@@ -117,8 +130,10 @@ struct SpaceIconField: NSViewRepresentable {
   }
 }
 
-/// The field behind `SpaceIconField`: it selects its emoji on focus, so the
-/// next one picked replaces it, and opens the emoji picker.
+/// The field behind `SpaceIconField`: on focus it puts the insertion point
+/// before its emoji, so the next one picked replaces it, and opens the emoji
+/// picker. Not a selection: macOS doesn't open the picker while an emoji is
+/// selected, so a Space that had an icon got none.
 final class IconTextField: NSTextField {
   /// An edit started, and the field takes focus once it's in a window.
   var wantsPicking = false
@@ -131,7 +146,7 @@ final class IconTextField: NSTextField {
   func beginPickingIfWanted() {
     guard wantsPicking, let window, window.makeFirstResponder(self) else { return }
     wantsPicking = false
-    currentEditor()?.selectAll(nil)
+    currentEditor()?.selectedRange = NSRange(location: 0, length: 0)
     NSApp.orderFrontCharacterPalette(self)
   }
 }
