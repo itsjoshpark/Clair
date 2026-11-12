@@ -297,6 +297,8 @@ final class ClairDialogWindow: NSWindow {
   private func observePage() {
     withObservationTracking {
       title = dialog.page.title
+      // A borderless window doesn't expose its title; VoiceOver reads this.
+      setAccessibilityTitle(dialog.page.title)
     } onChange: { [weak self] in
       Task { @MainActor in
         guard let self else { return }
@@ -308,17 +310,31 @@ final class ClairDialogWindow: NSWindow {
 }
 
 /// The card (D1): an optional icon, a title, a message, the page's content
-/// and the button row, the default button last.
+/// and the button row, the default button last. Its metrics are Arc's,
+/// measured from its extension dialogs: 450 pt wide, 38 pt in at the top and
+/// leading edge, 28 pt at the trailing edge and 26 pt at the bottom, a 62 pt
+/// icon and an 18 pt title.
 struct ClairDialogView: View {
   let dialog: ClairDialog
   @FocusState private var focusedButton: ClairDialogButton.Role?
 
   static let width: CGFloat = 450
-  static let padding: CGFloat = 24
+  static let insets = EdgeInsets(top: 38, leading: 38, bottom: 26, trailing: 28)
   static let cornerRadius: CGFloat = 16
-  static let iconSize: CGFloat = 48
+  static let iconSize: CGFloat = 62
+  /// Arc wraps its titles well short of the card's edge.
+  static let titleWidth: CGFloat = 330
   /// The width the content slot gets.
-  static let contentWidth = width - 2 * padding
+  static let contentWidth = width - insets.leading - insets.trailing
+
+  /// Arc's near-white card, or the window background in Dark Mode.
+  static let background = Color(
+    nsColor: NSColor(name: nil) { appearance in
+      appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        ? .windowBackgroundColor : NSColor(srgbRed: 0.98, green: 0.984, blue: 1, alpha: 1)
+    })
+  /// The message's and the list's slate grey.
+  static let secondaryText = Color.primary.opacity(0.75)
 
   var body: some View {
     let page = dialog.page
@@ -329,26 +345,29 @@ struct ClairDialogView: View {
         Image(nsImage: icon)
           .resizable()
           .interpolation(.high)
+          .aspectRatio(contentMode: .fit)
           .frame(width: Self.iconSize, height: Self.iconSize)
-          .padding(.bottom, 14)
+          .padding(.bottom, 17)
           .accessibilityHidden(true)
       }
       Text(page.title)
-        .font(.system(size: 17, weight: .semibold))
+        .font(.system(size: 18, weight: .semibold))
+        .lineSpacing(1.5)
+        .frame(maxWidth: Self.titleWidth, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("clair.dialogTitle")
       if let message = page.message {
         Text(message)
-          .font(.system(size: 13))
-          .foregroundStyle(.secondary)
+          .font(.system(size: 14))
+          .foregroundStyle(Self.secondaryText)
           .fixedSize(horizontal: false, vertical: true)
-          .padding(.top, 6)
+          .padding(.top, 8)
       }
       if let content = page.content {
         content
           .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.top, 12)
+          .padding(.top, 9)
       }
       HStack(spacing: 8) {
         Spacer(minLength: 0)
@@ -357,12 +376,13 @@ struct ClairDialogView: View {
             .focused($focusedButton, equals: button.role)
         }
       }
-      .padding(.top, 22)
+      // Arc leaves more room under a title alone than under a list.
+      .padding(.top, page.message == nil && page.content == nil ? 44 : 15)
     }
-    .padding(Self.padding)
+    .padding(Self.insets)
     .frame(width: Self.width, alignment: .leading)
-    .background(shape.fill(Color(nsColor: .windowBackgroundColor)))
-    .overlay(shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 1))
+    .background(shape.fill(Self.background))
+    .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
     .clipShape(shape)
     .onChange(of: dialog.defaultFocusRequests) {
       focusedButton = buttons.last { $0.isDefault }?.role
@@ -371,16 +391,16 @@ struct ClairDialogView: View {
   }
 }
 
-/// A row button with its key in a capsule after its title.
+/// A row button with its key after its title, as in Arc.
 private struct ClairDialogButtonView: View {
   let button: ClairDialogButton
   let press: () -> Void
 
   var body: some View {
     Button(action: press) {
-      HStack(spacing: 6) {
+      HStack(spacing: 12) {
         Text(button.title)
-        KeyCapsule(label: button.keyLabel, onFill: button.isDefault)
+        DialogKeyCap(role: button.role, label: button.keyLabel)
           .accessibilityHidden(true)
       }
     }
@@ -392,20 +412,34 @@ private struct ClairDialogButtonView: View {
   }
 }
 
-private struct KeyCapsule: View {
+/// The key on a button: a grey "ESC" on the cancelling button, an outlined
+/// return arrow on the filled one. 20 pt high with 5 pt corners, as Arc's.
+private struct DialogKeyCap: View {
+  let role: ClairDialogButton.Role
   let label: String
-  let onFill: Bool
 
   var body: some View {
-    Text(label)
-      .font(.system(size: 10, weight: .semibold))
-      .foregroundStyle(onFill ? Color.white.opacity(0.85) : Color.secondary)
-      .padding(.horizontal, 5)
-      .frame(minWidth: 18, minHeight: 16)
-      .background(Capsule().fill(onFill ? Color.white.opacity(0.22) : Color.primary.opacity(0.1)))
+    let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+    if role == .cancel {
+      Text(label)
+        .font(.system(size: 12, weight: .bold))
+        .foregroundStyle(Color.primary.opacity(0.55))
+        .padding(.horizontal, 6)
+        .frame(height: 20)
+        .background(shape.fill(Color.primary.opacity(0.1)))
+    } else {
+      Image(systemName: "arrow.turn.down.left")
+        .font(.system(size: 11, weight: .bold))
+        .foregroundStyle(Color.white)
+        .frame(width: 28, height: 20)
+        .background(shape.fill(Color.white.opacity(0.15)))
+        .overlay(shape.strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+    }
   }
 }
 
+/// Arc's buttons: 38 pt high with 6 pt corners and a darker edge under them
+/// for depth. Cancel is white with a hairline border; the default is filled.
 private struct ClairDialogButtonStyle: ButtonStyle {
   let role: ClairDialogButton.Role
 
@@ -417,24 +451,44 @@ private struct ClairDialogButtonStyle: ButtonStyle {
     let role: ClairDialogButton.Role
     let configuration: Configuration
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
       let filled = role != .cancel
+      let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
       configuration.label
-        .font(.system(size: 13, weight: .medium))
+        .font(.system(size: 14))
         .foregroundStyle(filled ? Color.white : Color.primary)
         .padding(.horizontal, 12)
-        .frame(minWidth: 72, minHeight: 30)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(fill))
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(height: 38)
+        .background(shape.fill(fill))
+        .overlay(shape.strokeBorder(border, lineWidth: 1))
+        // The edge under the button.
+        .background(shape.fill(edge).offset(y: 1.5))
+        .padding(.bottom, 1.5)
+        .contentShape(shape)
         .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
     }
 
+    private var isDark: Bool { colorScheme == .dark }
+
     private var fill: Color {
       switch role {
-      case .cancel: Color.primary.opacity(0.08)
+      case .cancel: isDark ? Color.white.opacity(0.1) : Color.white
       case .default: Color.accentColor
       case .destructive: Color(nsColor: .systemRed)
+      }
+    }
+
+    private var border: Color {
+      role == .cancel ? Color.primary.opacity(isDark ? 0.12 : 0.14) : Color.clear
+    }
+
+    private var edge: Color {
+      switch role {
+      case .cancel: Color.black.opacity(isDark ? 0.3 : 0.1)
+      case .default: Color.accentColor.mix(with: .black, by: 0.3)
+      case .destructive: Color(nsColor: .systemRed).mix(with: .black, by: 0.3)
       }
     }
   }

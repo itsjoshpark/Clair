@@ -70,12 +70,11 @@ final class DialogTests: NativeWindowTestCase {
     // Another window still works.
     let second = try await browser.open(url("link.html"), newWindow: true)
     defer { second.close() }
-    let windows = browser.ui.windows.containing(.any, identifier: "clair.sidebar")
-    let opened = await Harness.wait(for: 30) { windows.count >= 2 }
-    try require(opened, "The second window didn't open")
-    guard let secondWindow = windows.allElementsBoundByIndex.first(where: { !$0.sheets.firstMatch.exists }) else {
-      throw HarnessError("Every window has a sheet")
-    }
+    // The window whose sidebar lists the link page.
+    let secondWindow = browser.ui.windows.containing(
+      NSPredicate(format: "identifier == 'clair.tabRow' AND label == 'Clair link page'")
+    ).firstMatch
+    try require(secondWindow.waitForExistence(timeout: 30), "The second window didn't open")
     secondWindow.click()
     secondWindow.typeKey("t", modifierFlags: .command)
     let field = secondWindow.descendants(matching: .any).matching(identifier: "clair.commandBarField").firstMatch
@@ -98,8 +97,11 @@ final class DialogTests: NativeWindowTestCase {
     XCTAssertTrue(focused, "The page didn't get focus back")
     XCTAssertFalse(browser.element("clair.extensionAction").exists, "Esc installed the extension")
 
-    // Return installs, and the new extension's button is pinned.
-    try await askToInstall(from: tab, browser: browser)
+    // Return installs, and the new extension's button is pinned. A new tab
+    // asks, since Chromium holds back a second download from the same page.
+    let again = try await browser.open(url("find.html?again"))
+    defer { again.close() }
+    try await askToInstall(from: again, browser: browser)
     browser.ui.typeKey(.return, modifierFlags: [])
     let installed = browser.element("clair.extensionAction").waitForExistence(timeout: 30)
     XCTAssertTrue(installed, "Return didn't install the extension")

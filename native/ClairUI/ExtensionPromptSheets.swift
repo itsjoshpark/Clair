@@ -48,13 +48,30 @@ enum ExtensionPromptDialog {
     return cancelButton + [ClairDialogButton(title: accept, role: role)]
   }
 
+  /// The card's slate grey, following the appearance as the text is drawn.
+  static let listColor = NSColor(name: nil) { appearance in
+    appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+      ? NSColor(white: 1, alpha: 0.75) : NSColor(white: 0, alpha: 0.75)
+  }
+
   /// The permissions as a bulleted list, scrolling once it's taller than
   /// `maxListHeight`.
   static func permissionList(_ permissions: [String], width: CGFloat = ClairDialogView.contentWidth) -> NSScrollView {
     let text = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: 0))
-    text.string = permissions.map { "• \($0)" }.joined(separator: "\n")
-    text.font = .systemFont(ofSize: NSFont.systemFontSize)
-    text.textColor = .labelColor
+    // Arc's list: 14 pt, the bullet 3 pt in and the text hanging at 20 pt.
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.firstLineHeadIndent = 3
+    paragraph.headIndent = 20
+    paragraph.tabStops = [NSTextTab(textAlignment: .left, location: 20)]
+    paragraph.paragraphSpacing = 6
+    text.textStorage?.setAttributedString(
+      NSAttributedString(
+        string: permissions.map { "•\t\($0)" }.joined(separator: "\n"),
+        attributes: [
+          .font: NSFont.systemFont(ofSize: 14),
+          .foregroundColor: listColor,
+          .paragraphStyle: paragraph,
+        ]))
     text.isEditable = false
     text.isSelectable = false
     text.drawsBackground = false

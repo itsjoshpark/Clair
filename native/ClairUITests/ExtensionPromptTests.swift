@@ -39,7 +39,7 @@ final class ExtensionPromptTests {
     #expect(page.title == "Add \"Reader\" to Clair?")
     #expect(page.message == "It can:")
     #expect(page.content != nil)
-    #expect(list(["Read your history", "Read data"]) == "• Read your history\n• Read data")
+    #expect(list(["Read your history", "Read data"]) == "•\tRead your history\n•\tRead data")
     #expect(buttons(page) == ["Cancel", "Add Extension"])
     #expect(page.buttons[1].shortcut == .defaultAction)
     #expect(!page.buttons[1].isDestructive)
@@ -95,6 +95,20 @@ final class ExtensionPromptTests {
     #expect(scroll.frame.height == ExtensionPromptDialog.maxListHeight)
     #expect(scroll.hasVerticalScroller)
     #expect(ExtensionPromptDialog.permissionList(["Read data"]).frame.height < ExtensionPromptDialog.maxListHeight)
+  }
+
+  @Test func permissionListFollowsTheAppearance() {
+    let text = ExtensionPromptDialog.permissionList(["Read data"]).documentView as? NSTextView
+    let color = text?.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+    func whiteness(_ name: NSAppearance.Name) -> CGFloat {
+      var white: CGFloat = -1
+      NSAppearance(named: name)?.performAsCurrentDrawingAppearance {
+        color?.usingColorSpace(.genericGray)?.getWhite(&white, alpha: nil)
+      }
+      return white
+    }
+    #expect(whiteness(.darkAqua) > 0.9)
+    #expect(whiteness(.aqua) < 0.1)
   }
 
   @Test func permissionListTakesRoomInTheCard() {

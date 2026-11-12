@@ -169,6 +169,7 @@ final class ClairDialogTests {
     #expect(window.backgroundColor == .clear)
     #expect(window.canBecomeKey)
     #expect(window.title == "A")
+    #expect(window.accessibilityTitle() == "A")
     #expect(window.frame.width == ClairDialogView.width)
   }
 
