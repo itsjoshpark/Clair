@@ -1382,12 +1382,13 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
       new_contents->Resize(gfx::Rect(size));
     }
   }
-  // add-spaces D3: the window shows the active tab's Space. A tab the lists
-  // haven't placed yet, as a new one, joins the shown Space.
+  // add-spaces D3: the window shows the active tab's Space. Chromium tells
+  // the window before the lists hear of a new tab: a restored one already
+  // carries its Space, and a new one joins the shown Space.
   tabs::TabInterface* new_tab =
       tabs::TabInterface::MaybeGetFromContents(new_contents);
   if (space_tabs_ && new_tab) {
-    const std::string space = space_tabs_->SpaceOf(new_tab);
+    const std::string space = space_tabs_->IntendedSpaceOf(new_tab);
     if (!space.empty() && space != shown_space_) {
       SetShownSpace(space);
     }

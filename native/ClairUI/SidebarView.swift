@@ -556,6 +556,9 @@ struct SpacePager: View {
   @State private var width: CGFloat = 0
   /// 0 as a slide starts, 1 once the new Space is in place.
   @State private var progress: CGFloat = 1
+  /// The slide `progress` animates; a newer one starts from 0 before its
+  /// first frame.
+  @State private var animatedSlide: UUID?
 
   /// Arc's slide covers about 80% of the distance in 100 ms and settles by
   /// 300 ms (add-spaces design D10): a critically damped spring of 0.21 s.
@@ -568,6 +571,7 @@ struct SpacePager: View {
       } else {
         let slide = model.spaceSlide
         let direction: CGFloat = slide?.fromTrailing == false ? -1 : 1
+        let progress = slide != nil && slide?.id != animatedSlide ? 0 : self.progress
         if let slide, progress < 1 {
           SpacePage(model: model, space: slide.fromSpace, tabs: slide.fromTabs, actions: nil)
             .offset(x: -direction * width * progress)
@@ -586,6 +590,7 @@ struct SpacePager: View {
     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     .onChange(of: model.spaceSlide?.id) { _, id in
       guard id != nil else { return }
+      animatedSlide = id
       progress = 0
       withAnimation(Self.slide) {
         progress = 1

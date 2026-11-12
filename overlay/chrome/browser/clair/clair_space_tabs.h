@@ -94,6 +94,11 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
   // The Space `contents` belongs to, or empty while it isn't listed.
   std::string SpaceOf(content::WebContents* contents) const;
   std::string SpaceOf(const tabs::TabInterface* tab) const;
+  // The Space `tab` belongs to, or will once it's listed: a tab restored from
+  // a session or moved from another window carries its Space before the
+  // lists hear of it, and Chromium may make it active first. Empty for a new
+  // tab, which joins the Space its window shows.
+  std::string IntendedSpaceOf(tabs::TabInterface* tab) const;
   // A Space's tabs in its order, Peeks included; with `browser`, only those
   // the browser holds.
   std::vector<tabs::TabInterface*> TabsIn(const std::string& space) const;

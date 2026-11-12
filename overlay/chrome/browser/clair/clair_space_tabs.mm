@@ -464,6 +464,17 @@ std::string ClairSpaceTabs::SpaceOf(content::WebContents* contents) const {
                           : nullptr);
 }
 
+std::string ClairSpaceTabs::IntendedSpaceOf(tabs::TabInterface* tab) const {
+  std::string space = SpaceOf(tab);
+  if (!space.empty() || !tab || !is_regular()) {
+    return space;
+  }
+  SpaceTag* tag = GetTag(tab->GetContents());
+  return tag && clair::ClairSpaceStore::Get()->Contains(tag->space)
+             ? tag->space
+             : std::string();
+}
+
 std::vector<tabs::TabInterface*> ClairSpaceTabs::TabsIn(
     const std::string& space) const {
   std::vector<tabs::TabInterface*> result;
