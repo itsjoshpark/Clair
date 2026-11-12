@@ -23,7 +23,7 @@ Browser ── BrowserWindow ─▶ ClairBrowserWindow       BrowserWindowContro
 
 ## Spaces
 
-The `add-spaces` change's `design.md` has the reasoning (D1–D11).
+The archived `add-spaces` change's `design.md` (`openspec/changes/archive/2026-11-12-add-spaces/`) has the reasoning (D1–D11).
 
 - **The Space store (D1).** `ClairSpaceStore` keeps the Spaces, in order, in Chromium's Local State (`clair.spaces`, and `clair.last_space` for the Space a new window shows). It creates "Home" when none is stored and refuses to delete the last Space. `clair::RegisterLocalStatePrefs` registers both prefs from `browser_prefs.cc`.
 - **The tab lists (D2).** `ClairSpaceTabs`, one per profile (kept as the profile's user data), observes the tab strip of every native window of the profile and keeps one ordered list of tab handles per Space, across windows. Each tab carries its Space as `WebContents` user data. A new tab joins the Space its window shows, a restored one its saved Space at its saved place, and a Peek its parent's. The tab strip's order no longer means anything to the user, except that a Peek follows its parent. An incognito or guest profile has one Space of its own, which isn't in the store. `ClairSpaceTabs` also owns the tab snapshots and pushes each Space's list and each tab's changes to the host's `ClairSpacesObserver`, once per run-loop turn, before a window hears that its active tab changed.

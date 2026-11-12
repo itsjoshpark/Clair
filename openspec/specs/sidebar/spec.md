@@ -156,18 +156,26 @@ While downloads run, the downloads button SHALL show the same progress as the Do
 - **THEN** both windows' downloads buttons show the same progress as the Dock, and clear it when the download ends
 
 ### Requirement: Sidebar footer
-The sidebar SHALL end in a footer at its bottom edge, as in Arc, however short the tab list is: the downloads button at its leading end and a plus button at its trailing end. The plus button SHALL open a menu offering New Tab with its shortcut, which opens the command bar as Cmd+T does. While the tab list scrolls, a thin line SHALL separate it from the footer.
+The sidebar SHALL end in a footer, as in Arc, however short the tab list is: the downloads button leading, the Space switcher in the middle and a plus button trailing. The switcher SHALL show one item per Space, the current one darker, and SHALL be absent with one Space and in incognito and guest windows. The plus button SHALL open a menu offering New Space… and New Tab, which opens the command bar as Cmd+T does. While the tab list scrolls, a thin line SHALL separate it from the footer.
 
 #### Scenario: Plus menu
 - **WHEN** the user clicks the footer's plus button
-- **THEN** a menu shows New Tab with ⌘T, and choosing it opens the command bar for a new tab
+- **THEN** a menu shows New Space… and New Tab with ⌘T, and choosing New Tab opens the command bar for a new tab
 
 #### Scenario: Line above the footer
 - **WHEN** the window has more tabs than the list can show
 - **THEN** a line shows between the list and the footer, and it goes once tabs are closed until the rest fit
 
+#### Scenario: Switcher with two Spaces
+- **WHEN** there are two Spaces and the window shows the first
+- **THEN** the footer shows two items between the downloads button and the plus, the first darker
+
+#### Scenario: One Space
+- **WHEN** there is one Space
+- **THEN** the footer shows no switcher
+
 ### Requirement: Tab list
-Below the URL field, the sidebar SHALL show a "New Tab" row and then every tab of the window, in the window's tab order, with its favicon and title. The active tab SHALL be highlighted, more lightly while the window isn't key. A tab that plays sound or is muted SHALL show a speaker between its favicon and title, as in Arc, that mutes or unmutes it, with the tooltip "Mute this tab" or "Unmute this tab". The list SHALL scroll when it doesn't fit.
+Below the URL field and the Space header, the sidebar SHALL show a "New Tab" row and then every tab of the window that belongs to the Space it shows, in the Space's tab order, with its favicon and title. The active tab SHALL be highlighted, more lightly while the window isn't key. A tab that plays sound or is muted SHALL show a speaker between its favicon and title, as in Arc, that mutes or unmutes it, with the tooltip "Mute this tab" or "Unmute this tab". It SHALL scroll when it doesn't fit.
 
 #### Scenario: Selecting a tab
 - **WHEN** the user clicks a tab row
@@ -180,6 +188,10 @@ Below the URL field, the sidebar SHALL show a "New Tab" row and then every tab o
 #### Scenario: Many tabs
 - **WHEN** the window has more tabs than the sidebar can show
 - **THEN** the tab list scrolls, and the top row, URL field and footer stay in place
+
+#### Scenario: Another Space's tabs
+- **WHEN** "Home" has two tabs and "Work" has three, and the window shows "Work"
+- **THEN** the list shows the three tabs of "Work" and none of "Home"
 
 ### Requirement: New tabs at the top
 Every new tab SHALL be inserted at the top of the tab list, directly under the "New Tab" row, whether it comes from Cmd+T, the "New Tab" row, the command bar, a link opened in a new tab, or an extension or page that doesn't ask for a position. Whether it becomes active SHALL follow Chromium, so a link opened in the background stays in the background. Tabs that come back through session restore or Reopen Closed Tab SHALL return to their previous positions.
