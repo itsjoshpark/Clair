@@ -96,7 +96,9 @@ final class Probe: XCTestCase {
     case "scroll":
       try point(0).scroll(byDeltaX: 0, deltaY: try number(2))
     case "drag":
-      try point(0).press(forDuration: 0.1, thenDragTo: try point(2))
+      // At a hand's speed, so the app sees the drag move rather than jump.
+      try point(0).press(
+        forDuration: 0.3, thenDragTo: try point(2), withVelocity: .slow, thenHoldForDuration: 0.3)
     case "key":
       guard let name = words.first else { throw ProbeError.usage("key <name> [mods]") }
       app.typeKey(try Self.key(name), modifierFlags: try modifiers(1))

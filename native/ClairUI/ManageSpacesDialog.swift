@@ -86,6 +86,11 @@ final class ManageSpacesState {
     spaces.host?.moveSpace(spaces.spaces[from].spaceID, to: target)
   }
 
+  /// A Space dragged in the list, to `index`.
+  func move(_ spaceID: SpaceID, to index: Int) {
+    spaces.host?.moveSpace(spaceID, to: index)
+  }
+
   /// The number of tabs a Space has, in every window.
   func tabCount(of spaceID: SpaceID) -> Int {
     spaces.rowCount(inSpace: spaceID)
@@ -167,15 +172,7 @@ struct ManageSpacesView: View {
   var body: some View {
     HStack(alignment: .top, spacing: 14) {
       VStack(spacing: 0) {
-        List(selection: selectionBinding) {
-          ForEach(state.spaces.spaces, id: \.spaceID) { space in
-            ManageSpacesRow(space: space, tabCount: state.tabCount(of: space.spaceID))
-              .tag(space.spaceID)
-          }
-          .onMove { state.move(from: $0, to: $1) }
-        }
-        .listStyle(.bordered)
-        .accessibilityIdentifier("clair.manageSpacesList")
+        ManageSpacesList(state: state)
         HStack(spacing: 0) {
           Button {
             state.add()
@@ -236,8 +233,70 @@ struct ManageSpacesView: View {
     .onChange(of: state.nameFocusRequests) { nameFocused = true }
   }
 
-  private var selectionBinding: Binding<SpaceID?> {
-    Binding(get: { state.selection }, set: { state.select($0) })
+}
+
+/// The dialog's list of Spaces: a click selects a row, and dragging one moves
+/// its Space to the row it's dropped on. Rows rather than a List, whose own
+/// drag and drop didn't start in the dialog.
+struct ManageSpacesList: View {
+  @Bindable var state: ManageSpacesState
+
+  static let rowHeight: CGFloat = 26
+
+  @State private var dragged: SpaceID?
+  @State private var dragOffset: CGFloat = 0
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    let spaces = state.spaces.spaces
+    ScrollView {
+      VStack(spacing: 0) {
+        ForEach(spaces, id: \.spaceID) { space in
+          let selected = space.spaceID == state.selection
+          ManageSpacesRow(space: space, tabCount: state.tabCount(of: space.spaceID), isSelected: selected)
+            .padding(.horizontal, 8)
+            .frame(height: Self.rowHeight)
+            .background {
+              if selected {
+                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor)
+              }
+            }
+            .contentShape(Rectangle())
+            .offset(y: dragged == space.spaceID ? dragOffset : 0)
+            .zIndex(dragged == space.spaceID ? 1 : 0)
+            .onTapGesture { state.select(space.spaceID) }
+            .gesture(
+              DragGesture(minimumDistance: 4)
+                .onChanged { value in
+                  dragged = space.spaceID
+                  dragOffset = value.translation.height
+                }
+                .onEnded { value in
+                  if let from = spaces.firstIndex(where: { $0.spaceID == space.spaceID }) {
+                    let to = SpacesLogic.dragTarget(
+                      from: from, translation: value.translation.height, pitch: Self.rowHeight,
+                      count: spaces.count)
+                    if to != from {
+                      state.move(space.spaceID, to: to)
+                    }
+                  }
+                  dragged = nil
+                  dragOffset = 0
+                })
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("clair.manageSpacesRow")
+            .accessibilityAddTraits(selected ? .isSelected : [])
+        }
+      }
+      .padding(4)
+    }
+    .background(
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.8)))
+    .overlay(
+      RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("clair.manageSpacesList")
   }
 }
 
@@ -246,6 +305,7 @@ struct ManageSpacesView: View {
 struct ManageSpacesRow: View {
   let space: any ClairSpace
   let tabCount: Int
+  var isSelected = false
 
   var body: some View {
     HStack(spacing: 8) {
@@ -260,9 +320,11 @@ struct ManageSpacesRow: View {
       Text(space.name).lineLimit(1)
       Spacer(minLength: 4)
       if tabCount > 0 {
-        Text("\(tabCount)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+        Text("\(tabCount)").font(.system(size: 11)).monospacedDigit()
+          .foregroundStyle(isSelected ? AnyShapeStyle(Color.white.opacity(0.8)) : AnyShapeStyle(.secondary))
       }
     }
+    .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(space.name), \(tabCount == 1 ? "1 tab" : "\(tabCount) tabs")")
   }

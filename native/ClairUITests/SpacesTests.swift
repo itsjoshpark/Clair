@@ -80,10 +80,13 @@ struct SpacesLogicTests {
     #expect(items.last?.identifier == "clair.space.10")
   }
 
-  @Test func droppingASpaceOnAnotherTakesItsPlace() {
-    #expect(SpacesLogic.dropIndex(moving: "c", onto: "a", in: spaces) == 0)
-    #expect(SpacesLogic.dropIndex(moving: "a", onto: "c", in: spaces) == 2)
-    #expect(SpacesLogic.dropIndex(moving: "a", onto: "a", in: spaces) == nil)
+  @Test func aDraggedSpaceLandsInTheNearestSlot() {
+    // Five items 34 pt apart: half a pitch or more moves one slot.
+    #expect(SpacesLogic.dragTarget(from: 4, translation: -136, pitch: 34, count: 5) == 0)
+    #expect(SpacesLogic.dragTarget(from: 0, translation: 18, pitch: 34, count: 5) == 1)
+    #expect(SpacesLogic.dragTarget(from: 0, translation: 16, pitch: 34, count: 5) == 0)
+    #expect(SpacesLogic.dragTarget(from: 2, translation: 500, pitch: 34, count: 5) == 4)
+    #expect(SpacesLogic.dragTarget(from: 2, translation: -500, pitch: 34, count: 5) == 0)
   }
 
   // MARK: The header's menu (spaces spec, "Space header", "Deleting a Space")

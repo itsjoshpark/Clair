@@ -235,6 +235,8 @@ final class SpacesTests: NativeWindowTestCase {
     browser.ui.menuItems["Rename Space…"].click()
     let field = browser.element("clair.spaceNameField")
     try require(field.waitForExistence(timeout: 5), "Rename Space… didn't show a field")
+    let focused = await Harness.wait(for: 5) { field.value(forKey: "hasKeyboardFocus") as? Bool == true }
+    try require(focused, "Rename Space… didn't put the keyboard in the field")
     field.typeKey("a", modifierFlags: .command)
     field.typeText("Research\n")
     var renamed = await browser.waitForSpace("Research")
@@ -244,6 +246,7 @@ final class SpacesTests: NativeWindowTestCase {
     browser.element("clair.spaceHeader").rightClick()
     browser.ui.menuItems["Rename Space…"].click()
     try require(field.waitForExistence(timeout: 5), "Rename Space… didn't show a field again")
+    _ = await Harness.wait(for: 5) { field.value(forKey: "hasKeyboardFocus") as? Bool == true }
     field.typeKey("a", modifierFlags: .command)
     field.typeKey(.delete, modifierFlags: [])
     field.typeKey(.return, modifierFlags: [])
@@ -335,8 +338,10 @@ final class SpacesTests: NativeWindowTestCase {
     let selected = await browser.waitForActiveRow("Counter moving")
     try require(selected, "The tab to move isn't active")
     browser.tabRow("Counter moving")?.rightClick()
-    browser.ui.menuItems["Move to Space"].hover()
-    let work = browser.ui.menuItems["Work"]
+    let move = browser.ui.menuItems["Move to Space"]
+    move.hover()
+    // The submenu's own item: the Spaces menu has one of the same title.
+    let work = move.menuItems["Work"]
     try require(work.waitForExistence(timeout: 5), "Move to Space doesn't list Work")
     work.click()
     let gone = await browser.waitForTabs { !$0.contains("Counter moving") }
@@ -381,7 +386,7 @@ final class SpacesTests: NativeWindowTestCase {
 
     // Reordering by dragging in the list.
     let list = browser.dialogButton("clair.manageSpacesList")
-    let rows = list.descendants(matching: .cell).allElementsBoundByIndex
+    let rows = list.descendants(matching: .any).matching(identifier: "clair.manageSpacesRow").allElementsBoundByIndex
     try require(rows.count == 3, "The dialog doesn't list three Spaces")
     rows[2].press(forDuration: 0.6, thenDragTo: rows[0])
     let reordered = await Harness.wait(for: 10) { browser.switcherItems.first?.label == "Research" }

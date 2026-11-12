@@ -66,13 +66,13 @@ enum SpacesLogic {
     }
   }
 
-  /// The index a Space dragged in the switcher moves to when dropped on the
-  /// item at `target`.
-  static func dropIndex(moving spaceID: SpaceID, onto target: SpaceID, in spaces: [any ClairSpace]) -> Int? {
-    guard spaceID != target, spaces.contains(where: { $0.spaceID == spaceID }),
-      let index = spaces.firstIndex(where: { $0.spaceID == target })
-    else { return nil }
-    return index
+  /// Where an item at `index` of `count`, dragged `translation` points along
+  /// a strip of items `pitch` apart, lands: the nearest slot, clamped to the
+  /// strip.
+  static func dragTarget(from index: Int, translation: CGFloat, pitch: CGFloat, count: Int) -> Int {
+    guard count > 0, pitch > 0 else { return index }
+    let target = index + Int((translation / pitch).rounded())
+    return min(max(target, 0), count - 1)
   }
 
   // MARK: Menus

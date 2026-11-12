@@ -84,7 +84,7 @@ Coordinates are in points from the top-left corner of the app's main window
 | `click x y [mods]` | click, holding `shift`, `cmd`, `opt`, `ctrl` (comma-separated) |
 | `rclick x y`, `hover x y` | right-click, move the pointer |
 | `scroll x y dy` | scroll by `dy` |
-| `drag x1 y1 x2 y2` | press, then drag |
+| `drag x1 y1 x2 y2` | press, then drag at a hand's speed and hold before letting go |
 | `key <name> [mods]` | a single character, or `return`, `escape`, `tab`, `space`, `delete`, `forwarddelete`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown` |
 | `type <text>` | type text |
 | `paste <text>` | put text on the pasteboard and press Cmd+V, for emoji, which `type` doesn't type reliably |

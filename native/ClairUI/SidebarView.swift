@@ -532,8 +532,7 @@ struct SidebarFooter: View {
       Spacer(minLength: 2)
       if !items.isEmpty || (creating && model.showsSpaces) {
         SpaceSwitcher(
-          items: creating ? items.map { $0.notCurrent } : items, showsNewSpaceDot: creating, actions: actions,
-          spaces: model.spaces.spaces)
+          items: creating ? items.map { $0.notCurrent } : items, showsNewSpaceDot: creating, actions: actions)
         Spacer(minLength: 2)
       }
       // Arc's plus also offers folders, Easels and Boosts, which Clair hasn't.
