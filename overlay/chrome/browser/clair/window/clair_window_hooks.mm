@@ -20,6 +20,7 @@
 #include "chrome/browser/clair/window/clair_browser_window.h"
 #import "chrome/browser/clair/window/clair_native_window.h"
 #include "chrome/browser/clair/window/clair_peeks.h"
+#include "chrome/browser/headless/headless_mode_util.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -298,10 +299,15 @@ void RegisterProfilePrefOverrides(user_prefs::PrefRegistrySyncable* registry) {
   for (const char* pref : kOffPrefs) {
     registry->SetDefaultPrefValue(pref, base::Value(false));
   }
-  // add-spaces D11: tabs come back at launch, as in Arc.
-  registry->SetDefaultPrefValue(
-      prefs::kRestoreOnStartup,
-      base::Value(static_cast<int>(SessionStartupPref::kPrefValueLast)));
+  // add-spaces D11: tabs come back at launch, as in Arc. Not in headless
+  // mode, which has no windows to come back to: with a restore, Chromium
+  // opens the command line's URL through session restore, which never hands
+  // it to --dump-dom and the other headless commands, so they never finish.
+  if (!headless::IsHeadlessMode()) {
+    registry->SetDefaultPrefValue(
+        prefs::kRestoreOnStartup,
+        base::Value(static_cast<int>(SessionStartupPref::kPrefValueLast)));
+  }
 }
 
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {

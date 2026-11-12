@@ -92,6 +92,7 @@ Each browser remembers one **came-from** tab: set when the user selects a tab wh
 `clair::RegisterProfilePrefOverrides`, which already sets Clair's defaults for the password and autofill prefs, also sets the default of `session.restore_on_startup` to Chromium's "continue where you left off" value. It is a default, not a forced value: "On startup" in `chrome://settings` still changes it. It is a profile pref, so it holds for every profile `add-profiles` creates. Nothing else about Chromium's session restore changes: the tabs keep their `clair_space` and `clair_order` tags, so each lands in its Space at its place (D2, D6).
 
 - **Why a default override and not the `--restore-last-session` switch:** the switch can't be turned off by the user and doesn't show in settings.
+- **Not in headless mode.** With a restore, Chromium opens the command line's URL through session restore, which never hands it to `--dump-dom` and the other headless commands, so the engine's headless smoke test never finished. Headless runs keep Chromium's default.
 
 ### D7. Moving a tab to another Space, and reordering Spaces
 
