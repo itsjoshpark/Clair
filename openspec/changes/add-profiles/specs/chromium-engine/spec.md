@@ -12,14 +12,3 @@ Apart from its identity (`app-identity`), native layer (`native-layer`), updater
 #### Scenario: Settings unchanged
 - **WHEN** a user opens `chrome://settings` in the native window
 - **THEN** it shows the same settings and defaults as the same ungoogled-chromium release, apart from Clair's identity and versions and the absent "Autofill and passwords" section
-
-### Requirement: What Clair's Chromium hooks may do
-Clair's hooks SHALL load the native layer, hand Chromium's browser window and its attached UI to Clair's code, register Clair's component extensions, register Clair's own preferences, tag Clair's tabs in the sessions Chromium saves and read the tags back, free keyboard shortcuts that Clair assigns to its own commands, turn off or hide the password and autofill features, and turn off extensions' uninstall pages. Each hook SHALL only redirect to Clair's code or switch a Chromium feature off.
-
-#### Scenario: Reviewing a window hook
-- **WHEN** a hunk of the native-window hook patch is read
-- **THEN** it calls into Clair's overlay files or the native layer, makes Chromium skip UI the native window replaces, or switches off a feature Clair removes, and any behavior is in Clair's files
-
-#### Scenario: Reviewing a session hook
-- **WHEN** a hunk of a patch to Chromium's session code is read
-- **THEN** it calls into Clair's overlay files to write or read a tag on a tab, and decides nothing itself

@@ -21,6 +21,76 @@ Each profile SHALL be a Chromium profile with its own cookies, logins, history, 
 - **WHEN** an extension is installed and pinned in the default profile, and the user switches to a Space using "Work"
 - **THEN** the sidebar and the Extensions menu show the extensions of "Work", without that one
 
+### Requirement: Each Space uses one profile
+Each Space SHALL use exactly one profile, and several Spaces MAY use the same one. A Space's tabs SHALL use its profile. A Space created without a choice of profile SHALL use the profile of the Space the window shows. The Space's profile SHALL persist across launches.
+
+#### Scenario: First launch
+- **WHEN** Clair launches for the first time
+- **THEN** its one Space uses the default profile
+
+#### Scenario: Two Spaces on one profile
+- **WHEN** "Home" and "Research" use the default profile, and the user signs in to a site in "Home"
+- **THEN** the site is signed in in "Research" too
+
+### Requirement: Switching to a Space of another profile
+Switching Spaces SHALL work the same whether or not the two Spaces use the same profile: in the same window, at the same frame, sidebar width and sidebar visibility, with the same slide.
+
+#### Scenario: Another profile
+- **WHEN** a window shows "Home" in the default profile and the user switches to "Work", which uses another profile
+- **THEN** the same window, at the same frame and sidebar width, shows "Work", and its pages use that profile's cookies and logins
+
+#### Scenario: Extensions and favicons follow
+- **WHEN** the window then shows "Work"
+- **THEN** the sidebar's pinned extensions, the Extensions menu and the History menu are those of the "Work" profile
+
+### Requirement: Switching in full screen
+Switching Spaces while the window is in macOS full screen SHALL keep the window in full screen, without a transition between macOS Spaces, whichever profiles the two Spaces use. Leaving full screen afterwards SHALL return the window to the frame it had before entering.
+
+#### Scenario: Another profile in full screen
+- **WHEN** a full-screen window shows "Home" and the user switches to "Work", which uses another profile
+- **THEN** the window shows "Work" in full screen at once
+
+#### Scenario: Leaving full screen after a switch
+- **WHEN** the user then leaves full screen
+- **THEN** the window returns to its earlier frame, still showing "Work"
+
+### Requirement: Choosing a profile for a new Space
+The New Space form SHALL have a profile popup listing every profile, with the profile of the Space shown before selected, and "New Profile…". The Manage Spaces dialog SHALL show the same popup for the selected Space.
+
+#### Scenario: Creating a Space on another profile
+- **WHEN** the user opens the form, types "Work", chooses the profile "Work" and clicks "Create Space"
+- **THEN** a Space "Work" using that profile is last in the switcher, and the window shows it with a new tab page
+
+#### Scenario: New profile from the form
+- **WHEN** the user chooses "New Profile…" in the form's profile popup and creates the profile "Client"
+- **THEN** the form's popup shows "Client" selected
+
+### Requirement: Changing a Space's profile
+The Space header's menu and the Spaces menu SHALL offer Set Profile, and the Manage Spaces dialog its profile popup. Each SHALL list every profile, with a checkmark on the Space's, and "New Profile…". Choosing another profile for a Space with no tabs SHALL apply at once. For a Space with tabs, Clair SHALL first ask for confirmation in a dialog, saying that the tabs will reload and may be signed out; on confirmation each tab SHALL reopen at its URL in the new profile, in the same order.
+
+#### Scenario: Empty Space
+- **WHEN** the user sets the profile of a Space with no tabs to "Work"
+- **THEN** the Space uses "Work" at once, with no prompt
+
+#### Scenario: Space with tabs
+- **WHEN** the user sets the profile of a Space with three tabs to "Work" and confirms
+- **THEN** the Space lists the same three URLs in the same order, loaded in the "Work" profile
+
+#### Scenario: Cancelled
+- **WHEN** the user cancels the confirmation
+- **THEN** the Space keeps its profile and its tabs are untouched
+
+### Requirement: Moving a tab to a Space of another profile
+"Move to Space" SHALL list Spaces of every profile. A tab moved to a Space of another profile SHALL be opened there at its URL, at the top of that Space's list, and removed from this one, since a page can't change profile.
+
+#### Scenario: Another profile
+- **WHEN** the user moves a tab from "Home" to "Work", which uses another profile
+- **THEN** "Work" lists a tab at the same URL, loaded in its profile, and "Home" no longer lists the tab
+
+#### Scenario: Same profile
+- **WHEN** the user moves a tab to a Space using the same profile
+- **THEN** the tab keeps its page as it is
+
 ### Requirement: No Chromium profile menu or picker
 The menu bar SHALL have no Profiles menu. Clair SHALL NOT show Chromium's profile picker at launch, however many profiles exist. A window SHALL open on a Space, never on a profile chosen in Chromium's own profile UI.
 
