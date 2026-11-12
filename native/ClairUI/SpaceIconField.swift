@@ -47,6 +47,7 @@ struct SpaceIconField: NSViewRepresentable {
     field.isEditable = isEditing
     field.isSelectable = isEditing
     if isEditing, !context.coordinator.wasEditing {
+      context.coordinator.begin()
       // Now if the field is in a window, or else once SwiftUI puts it in
       // one, as when editing makes the field appear.
       field.wantsPicking = true
@@ -70,7 +71,9 @@ struct SpaceIconField: NSViewRepresentable {
       self.parent = parent
     }
 
-    func controlTextDidBeginEditing(_ notification: Notification) {
+    /// An edit starts. Not `controlTextDidBeginEditing`, which waits for the
+    /// first change: an edit that changes nothing has to end too.
+    func begin() {
       ended = false
     }
 

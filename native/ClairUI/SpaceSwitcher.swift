@@ -63,21 +63,46 @@ struct SpaceSwitcher: View {
   /// dropped on (spaces spec, "Reordering Spaces"). A press that doesn't move
   /// is the button's click.
   private func drag(_ item: SpacesLogic.SwitcherItem) -> some Gesture {
-    DragGesture(minimumDistance: 4)
+    SpaceReorderDrag.gesture(
+      for: item.spaceID, in: items.map(\.spaceID), along: .horizontal, pitch: pitch,
+      dragged: $dragged, offset: $dragOffset
+    ) { [weak actions] spaceID, index in
+      actions?.moveSpace(spaceID, to: index)
+    }
+  }
+}
+
+/// The drag that reorders Spaces, in the switcher and in Manage Spaces: the
+/// dragged one follows the pointer along `axis`, and is moved to the slot
+/// it's dropped on (`SpacesLogic.dragTarget`).
+@MainActor
+enum SpaceReorderDrag {
+  /// - Parameters:
+  ///   - order: every Space, as laid out, `pitch` apart.
+  ///   - dragged: the Space being dragged, for the view to offset by `offset`.
+  ///   - move: called once, at the drop, when the Space lands on another slot.
+  static func gesture(
+    for spaceID: SpaceID, in order: [SpaceID], along axis: Axis, pitch: CGFloat,
+    dragged: Binding<SpaceID?>, offset: Binding<CGFloat>, move: @escaping (SpaceID, Int) -> Void
+  ) -> some Gesture {
+    func distance(_ value: DragGesture.Value) -> CGFloat {
+      axis == .horizontal ? value.translation.width : value.translation.height
+    }
+    return DragGesture(minimumDistance: 4)
       .onChanged { value in
-        dragged = item.spaceID
-        dragOffset = value.translation.width
+        dragged.wrappedValue = spaceID
+        offset.wrappedValue = distance(value)
       }
       .onEnded { value in
-        if let from = items.firstIndex(where: { $0.spaceID == item.spaceID }) {
+        if let from = order.firstIndex(of: spaceID) {
           let to = SpacesLogic.dragTarget(
-            from: from, translation: value.translation.width, pitch: pitch, count: items.count)
+            from: from, translation: distance(value), pitch: pitch, count: order.count)
           if to != from {
-            actions?.moveSpace(item.spaceID, to: to)
+            move(spaceID, to)
           }
         }
-        dragged = nil
-        dragOffset = 0
+        dragged.wrappedValue = nil
+        offset.wrappedValue = 0
       }
   }
 }

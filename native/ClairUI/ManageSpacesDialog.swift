@@ -48,7 +48,7 @@ final class ManageSpacesState {
   /// its name.
   func add() {
     commitName()
-    guard let spaceID = spaces.host?.createSpace(named: Self.newSpaceName, icon: nil) else { return }
+    guard let spaceID = spaces.createSpace(named: Self.newSpaceName, icon: nil) else { return }
     selection = spaceID
     nameDraft = Self.newSpaceName
     nameFocusRequests += 1
@@ -56,11 +56,8 @@ final class ManageSpacesState {
 
   /// The name as typed, applied at once unless it's empty.
   func nameChanged() {
-    guard let space = selectedSpace else { return }
-    let name = SpacesLogic.cleanName(nameDraft)
-    if !name.isEmpty, name != space.name {
-      spaces.host?.renameSpace(space.spaceID, to: name)
-    }
+    guard let selection else { return }
+    spaces.renameSpace(selection, to: nameDraft)
   }
 
   /// The name field lost focus: an emptied name reverts.
@@ -75,20 +72,12 @@ final class ManageSpacesState {
 
   func setIcon(_ icon: String?) {
     guard let space = selectedSpace else { return }
-    spaces.host?.setIcon(icon, forSpace: space.spaceID)
-  }
-
-  /// A drag in the list, with SwiftUI's offsets.
-  func move(from source: IndexSet, to destination: Int) {
-    guard let from = source.first,
-      let target = TabListLogic.moveTarget(from: from, to: destination, count: spaces.spaces.count)
-    else { return }
-    spaces.host?.moveSpace(spaces.spaces[from].spaceID, to: target)
+    spaces.setIcon(icon, forSpace: space.spaceID)
   }
 
   /// A Space dragged in the list, to `index`.
   func move(_ spaceID: SpaceID, to index: Int) {
-    spaces.host?.moveSpace(spaceID, to: index)
+    spaces.moveSpace(spaceID, to: index)
   }
 
   /// The number of tabs a Space has, in every window.
@@ -139,22 +128,21 @@ enum ManageSpacesDialog {
   static func remove(
     _ spaceID: SpaceID, state: ManageSpacesState, dialog: ClairDialog, controller: BrowserWindowController
   ) {
-    guard state.canRemove, let space = state.spaces.space(spaceID),
-      let index = state.spaces.index(of: spaceID)
-    else { return }
-    let tabCount = state.tabCount(of: spaceID)
-    let host = state.spaces.host
-    guard SpacesLogic.deletionNeedsConfirmation(tabCount: tabCount) else {
-      host?.deleteSpace(spaceID)
+    let spaces = state.spaces
+    guard let deletion = spaces.deletion(of: spaceID), let index = spaces.index(of: spaceID) else { return }
+    let delete = {
+      spaces.deleteSpace(spaceID)
       state.removed(spaceID, at: index)
+    }
+    guard deletion.needsConfirmation else {
+      delete()
       return
     }
     dialog.swap(
       to: BrowserWindowController.deletionPage(
-        for: space, tabCount: tabCount,
+        for: deletion.space, tabCount: deletion.tabCount,
         confirm: { dialog in
-          host?.deleteSpace(spaceID)
-          state.removed(spaceID, at: index)
+          delete()
           dialog.swapBack()
         },
         cancel: { dialog in dialog.swapBack() }))
@@ -266,23 +254,12 @@ struct ManageSpacesList: View {
             .zIndex(dragged == space.spaceID ? 1 : 0)
             .onTapGesture { state.select(space.spaceID) }
             .gesture(
-              DragGesture(minimumDistance: 4)
-                .onChanged { value in
-                  dragged = space.spaceID
-                  dragOffset = value.translation.height
-                }
-                .onEnded { value in
-                  if let from = spaces.firstIndex(where: { $0.spaceID == space.spaceID }) {
-                    let to = SpacesLogic.dragTarget(
-                      from: from, translation: value.translation.height, pitch: Self.rowHeight,
-                      count: spaces.count)
-                    if to != from {
-                      state.move(space.spaceID, to: to)
-                    }
-                  }
-                  dragged = nil
-                  dragOffset = 0
-                })
+              SpaceReorderDrag.gesture(
+                for: space.spaceID, in: spaces.map(\.spaceID), along: .vertical, pitch: Self.rowHeight,
+                dragged: $dragged, offset: $dragOffset
+              ) { spaceID, index in
+                state.move(spaceID, to: index)
+              })
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("clair.manageSpacesRow")
             .accessibilityAddTraits(selected ? .isSelected : [])

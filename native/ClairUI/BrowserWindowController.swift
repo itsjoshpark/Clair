@@ -387,11 +387,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   func shownSpaceDidChange(_ spaceID: SpaceID, from previousSpaceID: SpaceID?) {
     // The earlier Space's header and rows slide out as the new one's slide
     // in, unless Reduce Motion is on (D10).
+    // Nor from a Space that's gone: there's no header to slide out, and no
+    // place in the order to tell the side from.
     if let previousSpaceID, previousSpaceID != spaceID, model.showsSpaces, window.isVisible,
+      let previousSpace = model.spaces.space(previousSpaceID),
       !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     {
       model.spaceSlide = SpaceSlide(
-        fromSpace: model.spaces.space(previousSpaceID), fromTabs: model.tabs,
+        fromSpace: previousSpace, fromTabs: model.tabs,
         fromTrailing: SpacesLogic.slidesFromTrailing(to: spaceID, from: previousSpaceID, in: model.spaces.spaces))
     } else {
       model.spaceSlide = nil
@@ -822,8 +825,6 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
 
   // MARK: SpaceActions (add-spaces D10)
 
-  private var host: (any ClairHost)? { model.spaces.host }
-
   func showSpace(_ spaceID: SpaceID) {
     guard model.showsSpaces else { return }
     model.newSpaceForm = nil
@@ -863,7 +864,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func createSpace(named name: String, icon: String?) {
-    guard let spaceID = host?.createSpace(named: SpacesLogic.cleanName(name), icon: icon) else { return }
+    guard let spaceID = model.spaces.createSpace(named: name, icon: icon) else { return }
     model.newSpaceForm = nil
     // A Space with no tab here opens on a new tab page with the command bar.
     browser?.showSpace(spaceID)
@@ -888,26 +889,24 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func renameSpace(_ spaceID: SpaceID, to name: String) {
-    let name = SpacesLogic.cleanName(name)
-    guard !name.isEmpty else { return }
-    host?.renameSpace(spaceID, to: name)
+    model.spaces.renameSpace(spaceID, to: name)
   }
 
   func setIcon(_ icon: String?, forSpace spaceID: SpaceID) {
-    host?.setIcon(icon, forSpace: spaceID)
+    model.spaces.setIcon(icon, forSpace: spaceID)
   }
 
   func deleteSpace(_ spaceID: SpaceID) {
-    guard model.spaces.spaces.count > 1, let space = model.spaces.space(spaceID) else { return }
-    let tabCount = model.spaces.rowCount(inSpace: spaceID)
-    guard SpacesLogic.deletionNeedsConfirmation(tabCount: tabCount) else {
-      host?.deleteSpace(spaceID)
+    let spaces = model.spaces
+    guard let deletion = spaces.deletion(of: spaceID) else { return }
+    guard deletion.needsConfirmation else {
+      spaces.deleteSpace(spaceID)
       return
     }
-    let dialog = ClairDialog(Self.deletionPage(for: space, tabCount: tabCount))
-    dialogs.show(dialog) { [weak self] answer in
+    let dialog = ClairDialog(Self.deletionPage(for: deletion.space, tabCount: deletion.tabCount))
+    dialogs.show(dialog) { answer in
       if answer == .accepted {
-        self?.host?.deleteSpace(spaceID)
+        spaces.deleteSpace(spaceID)
       }
     }
   }
@@ -927,11 +926,11 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func moveSpace(_ spaceID: SpaceID, to index: Int) {
-    host?.moveSpace(spaceID, to: index)
+    model.spaces.moveSpace(spaceID, to: index)
   }
 
   func moveTab(_ tab: TabID, toSpace spaceID: SpaceID) {
-    host?.move(tab: tab, toSpace: spaceID)
+    model.spaces.moveTab(tab, toSpace: spaceID)
   }
 
   func manageSpaces() {

@@ -125,12 +125,9 @@ struct SpaceHeaderView: View {
   }
 
   private func commitName() {
+    // An empty name keeps the earlier one.
     if let space {
-      let name = SpacesLogic.cleanName(draft)
-      // An empty name keeps the earlier one.
-      if !name.isEmpty, name != space.name {
-        actions?.renameSpace(space.spaceID, to: name)
-      }
+      actions?.renameSpace(space.spaceID, to: draft)
     }
     actions?.endEditingSpaceHeader()
   }

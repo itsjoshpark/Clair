@@ -24,8 +24,8 @@ protocol SpacesModelListener: AnyObject {
 /// redraw every sidebar.
 @Observable
 final class SpacesModel: NSObject, ClairSpacesObserver {
-  /// The host it reports, or nil for a model that never changes.
-  @ObservationIgnored let host: (any ClairHost)?
+  /// The host it reports and changes, or nil for a model that never changes.
+  @ObservationIgnored private let host: (any ClairHost)?
 
   /// Every Space, in the user's order.
   private(set) var spaces: [any ClairSpace] = []
@@ -88,15 +88,73 @@ final class SpacesModel: NSObject, ClairSpacesObserver {
     TabListLogic.rowCount(tabs(inSpace: spaceID))
   }
 
+  // MARK: Changing
+
+  // Every change to the Spaces goes through here, so the sidebar, the menu
+  // bar and Manage Spaces follow the same rules.
+
+  /// Creates a Space after the last, named `name` without the spaces around
+  /// it. Nil when the name is empty.
+  @discardableResult
+  func createSpace(named name: String, icon: String?) -> SpaceID? {
+    host?.createSpace(named: SpacesLogic.cleanName(name), icon: icon)
+  }
+
+  /// Renames a Space to `name` without the spaces around it. An empty name,
+  /// or the one it has, changes nothing.
+  func renameSpace(_ spaceID: SpaceID, to name: String) {
+    let name = SpacesLogic.cleanName(name)
+    guard !name.isEmpty, let space = space(spaceID), space.name != name else { return }
+    host?.renameSpace(spaceID, to: name)
+  }
+
+  func setIcon(_ icon: String?, forSpace spaceID: SpaceID) {
+    host?.setIcon(icon, forSpace: spaceID)
+  }
+
+  func moveSpace(_ spaceID: SpaceID, to index: Int) {
+    host?.moveSpace(spaceID, to: index)
+  }
+
+  func moveTab(_ tab: TabID, toSpace spaceID: SpaceID) {
+    host?.move(tab: tab, toSpace: spaceID)
+  }
+
+  /// What deleting a Space takes.
+  struct Deletion {
+    let space: any ClairSpace
+    /// Its rows, in every window.
+    let tabCount: Int
+    /// Whether to ask first (spaces spec, "Deleting a Space").
+    var needsConfirmation: Bool { SpacesLogic.deletionNeedsConfirmation(tabCount: tabCount) }
+  }
+
+  /// What deleting `spaceID` takes, or nil when it can't be deleted: the only
+  /// Space, or one that's gone.
+  func deletion(of spaceID: SpaceID) -> Deletion? {
+    guard spaces.count > 1, let space = space(spaceID) else { return nil }
+    return Deletion(space: space, tabCount: rowCount(inSpace: spaceID))
+  }
+
+  /// Deletes a Space and closes its tabs, without asking; the caller asks
+  /// where `deletion(of:)` says to.
+  func deleteSpace(_ spaceID: SpaceID) {
+    guard deletion(of: spaceID) != nil else { return }
+    host?.deleteSpace(spaceID)
+  }
+
   // MARK: ClairSpacesObserver
 
   func spacesDidChange(_ spaces: [any ClairSpace]) {
-    self.spaces = spaces
     let known = Set(spaces.map(\.spaceID))
-    // A deleted Space's list goes; private Spaces of incognito windows stay.
-    for (spaceID, tabs) in tabsBySpace where tabs.isEmpty && !known.contains(spaceID) {
-      tabsBySpace[spaceID] = nil
+    // A deleted Space's list goes, whatever it still holds: the engine tells
+    // of the Space before its tabs' closing, and pushes no list for a Space
+    // that's gone. Private Spaces of incognito windows were never in `spaces`
+    // and stay.
+    for space in self.spaces where !known.contains(space.spaceID) {
+      tabsBySpace[space.spaceID] = nil
     }
+    self.spaces = spaces
     for listener in allListeners {
       listener.spacesDidChange()
     }

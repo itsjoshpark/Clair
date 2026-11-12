@@ -2,6 +2,7 @@
 // You can use, redistribute, and/or modify this source code under
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
+import AppKit
 import ClairHost
 import Foundation
 import Testing
@@ -172,6 +173,80 @@ struct SpaceIconTests {
 
   @Test func emptyClears() {
     #expect(SpaceIcon.edit(for: "") == .clear)
+  }
+
+  /// A Space that has an icon keeps its field, and its coordinator, between
+  /// edits: each edit ends once, also one that changes nothing.
+  @MainActor
+  @Test func everyEditEndsOnce() {
+    var ends = 0
+    let field = SpaceIconField(icon: "📚", isEditing: true, onChange: { _ in }, onEnd: { ends += 1 })
+    let coordinator = field.makeCoordinator()
+    let ended = Notification(name: NSControl.textDidEndEditingNotification)
+    coordinator.begin()
+    coordinator.controlTextDidEndEditing(ended)
+    coordinator.controlTextDidEndEditing(ended)
+    #expect(ends == 1)
+    coordinator.begin()
+    coordinator.controlTextDidEndEditing(ended)
+    #expect(ends == 2)
+  }
+}
+
+/// The Spaces' one model and its changes (add-spaces D10).
+@MainActor
+struct SpacesModelTests {
+  @Test func renamingCleansTheNameAndSkipsItsOwn() {
+    let host = FakeHost()
+    let model = SpacesModel(host: host)
+    model.renameSpace(FakeHost.homeID, to: "  ")
+    model.renameSpace(FakeHost.homeID, to: " Home ")
+    #expect(!host.commands.contains { $0.hasPrefix("rename") })
+    model.renameSpace(FakeHost.homeID, to: " Research ")
+    #expect(host.spaces[0].name == "Research")
+    #expect(model.spaces[0].name == "Research")
+  }
+
+  @Test func creatingCleansTheName() {
+    let host = FakeHost()
+    let model = SpacesModel(host: host)
+    #expect(model.createSpace(named: "   ", icon: nil) == nil)
+    let work = model.createSpace(named: " Work ", icon: "💼")
+    #expect(work == host.spaces[1].spaceID)
+    #expect(host.spaces[1].name == "Work")
+  }
+
+  @Test func deletionTellsWhetherToAsk() throws {
+    let (host, browser, controller) = spacesWindow()
+    let model = controller.model.spaces
+    #expect(model.deletion(of: FakeHost.homeID) == nil)
+    let work = try #require(model.createSpace(named: "Work", icon: nil))
+    #expect(model.deletion(of: "gone") == nil)
+    #expect(try #require(model.deletion(of: work)).needsConfirmation == false)
+    browser.showSpace(work)
+    let deletion = try #require(model.deletion(of: work))
+    #expect(deletion.space.name == "Work")
+    #expect(deletion.tabCount == 1)
+    #expect(deletion.needsConfirmation)
+    model.deleteSpace(work)
+    #expect(host.spaces.map(\.name) == ["Home"])
+    model.deleteSpace(FakeHost.homeID)
+    #expect(host.spaces.count == 1)
+  }
+
+  /// The engine tells of a deleted Space while its tabs are still closing,
+  /// and pushes no list for it afterwards.
+  @Test func aDeletedSpacesTabsAreDropped() {
+    let (host, browser, _) = spacesWindow(["Work"])
+    let work = host.spaces[1].spaceID
+    let model = SpacesModel(host: host)
+    model.tabsDidChange(browser.allTabs, inSpace: work)
+    model.tabsDidChange(browser.allTabs, inSpace: "private")
+    #expect(model.tabs(inSpace: work).count == 1)
+    model.spacesDidChange([host.spaces[0]])
+    #expect(model.tabs(inSpace: work).isEmpty)
+    // An incognito window's Space was never one of the user's.
+    #expect(model.tabs(inSpace: "private").count == 1)
   }
 }
 
@@ -380,7 +455,7 @@ struct ManageSpacesTests {
   @Test func draggingReordersSpaces() {
     let (host, _, controller) = spacesWindow(["Work", "Travel"])
     let state = ManageSpacesState(spaces: controller.model.spaces, selecting: FakeHost.homeID)
-    state.move(from: [2], to: 0)
+    state.move(host.spaces[2].spaceID, to: 0)
     #expect(host.spaces.map(\.name) == ["Travel", "Home", "Work"])
   }
 

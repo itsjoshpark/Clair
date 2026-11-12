@@ -110,10 +110,6 @@ final class BrowserWindowModel {
     self.spaces = spaces
   }
 
-  func setTabs(_ tabs: [any ClairTab]) {
-    self.tabs = tabs
-  }
-
   /// Shows another Space's rows, read from `spaces`.
   func setShownSpace(_ spaceID: SpaceID) {
     shownSpaceID = spaceID
