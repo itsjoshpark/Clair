@@ -4,57 +4,54 @@
 
 import AppKit
 import ClairHost
+import SwiftUI
 
-/// The alert for an extension confirmation (arc-extension-experience D4).
-/// Install and remove use Clair's wording; other prompts use Chromium's.
+/// The dialog for an extension confirmation (arc-extension-experience D4,
+/// add-clair-dialogs D3). Install and remove use Clair's wording; other
+/// prompts use Chromium's.
 @MainActor
-enum ExtensionPromptAlert {
+enum ExtensionPromptDialog {
   /// The tallest the permission list gets before it scrolls, so a long list
-  /// can't push the sheet's buttons off the screen.
+  /// can't push the dialog's buttons off the screen.
   static let maxListHeight: CGFloat = 200
-  /// The width of an alert's text.
-  private static let listWidth: CGFloat = 218
 
-  static func make(for prompt: any ClairExtensionPrompt) -> NSAlert {
-    let alert = NSAlert()
-    if let icon = prompt.icon {
-      alert.icon = sized(icon)
-    }
+  static func make(for prompt: any ClairExtensionPrompt) -> ClairDialogPage {
     switch prompt.kind {
     case .install:
-      alert.messageText = "Add \"\(prompt.extensionName)\" to Clair?"
-      list(prompt.permissions, heading: "It can:", in: alert)
-      addButtons(to: alert, accept: "Add Extension", cancel: "Cancel")
+      page(
+        prompt, title: "Add \"\(prompt.extensionName)\" to Clair?", heading: "It can:",
+        buttons: buttons(accept: "Add Extension", role: .default, cancel: "Cancel"))
     case .remove:
-      alert.messageText = "Remove \"\(prompt.extensionName)\" from Clair?"
-      addButtons(to: alert, accept: "Remove Extension", cancel: "Cancel")
-      alert.buttons.first?.hasDestructiveAction = true
+      page(
+        prompt, title: "Remove \"\(prompt.extensionName)\" from Clair?", heading: nil,
+        buttons: buttons(accept: "Remove Extension", role: .destructive, cancel: "Cancel"))
     default:
-      alert.messageText = prompt.title
-      list(prompt.permissions, heading: prompt.permissionsHeading, in: alert)
-      addButtons(to: alert, accept: prompt.acceptLabel, cancel: prompt.cancelLabel)
+      page(
+        prompt, title: prompt.title, heading: prompt.permissionsHeading,
+        buttons: buttons(accept: prompt.acceptLabel, role: .default, cancel: prompt.cancelLabel))
     }
-    return alert
   }
 
-  /// NSAlert always draws its icon at 64 pt, so the extension's is drawn
-  /// smaller inside that square, next to the title and the text's leading edge.
-  private static func sized(_ icon: NSImage) -> NSImage {
-    let canvas = NSImage(size: NSSize(width: 64, height: 64))
-    canvas.lockFocus()
-    icon.draw(in: NSRect(x: 0, y: 0, width: 44, height: 44))
-    canvas.unlockFocus()
-    return canvas
+  private static func page(
+    _ prompt: any ClairExtensionPrompt, title: String, heading: String?, buttons: [ClairDialogButton]
+  ) -> ClairDialogPage {
+    let permissions = heading == nil ? [] : prompt.permissions
+    return ClairDialogPage(
+      icon: prompt.icon, title: title, message: permissions.isEmpty || heading?.isEmpty != false ? nil : heading,
+      content: permissions.isEmpty ? nil : AnyView(PermissionListView(permissions: permissions)),
+      buttons: buttons)
   }
 
-  private static func list(_ permissions: [String], heading: String, in alert: NSAlert) {
-    guard !permissions.isEmpty else { return }
-    alert.informativeText = heading
-    alert.accessoryView = permissionList(permissions)
+  private static func buttons(accept: String, role: ClairDialogButton.Role, cancel: String) -> [ClairDialogButton] {
+    // Esc whatever the label says.
+    let cancelButton = cancel.isEmpty ? [] : [ClairDialogButton(title: cancel, role: .cancel)]
+    return cancelButton + [ClairDialogButton(title: accept, role: role)]
   }
 
-  private static func permissionList(_ permissions: [String]) -> NSScrollView {
-    let text = NSTextView(frame: NSRect(x: 0, y: 0, width: listWidth, height: 0))
+  /// The permissions as a bulleted list, scrolling once it's taller than
+  /// `maxListHeight`.
+  static func permissionList(_ permissions: [String], width: CGFloat = ClairDialogView.contentWidth) -> NSScrollView {
+    let text = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: 0))
     text.string = permissions.map { "• \($0)" }.joined(separator: "\n")
     text.font = .systemFont(ofSize: NSFont.systemFontSize)
     text.textColor = .labelColor
@@ -69,7 +66,7 @@ enum ExtensionPromptAlert {
       height = ceil(layout.usedRect(for: container).height)
     }
     text.frame.size.height = height
-    let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: listWidth, height: min(height, maxListHeight)))
+    let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: width, height: min(height, maxListHeight)))
     scroll.drawsBackground = false
     scroll.borderType = .noBorder
     scroll.hasVerticalScroller = height > maxListHeight
@@ -77,80 +74,57 @@ enum ExtensionPromptAlert {
     scroll.documentView = text
     return scroll
   }
+}
 
-  private static func addButtons(to alert: NSAlert, accept: String, cancel: String) {
-    alert.addButton(withTitle: accept)
-    if !cancel.isEmpty {
-      // Esc whatever the label says; only a button titled "Cancel" gets it
-      // from NSAlert.
-      alert.addButton(withTitle: cancel).keyEquivalent = "\u{1b}"
-    }
+/// The permission list in the dialog's content slot, as tall as its list up
+/// to `maxListHeight`.
+private struct PermissionListView: NSViewRepresentable {
+  let permissions: [String]
+  let size: CGSize
+
+  init(permissions: [String]) {
+    self.permissions = permissions
+    size = ExtensionPromptDialog.permissionList(permissions).frame.size
+  }
+
+  func makeNSView(context: Context) -> NSScrollView {
+    ExtensionPromptDialog.permissionList(permissions)
+  }
+
+  func updateNSView(_ view: NSScrollView, context: Context) {}
+
+  func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
+    size
   }
 }
 
-/// A window's extension confirmations: one sheet at a time, the rest waiting
-/// behind it. Each prompt is answered at most once.
+/// A window's extension confirmations, as dialogs on the window's presenter,
+/// which shows one at a time. Each prompt is answered at most once; the
+/// presenter's `cancelAll()` answers what's left when the window closes.
 @MainActor
 final class ExtensionPromptSheets {
-  typealias Present = (NSAlert, @escaping @MainActor (NSApplication.ModalResponse) -> Void) -> Void
-
-  private let present: Present
-  private let close: (NSAlert) -> Void
+  private let dialogs: ClairDialogPresenter
   private let answer: (_ promptID: Int, _ accepted: Bool) -> Void
-  private var waiting: [any ClairExtensionPrompt] = []
-  private var current: (promptID: Int, alert: NSAlert)?
+  private var asked: [Int: ClairDialog] = [:]
 
-  init(
-    present: @escaping Present, close: @escaping (NSAlert) -> Void,
-    answer: @escaping (_ promptID: Int, _ accepted: Bool) -> Void
-  ) {
-    self.present = present
-    self.close = close
+  init(dialogs: ClairDialogPresenter, answer: @escaping (_ promptID: Int, _ accepted: Bool) -> Void) {
+    self.dialogs = dialogs
     self.answer = answer
   }
 
   func show(_ prompt: any ClairExtensionPrompt) {
-    waiting.append(prompt)
-    showNext()
+    let promptID = prompt.promptID
+    let dialog = ClairDialog(ExtensionPromptDialog.make(for: prompt))
+    asked[promptID] = dialog
+    dialogs.show(dialog) { [weak self] answer in
+      guard let self, self.asked.removeValue(forKey: promptID) != nil else { return }
+      self.answer(promptID, answer == .accepted)
+    }
   }
 
   /// Chromium no longer needs the answer.
   func dismiss(_ promptID: Int) {
-    waiting.removeAll { $0.promptID == promptID }
-    guard let current, current.promptID == promptID else { return }
-    self.current = nil
-    close(current.alert)
-    showNext()
-  }
-
-  /// The window is closing: everything still asked counts as a cancel.
-  func cancelAll() {
-    let pending = (current.map { [$0.promptID] } ?? []) + waiting.map(\.promptID)
-    let alert = current?.alert
-    current = nil
-    waiting = []
-    if let alert {
-      close(alert)
-    }
-    pending.forEach { answer($0, false) }
-  }
-
-  private func showNext() {
-    guard current == nil, !waiting.isEmpty else { return }
-    let prompt = waiting.removeFirst()
-    let alert = ExtensionPromptAlert.make(for: prompt)
-    let promptID = prompt.promptID
-    current = (promptID, alert)
-    present(alert) { [weak self] response in
-      self?.finish(promptID, accepted: response == .alertFirstButtonReturn)
-    }
-  }
-
-  private func finish(_ promptID: Int, accepted: Bool) {
-    // A sheet closed by dismiss or cancelAll has already been dealt with.
-    guard current?.promptID == promptID else { return }
-    current = nil
-    answer(promptID, accepted)
-    showNext()
+    guard let dialog = asked.removeValue(forKey: promptID) else { return }
+    dialogs.dismiss(dialog)
   }
 }

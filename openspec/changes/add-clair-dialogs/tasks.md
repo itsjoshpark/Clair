@@ -15,5 +15,5 @@ This change is `ClairUI` only: the engine key doesn't change. "CI" is the merge 
 
 ## 3. Release notes and integration
 
-- [ ] 3.1 Add a Changie fragment (`changie new`, kind Changed) for the extension prompts' new look. Verify that it's in the PR.
+- [x] 3.1 Add a Changie fragment (`changie new`, kind Changed) for the extension prompts' new look. Verify that it's in the PR.
 - [ ] 3.2 Run `openspec validate --all --strict` and the merge gate. Verify that CI and the quality checks pass.

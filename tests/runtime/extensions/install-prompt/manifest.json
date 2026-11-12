@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Clair Install Prompt Test",
+  "version": "1.0",
+  "description": "Packed as a CRX by the runtime suite, to show the install dialog. Its action gets pinned once installed.",
+  "permissions": [
+    "tabs"
+  ],
+  "action": {
+    "default_title": "Clair Install Prompt Test"
+  }
+}

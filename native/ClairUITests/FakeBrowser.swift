@@ -79,7 +79,7 @@ final class FakeInfobar: NSObject, ClairInfobar {
   let linkText: String?
   let okButtonLabel: String?
   let cancelButtonLabel: String?
-  let icon: NSImage? = nil
+  var icon: NSImage?
 
   init(id: Int, message: String, linkText: String? = nil, ok: String? = nil, cancel: String? = nil) {
     infobarID = id
@@ -97,7 +97,7 @@ final class FakeSuggestion: NSObject, ClairSuggestion {
   let contents: String
   let descriptionText: String
   let destination: URL?
-  let icon: NSImage? = nil
+  var icon: NSImage?
   let hasTabMatch: Bool
   let keyword: String?
   let keywordName: String?
@@ -125,7 +125,7 @@ final class FakeExtensionPrompt: NSObject, ClairExtensionPrompt {
   let promptID: Int
   let kind: ExtensionPromptKind
   let extensionName: String
-  let icon: NSImage? = nil
+  var icon: NSImage?
   let permissions: [String]
   let title: String
   let permissionsHeading: String
@@ -151,7 +151,7 @@ final class FakeExtensionPrompt: NSObject, ClairExtensionPrompt {
 final class FakeExtensionAction: NSObject, ClairExtensionAction {
   let extensionID: String
   let name: String
-  let icon: NSImage? = nil
+  var icon: NSImage?
   let badgeText: String
   let badgeBackgroundColor: NSColor?
   let badgeTextColor: NSColor?

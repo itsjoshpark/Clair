@@ -37,7 +37,9 @@ The card handles Esc and Return itself, through the buttons' key equivalents, so
 
 ### D3. The extension prompts move over unchanged in behaviour
 
-`ExtensionPromptAlert` becomes a builder of `ClairDialogView`s with the same three cases and wording. The permission list is a scrolling list capped at the current 200 pt, so the buttons stay visible. `ExtensionPromptSheets` keeps its queue, `dismiss` and `cancelAll`, on top of the presenter. `BrowserWindowController` owns the window's presenter and hands it to later changes' dialogs.
+`ExtensionPromptAlert` becomes `ExtensionPromptDialog`, a builder of the card's pages with the same three cases and wording. The permission list is a scrolling list capped at the current 200 pt, so the buttons stay visible. The queue and `cancelAll` move to the presenter, which serves every dialog on the window; `ExtensionPromptSheets` keeps the prompts' IDs, answers Chromium once per prompt, and keeps `dismiss`. `BrowserWindowController` owns the window's presenter, cancels everything on it when the window closes, and hands it to later changes' dialogs.
+
+The runtime suite raises a real install dialog without Google's servers: `make-crx.py` packs a fixture extension as a CRX3 file signed with a new key (standard library and `openssl`), the test server serves it as `application/x-chrome-extension`, and Clair runs with ungoogled-chromium's `--extension-mime-request-handling=always-prompt-for-install`.
 
 ### D4. The update prompts stay
 
