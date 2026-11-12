@@ -227,18 +227,17 @@ If the tab is active here, the overlay first activates the next tab as D9 does f
 
 `moveSpace:toIndex:` rewrites `clair.spaces`' `order` and notifies observers. `SpaceSwitcher` handles the drag; the Spaces menu rebuilds from the observer.
 
-### D20. `ClairDialog`: Clair's own dialog
+### D20. `ClairDialog`: a sheet with Clair's own content
 
-`ClairDialog.swift` adds one reusable SwiftUI component and a `.clairDialog(item:)` modifier, used on a browser window's root view and on the Settings window's content. It draws a dimmed layer over the window's content and a rounded, shadowed card centred on it, layered above the page as the command bar is.
+Arc's dialogs are macOS sheets: the accessibility tree shows each as a sheet of its window, filled with Arc's own content. Clair does the same. `ClairDialog.swift` adds:
 
-- **Parts:** an optional icon, a title, a message, a content slot (a field, or D21's two columns), and a button row built from roles: cancel (Esc), default (Return) and destructive default (red). The buttons show their key in a small capsule, as Arc's do.
-- **Blocking its window:** the dimmed layer takes every click, and the dialog holds first responder inside a focus scope, so keys don't reach the page; the browser window gives up the page's focus first, as it does for the command bar, and restores it on closing. It is modal to its window only.
-- **One at a time per window, with one level on top:** a confirmation opened from a dialog (Remove in Manage Spaces, "New Profile…" in its profile popup) shows over it and returns to it.
-- **Accessibility:** the card is a modal accessibility element titled by its title, with stable identifiers on its buttons for the runtime suite.
+- **`ClairDialogView`,** the SwiftUI card: an optional icon, a title, a message, a content slot (a field, a permission list, or D21's two columns), and a button row built from roles: cancel (Esc), default (Return) and destructive default (red). The two keyed buttons show their key in a small capsule, as Arc's do.
+- **`ClairDialogPresenter`,** one per window: it hosts the card in a borderless, clear `NSWindow` and shows it with `beginSheet(_:)` on the browser or Settings window, so AppKit provides the centring, the dimming, the modality, the focus loop, and the dialog's accessibility role. It queues requests, showing one at a time, and can dismiss the one showing without an answer. This is `ExtensionPromptSheets`' queue, generalised.
+- **Swapping content:** a dialog can replace its card's content and return to it, for a confirmation or a name asked from inside it (D21). No dialog opens on top of another.
 
-- **Why not `NSAlert` or a sheet:** their layout, corners, buttons and key hints can't be styled to match Arc's, and a sheet can't hold D21's two columns well.
-- **Why in the window and not a child window:** it moves, resizes and goes full screen with its window for free, and needs no window ordering code.
-- **Scope:** every dialog this change adds. `ExtensionPromptSheets` and the update prompts stay as they are; a later change moves them.
+- **Why not `NSAlert`:** its layout, icon size, buttons and key hints can't be styled to match Arc's; `ExtensionPromptAlert` already works around its 64 pt icon.
+- **Why a sheet and not a view drawn in the window:** modality, focus, Esc and Return, and VoiceOver come from AppKit, and it works the same on the Settings window.
+- **Scope:** every dialog this change adds, and the extension prompts: `ExtensionPromptAlert` becomes a `ClairDialogView` with the same wording and permission list, capped in height and scrolling, and `ExtensionPromptSheets` uses the presenter. `UpdateAlerts` stays: its alerts show with no window, and `UpdateController` waits on their answer in place.
 
 ### D21. Manage Spaces
 
@@ -247,7 +246,7 @@ If the tab is active here, the overlay first activates the next tab as D9 does f
 - **Left:** the Spaces from `SpacesModel` in order, each row with icon, name and tab count; drag to reorder (`moveSpace:toIndex:`); Add and Remove under the list.
 - **Right:** the selected Space's name field, its `SpaceIconField` and its profile popup with "New Profile…".
 - Add creates a Space named "New Space" on the selected Space's profile and focuses its name. An emptied name reverts when the field loses focus.
-- Remove and a profile change on a Space with tabs use the same confirmations as the header's menu.
+- Remove and a profile change on a Space with tabs use the same confirmations as the header's menu, and "New Profile…" asks for the name, each by swapping the card's content and returning to the list (D20).
 - Its one button is "Done"; Esc closes it too.
 
 It needs no contract of its own: every action is a host call D13 already lists. With no browser window open, Manage Spaces… is disabled.
@@ -261,7 +260,7 @@ It needs no contract of its own: every action is a host call D13 already lists. 
 - **[Two windows on one tab move it on every focus change]** → Accepted; Arc does the same.
 - **[A window can close when a page closes its only tab]** → Accepted (D9); it needs a close Clair didn't start.
 - **[Reopen Closed Window brings back an empty window]** when its tabs moved to another window. → Accepted.
-- **[A hand-built dialog must get keyboard and VoiceOver behaviour right]** that `NSAlert` gives for free. → D20 lists them, and the `dialogs` spec's scenarios are tested in the runtime suite.
+- **[The extension prompts change under an unrelated feature]** → They keep their wording, queue and answers; only the view changes, and the runtime suite's extension tests cover them.
 - **[The contract change is large]** Every `ClairUI` test double changes. → Group 1 lands the contract and fakes first, so `ClairUI` work can proceed against `FakeHost` while the engine builds.
 - **[Engine build time]** One engine build covers groups 2 to 5; fixes rebuild incrementally.
 
