@@ -109,7 +109,8 @@ build/probe/bin/measure track build/probe/rec/peek/frames white 0 0 2400 2012 80
   (Arc, Clair). `measure` works in the image's pixels: halve them for points.
 - `tools/` holds small Swift tools, compiled into `build/probe/bin/` on first
   use (or by `tools/build.sh`); each describes its arguments at the top:
-  `windows` (window IDs and frames, by app name or process ID), `cdp` (DevTools
+  `windows` (window IDs and frames, by app name or process ID), `drag` (a drag
+  with real mouse events, in screen points), `cdp` (DevTools
   protocol commands for the test copy), `frames` (a movie's frames), `sheet` (a
   labelled contact sheet), `crop` (a pixel rectangle; `sips --cropOffset`
   centres instead), and `measure`:
@@ -163,6 +164,13 @@ These come from the add-peek change (its design.md has the numbers):
   a tab in the owner's main window (their Personal space): close it there
   afterwards. Cmd+W on a blank window's last tab closes the window. A drag
   that misses Arc's sidebar edge moves the window.
+- **Drags in Clair**: on the owner's Mac the probe's `drag` reaches Clair
+  with no events at all, though `click` and `hover` do, so it moves nothing
+  there. Drag with the mouse's own events instead:
+  `build/probe/bin/drag x1 y1 x2 y2`, in screen points, after `activate`. It
+  moves the real pointer and needs the shell to have permission to post
+  events. The XCUITest runner has no such permission, so the probe can't do
+  this itself.
 - **Never toggle the sidebar** from the probe: a new Clair window opens with
   the last chosen state, and the owner often sets the window up. Look at a
   screenshot first.

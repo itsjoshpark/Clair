@@ -315,9 +315,10 @@ final class SpacesTests: NativeWindowTestCase {
     try await createSpace("Travel", in: browser)
     let items = browser.switcherItems
     try require(items.count == 3, "The switcher doesn't list three Spaces")
-    items[2].press(forDuration: 0.6, thenDragTo: items[0])
+    let drag = Harness.slowDrag(from: items[2], to: items[0])
     let moved = await Harness.wait(for: 10) { browser.switcherItems.map(\.label) == ["Travel", "Home", "Work"] }
-    XCTAssertTrue(moved, "Dragging Travel onto Home didn't put it first: \(browser.switcherItems.map(\.label))")
+    XCTAssertTrue(
+      moved, "Dragging Travel onto Home with \(drag) didn't put it first: \(browser.switcherItems.map(\.label))")
     XCTAssertEqual(browser.spacesMenuSpaces, ["Travel", "Home", "Work"], "The Spaces menu isn't in the new order")
     browser.switcherItems[1].click()
     browser.ui.typeKey("1", modifierFlags: .control)
@@ -399,9 +400,9 @@ final class SpacesTests: NativeWindowTestCase {
     let list = browser.dialogButton("clair.manageSpacesList")
     let rows = list.descendants(matching: .any).matching(identifier: "clair.manageSpacesRow").allElementsBoundByIndex
     try require(rows.count == 3, "The dialog doesn't list three Spaces")
-    rows[2].press(forDuration: 0.6, thenDragTo: rows[0])
+    let drag = Harness.slowDrag(from: rows[2], to: rows[0])
     let reordered = await Harness.wait(for: 10) { browser.switcherItems.first?.label == "Research" }
-    XCTAssertTrue(reordered, "Dragging in the dialog didn't reorder the Spaces")
+    XCTAssertTrue(reordered, "Dragging in the dialog with \(drag) didn't reorder the Spaces")
 
     browser.dialogButton("clair.dialogDefault").click()
     let closed = await Harness.wait(for: 5) { !browser.dialog.exists }
