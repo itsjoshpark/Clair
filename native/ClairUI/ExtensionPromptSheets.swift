@@ -19,12 +19,12 @@ enum ExtensionPromptDialog {
     switch prompt.kind {
     case .install:
       page(
-        prompt, title: "Add \"\(prompt.extensionName)\" to Clair?", heading: "It can:",
+        prompt, title: "Add “\(prompt.extensionName)” to Clair?", heading: "It can:",
         buttons: buttons(accept: "Add Extension", role: .default, cancel: "Cancel"))
     case .remove:
       page(
-        prompt, title: "Remove \"\(prompt.extensionName)\" from Clair?", heading: nil,
-        buttons: buttons(accept: "Remove Extension", role: .destructive, cancel: "Cancel"))
+        prompt, title: "Remove “\(prompt.extensionName)” from Clair?", heading: nil,
+        buttons: buttons(accept: "Remove Extension", role: .default, cancel: "Cancel"))
     default:
       page(
         prompt, title: prompt.title, heading: prompt.permissionsHeading,
@@ -48,12 +48,6 @@ enum ExtensionPromptDialog {
     return cancelButton + [ClairDialogButton(title: accept, role: role)]
   }
 
-  /// The card's slate grey, following the appearance as the text is drawn.
-  static let listColor = NSColor(name: nil) { appearance in
-    appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-      ? NSColor(white: 1, alpha: 0.75) : NSColor(white: 0, alpha: 0.75)
-  }
-
   /// The permissions as a bulleted list, scrolling once it's taller than
   /// `maxListHeight`.
   static func permissionList(_ permissions: [String], width: CGFloat = ClairDialogView.contentWidth) -> NSScrollView {
@@ -69,7 +63,7 @@ enum ExtensionPromptDialog {
         string: permissions.map { "•\t\($0)" }.joined(separator: "\n"),
         attributes: [
           .font: NSFont.systemFont(ofSize: 14),
-          .foregroundColor: listColor,
+          .foregroundColor: ClairDialogView.secondaryTextColor,
           .paragraphStyle: paragraph,
         ]))
     text.isEditable = false

@@ -317,6 +317,7 @@ final class ClairDialogWindow: NSWindow {
 struct ClairDialogView: View {
   let dialog: ClairDialog
   @FocusState private var focusedButton: ClairDialogButton.Role?
+  @Environment(\.colorScheme) private var colorScheme
 
   static let width: CGFloat = 450
   static let insets = EdgeInsets(top: 38, leading: 38, bottom: 26, trailing: 28)
@@ -327,14 +328,22 @@ struct ClairDialogView: View {
   /// The width the content slot gets.
   static let contentWidth = width - insets.leading - insets.trailing
 
-  /// Arc's near-white card, or the window background in Dark Mode.
-  static let background = Color(
-    nsColor: NSColor(name: nil) { appearance in
-      appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        ? .windowBackgroundColor : NSColor(srgbRed: 0.98, green: 0.984, blue: 1, alpha: 1)
-    })
-  /// The message's and the list's slate grey.
-  static let secondaryText = Color.primary.opacity(0.75)
+  /// Arc tints its dialogs with the Space's colour: a near-white card in
+  /// Light Mode, a deep navy one in Dark Mode. Clair tints with the accent
+  /// colour.
+  static func background(_ scheme: ColorScheme) -> Color {
+    scheme == .dark
+      ? Color(white: 0.07).mix(with: .accentColor, by: 0.14)
+      : Color.white.mix(with: .accentColor, by: 0.02)
+  }
+
+  /// The message's and the list's slate grey, a little tinted in Light Mode.
+  /// It follows the appearance as it's drawn, for AppKit's text as well.
+  static let secondaryTextColor = NSColor(name: nil) { appearance in
+    appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+      ? NSColor(white: 1, alpha: 0.72)
+      : (NSColor.black.blended(withFraction: 0.12, of: .controlAccentColor) ?? .black).withAlphaComponent(0.75)
+  }
 
   var body: some View {
     let page = dialog.page
@@ -360,7 +369,7 @@ struct ClairDialogView: View {
       if let message = page.message {
         Text(message)
           .font(.system(size: 14))
-          .foregroundStyle(Self.secondaryText)
+          .foregroundStyle(Color(nsColor: Self.secondaryTextColor))
           .fixedSize(horizontal: false, vertical: true)
           .padding(.top, 8)
       }
@@ -381,8 +390,8 @@ struct ClairDialogView: View {
     }
     .padding(Self.insets)
     .frame(width: Self.width, alignment: .leading)
-    .background(shape.fill(Self.background))
-    .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+    .background(shape.fill(Self.background(colorScheme)))
+    .overlay(shape.strokeBorder(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.1), lineWidth: 1))
     .clipShape(shape)
     .onChange(of: dialog.defaultFocusRequests) {
       focusedButton = buttons.last { $0.isDefault }?.role
@@ -417,16 +426,20 @@ private struct ClairDialogButtonView: View {
 private struct DialogKeyCap: View {
   let role: ClairDialogButton.Role
   let label: String
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
     if role == .cancel {
       Text(label)
         .font(.system(size: 12, weight: .bold))
-        .foregroundStyle(Color.primary.opacity(0.55))
+        .foregroundStyle(
+          colorScheme == .dark ? Color.white.mix(with: .accentColor, by: 0.12).opacity(0.85) : Color.black.opacity(0.55)
+        )
         .padding(.horizontal, 6)
         .frame(height: 20)
-        .background(shape.fill(Color.primary.opacity(0.1)))
+        .background(
+          shape.fill(colorScheme == .dark ? Color(white: 0.3).mix(with: .accentColor, by: 0.2) : Color.black.opacity(0.1)))
     } else {
       Image(systemName: "arrow.turn.down.left")
         .font(.system(size: 11, weight: .bold))
@@ -472,21 +485,23 @@ private struct ClairDialogButtonStyle: ButtonStyle {
 
     private var isDark: Bool { colorScheme == .dark }
 
+    /// In Dark Mode, Arc tints Cancel with the Space's colour too.
     private var fill: Color {
       switch role {
-      case .cancel: isDark ? Color.white.opacity(0.1) : Color.white
+      case .cancel: isDark ? Color(white: 0.16).mix(with: .accentColor, by: 0.25) : Color.white
       case .default: Color.accentColor
       case .destructive: Color(nsColor: .systemRed)
       }
     }
 
     private var border: Color {
-      role == .cancel ? Color.primary.opacity(isDark ? 0.12 : 0.14) : Color.clear
+      guard role == .cancel else { return .clear }
+      return isDark ? Color(white: 0.45).mix(with: .accentColor, by: 0.35) : Color.black.opacity(0.14)
     }
 
     private var edge: Color {
       switch role {
-      case .cancel: Color.black.opacity(isDark ? 0.3 : 0.1)
+      case .cancel: isDark ? Color.clear : Color.black.opacity(0.1)
       case .default: Color.accentColor.mix(with: .black, by: 0.3)
       case .destructive: Color(nsColor: .systemRed).mix(with: .black, by: 0.3)
       }

@@ -46,7 +46,7 @@ final class DialogTests: NativeWindowTestCase {
     let dialog = browser.dialog
     XCTAssertEqual(dialog.elementType, .sheet, "The dialog isn't a sheet of its window")
     XCTAssertTrue(
-      dialog.staticTexts["Add \"\(Self.extensionName)\" to Clair?"].exists, "The dialog's title is wrong")
+      dialog.staticTexts["Add “\(Self.extensionName)” to Clair?"].exists, "The dialog's title is wrong")
     XCTAssertTrue(browser.dialogButton("clair.dialogTitle").exists, "The dialog's title has no identifier")
     XCTAssertTrue(browser.dialogButton("clair.dialogCancel").exists, "The dialog has no Cancel button")
     XCTAssertTrue(browser.dialogButton("clair.dialogDefault").exists, "The dialog has no Add Extension button")

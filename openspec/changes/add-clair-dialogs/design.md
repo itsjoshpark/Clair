@@ -24,7 +24,7 @@ See proposal.md, "Why". What shapes the approach:
 
 `ClairDialog.swift` adds:
 
-- **`ClairDialogView`,** the SwiftUI card: an optional icon, a title, a message, a content slot (a field, a permission list, or a later change's larger content), and a button row built from roles: cancel (Esc), default (Return) and destructive default (red). The two keyed buttons show their key in a small capsule, as Arc's do.
+- **`ClairDialogView`,** the SwiftUI card: an optional icon, a title, a message, a content slot (a field, a permission list, or a later change's larger content), and a button row built from roles: cancel (Esc), default (Return) and destructive default (red). The two keyed buttons show their key in a small capsule, as Arc's do. Its metrics are Arc's, measured from its extension dialogs in Light and Dark Mode. Arc tints the card, and in Dark Mode the Cancel button and its key, with the Space's colour; until Clair has Spaces, the card uses the accent colour.
 - **`ClairDialogPresenter`,** one per window: it hosts the card in a borderless, clear `NSWindow` and shows it with `beginSheet(_:)` on its window, so AppKit provides the centring, the dimming, the modality and the focus loop. It queues requests, showing one at a time, and can dismiss the one showing without an answer. This is `ExtensionPromptSheets`' queue, generalised.
 - **Swapping content:** a dialog can replace its card's content and return to it, for a question asked from inside a larger dialog. No dialog opens on top of another.
 
@@ -37,7 +37,7 @@ The card handles Esc and Return itself, through the buttons' key equivalents, so
 
 ### D3. The extension prompts move over unchanged in behaviour
 
-`ExtensionPromptAlert` becomes `ExtensionPromptDialog`, a builder of the card's pages with the same three cases and wording. The permission list is a scrolling list capped at the current 200 pt, so the buttons stay visible. The queue and `cancelAll` move to the presenter, which serves every dialog on the window; `ExtensionPromptSheets` keeps the prompts' IDs, answers Chromium once per prompt, and keeps `dismiss`. `BrowserWindowController` owns the window's presenter, cancels everything on it when the window closes, and hands it to later changes' dialogs.
+`ExtensionPromptAlert` becomes `ExtensionPromptDialog`, a builder of the card's pages with the same three cases and wording, with typographic quotes around the name as in Arc's titles. Remove Extension is a plain default button in the accent colour, as Arc's is, not a red destructive one. The permission list is a scrolling list capped at the current 200 pt, so the buttons stay visible. The queue and `cancelAll` move to the presenter, which serves every dialog on the window; `ExtensionPromptSheets` keeps the prompts' IDs, answers Chromium once per prompt, and keeps `dismiss`. `BrowserWindowController` owns the window's presenter, cancels everything on it when the window closes, and hands it to later changes' dialogs.
 
 The runtime suite raises a real install dialog without Google's servers: `make-crx.py` packs a fixture extension as a CRX3 file signed with a new key (standard library and `openssl`), the test server serves it as `application/x-chrome-extension`, and Clair runs with ungoogled-chromium's `--extension-mime-request-handling=always-prompt-for-install`.
 

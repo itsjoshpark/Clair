@@ -3,11 +3,11 @@
 ## MODIFIED Requirements
 
 ### Requirement: Install confirmation as a native sheet
-Before an extension is installed, Clair SHALL ask in a Clair dialog (`dialogs`) on the window. The dialog SHALL show the extension's icon, the title "Add "<name>" to Clair?", the heading "It can:" followed by the extension's permissions as a list, and the buttons "Add Extension" (default, Return) and "Cancel" (Esc). The window SHALL stay blocked until the user answers.
+Before an extension is installed, Clair SHALL ask in a Clair dialog (`dialogs`) on the window. The dialog SHALL show the extension's icon, the title "Add “<name>” to Clair?", the heading "It can:" followed by the extension's permissions as a list, and the buttons "Add Extension" (default, Return) and "Cancel" (Esc). The window SHALL stay blocked until the user answers.
 
 #### Scenario: Confirming an install
 - **WHEN** the user clicks "Add to Clair" on a store page
-- **THEN** a sheet asks "Add "<name>" to Clair?" with the extension's permissions under "It can:", and pressing Return installs the extension
+- **THEN** a sheet asks "Add “<name>” to Clair?" with the extension's permissions under "It can:", and pressing Return installs the extension
 
 #### Scenario: Cancelling an install
 - **WHEN** the install sheet is shown and the user presses Esc or clicks "Cancel"
@@ -22,7 +22,7 @@ Before an extension is installed, Clair SHALL ask in a Clair dialog (`dialogs`) 
 - **THEN** the list scrolls inside the dialog, and the buttons stay visible
 
 ### Requirement: Remove confirmation as a native sheet
-When an extension is removed through a path that asks for confirmation, such as the store's "Remove from Clair" button, Clair SHALL ask in a Clair dialog (`dialogs`) on the window. The dialog SHALL have the title "Remove "<name>" from Clair?", the extension's icon, a destructive "Remove Extension" button (Return) and "Cancel" (Esc), and no "report abuse" option.
+When an extension is removed through a path that asks for confirmation, such as the store's "Remove from Clair" button, Clair SHALL ask in a Clair dialog (`dialogs`) on the window. The dialog SHALL have the title "Remove “<name>” from Clair?", the extension's icon, a "Remove Extension" button (default, Return) filled with the accent colour as Arc's is rather than red, "Cancel" (Esc), and no "report abuse" option.
 
 #### Scenario: Removing from the store
 - **WHEN** the user clicks "Remove from Clair" on an installed extension's store page and clicks "Remove Extension"

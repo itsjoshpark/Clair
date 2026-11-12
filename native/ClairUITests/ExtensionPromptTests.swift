@@ -36,7 +36,7 @@ final class ExtensionPromptTests {
   @Test func installDialog() {
     let page = ExtensionPromptDialog.make(
       for: FakeExtensionPrompt(id: 1, kind: .install, name: "Reader", permissions: ["Read your history", "Read data"]))
-    #expect(page.title == "Add \"Reader\" to Clair?")
+    #expect(page.title == "Add “Reader” to Clair?")
     #expect(page.message == "It can:")
     #expect(page.content != nil)
     #expect(list(["Read your history", "Read data"]) == "•\tRead your history\n•\tRead data")
@@ -53,14 +53,15 @@ final class ExtensionPromptTests {
     #expect(buttons(page) == ["Cancel", "Add Extension"])
   }
 
-  @Test func removeDialogIsDestructive() {
+  /// Arc fills Remove Extension with the Space's colour, not red.
+  @Test func removeDialogFollowsArc() {
     let page = ExtensionPromptDialog.make(
       for: FakeExtensionPrompt(id: 2, kind: .remove, name: "Reader", permissions: ["Read data"]))
-    #expect(page.title == "Remove \"Reader\" from Clair?")
+    #expect(page.title == "Remove “Reader” from Clair?")
     #expect(page.message == nil)
     #expect(page.content == nil)
     #expect(buttons(page) == ["Cancel", "Remove Extension"])
-    #expect(page.buttons[1].isDestructive)
+    #expect(page.buttons[1].role == .default)
     #expect(page.buttons[1].shortcut == .defaultAction)
   }
 
@@ -108,7 +109,7 @@ final class ExtensionPromptTests {
       return white
     }
     #expect(whiteness(.darkAqua) > 0.9)
-    #expect(whiteness(.aqua) < 0.1)
+    #expect(whiteness(.aqua) < 0.3)
   }
 
   @Test func permissionListTakesRoomInTheCard() {
@@ -141,7 +142,7 @@ final class ExtensionPromptTests {
     #expect(begun.count == 1)
     accept(begun[0])
     #expect(begun.count == 2)
-    #expect(begun[1].page.title == "Add \"B\" to Clair?")
+    #expect(begun[1].page.title == "Add “B” to Clair?")
   }
 
   @Test func dismissedPromptAnswersNothing() {
