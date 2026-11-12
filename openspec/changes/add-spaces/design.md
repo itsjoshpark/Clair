@@ -85,6 +85,12 @@ Each browser remembers one **came-from** tab: set when the user selects a tab wh
 - `browser_live_tab_context.cc`: add them for Reopen Closed Tab and Window.
 - `browser_tabrestore.cc`, in `CreateRestoredTab`: read them onto the new `WebContents`, before it joins a strip.
 
+### D11. Session restore is the default
+
+`clair::RegisterProfilePrefOverrides`, which already sets Clair's defaults for the password and autofill prefs, also sets the default of `session.restore_on_startup` to Chromium's "continue where you left off" value. It is a default, not a forced value: "On startup" in `chrome://settings` still changes it, and Arc has the same switch in its Advanced settings. It is a profile pref, so it holds for every profile `add-profiles` creates.
+
+- **Why a default override and not the `--restore-last-session` switch:** the switch can't be turned off by the user and doesn't show in settings.
+
 ### D7. Moving a tab to another Space, and reordering Spaces
 
 - `moveTab:toSpace:` changes the tab's Space tag and puts it at the top of the target's list. The page isn't touched and the tab stays in its browser. If it is the active tab, the overlay first activates the next tab as D4 does, so the window stays on its Space.
@@ -124,7 +130,7 @@ Pushes stay coalesced to once per run-loop turn per tab and per Space.
 - **[A restored tab's rank can collide or leave gaps]** after tabs were closed while Clair wasn't saving. → Ranks only order tabs on restore; ties fall back to strip order, and `ClairSpaceTabs` writes fresh ranks once restored.
 - **[Closing a Space's last tab moves the window to another Space]** where Arc shows an empty Space. → Accepted: Clair's windows always show a tab.
 - **[A window can close when a page closes its only tab]** → Accepted, as today.
-- **[Tabs come back after a relaunch only with Chromium's session restore on]** → Unchanged from today; Spaces themselves always persist.
+- **[Tabs pile up now that every launch restores them]** → Accepted for now; closing old tabs automatically is a later change.
 
 ## Open Questions
 

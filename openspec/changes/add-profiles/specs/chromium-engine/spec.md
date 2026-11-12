@@ -11,4 +11,4 @@ Apart from its identity (`app-identity`), native layer (`native-layer`), updater
 
 #### Scenario: Settings unchanged
 - **WHEN** a user opens `chrome://settings` in the native window
-- **THEN** it shows the same settings and defaults as the same ungoogled-chromium release, apart from Clair's identity and versions and the absent "Autofill and passwords" section
+- **THEN** it shows the same settings and defaults as the same ungoogled-chromium release, apart from Clair's identity and versions, the absent "Autofill and passwords" section, and "On startup" set to continue where the user left off

@@ -2,7 +2,7 @@
 
 `add-clair-dialogs` must be merged first. Groups 1 and 2 change the engine key, so build the engine first and push docs afterwards, as `CLAUDE.md` describes. "CI" is the merge gate in `ci.yml`. "By hand" means the owner launches a test build of the branch; behaviour compared with Arc is checked there with `tests/probe/`. `quality.yml` runs on the branch before merging (`gh workflow run quality.yml --ref <branch>`). D-numbers are `design.md`'s decisions; `arc-reference.md` has Arc's measurements and wording.
 
-Suggested order: 1, then 2 with one engine build at 2.8. Group 3 can start in `ClairUI` against `FakeHost` and `FakeBrowser` as soon as 1 is done, while the engine builds. Group 4 is last.
+Suggested order: 1, then 2 with one engine build at 2.9. Group 3 can start in `ClairUI` against `FakeHost` and `FakeBrowser` as soon as 1 is done, while the engine builds. Group 4 is last.
 
 Read `design.md` in full before starting. Verify every Chromium call it names against the engine workspace's source before using it, and update the design if one differs.
 
@@ -15,14 +15,15 @@ Read `design.md` in full before starting. Verify every Chromium call it names ag
 ## 2. Engine
 
 - [ ] 2.1 Add `clair::RegisterLocalStatePrefs` to `clair_window_hooks`, registering `clair.spaces` and `clair.last_space`, and call it from `RegisterLocalState` in `browser_prefs.cc` through `patches/clair/native-window-hook.patch` (D1). Verify that `./build.sh fetch prepare` applies the patch in CI's patch check.
-- [ ] 2.2 Add `overlay/chrome/browser/clair/clair_space_store.{h,mm}` (D1): load, validate and save `clair.spaces`; create "Home" when empty; create, rename, set icon, reorder and delete (refused for the only Space); notify observers. Wire its calls and snapshots into `ClairChromiumHost` in `clair_native_layer.mm`, and add the files to `BUILD.gn` through the patch. Verify by the engine build in 2.8 and the runtime tests in 3.11.
+- [ ] 2.2 Add `overlay/chrome/browser/clair/clair_space_store.{h,mm}` (D1): load, validate and save `clair.spaces`; create "Home" when empty; create, rename, set icon, reorder and delete (refused for the only Space); notify observers. Wire its calls and snapshots into `ClairChromiumHost` in `clair_native_layer.mm`, and add the files to `BUILD.gn` through the patch. Verify by the engine build in 2.9 and the runtime tests in 3.11.
 - [ ] 2.3 Add `overlay/chrome/browser/clair/clair_space_tabs.{h,mm}` (D2): one per regular profile, observing every native browser's tab strip of that profile; the Space tag as `WebContents` user data; the ordered list per Space with the three placement rules; reordering within the list; and the coalesced pushes of D9. Move the tab snapshot code from `clair_browser_bridge.mm` here, and fill `spaceID` and `browserID`. Verify by the engine build and the runtime tests in 3.11.
 - [ ] 2.4 Give each `ClairBrowserWindow` a shown Space with `showSpace:`, and keep D3's invariant: the shown Space follows the active tab; showing a Space activates the tab last active in it here, or opens a new tab page with the command bar; a new browser shows the active browser's Space or `clair.last_space`. New tabs join the shown Space; a Peek joins its parent's. Verify with the runtime tests in 3.11.
 - [ ] 2.5 Implement the came-from slot and choose the next tab before a close Clair starts (D4), in `closeTab:` and `IDC_CLOSE_TAB`; and implement `moveTab:toSpace:`, `moveSpace:toIndex:` and `deleteSpace:` (D7). Verify with the runtime tests in 3.11, which replay `arc-reference.md`'s close sequences.
 - [ ] 2.6 Run the tab commands D5 lists over the window's rows of the shown Space in `ExecuteCommand` in `clair_native_window.mm`, keeping the existing handling of Peeks, and make `closeTabsBelowTab:` and `moveTab:toIndex:` use the Space's list. Add `patches/clair/space-shortcuts.patch` (D8) with a header explaining it as `copy-url-shortcut.patch`'s does, and add it to `patches/series`. Verify that the patch check applies it, and with the runtime tests in 3.11: Cmd+number, Next and Previous Tab wrapping within the Space, and Close Tabs Below.
 - [ ] 2.7 Add `overlay/chrome/browser/clair/window/clair_space_session.{h,mm}` and `patches/clair/space-session.patch` (D6): write `clair_space` and `clair_order` when they change and in the session file's rebuild, add them for Reopen Closed Tab and Window, and read them in `CreateRestoredTab`. Add the patch to `patches/series` after `peek-session.patch`. Verify that the patch check applies it, and with the runtime tests in 3.11 that relaunch and that restore a closed tab.
-- [ ] 2.8 Build the engine with `gh workflow run engine.yml -f ref=<branch>`. Verify that `chromium-engine-<key>` is published and CI's engine check passes.
-- [ ] 2.9 Update `docs/native-window.md` with the Space store, the per-profile tab lists and the shown-Space invariant, and where each lives. Verify that every file and decision it names exists.
+- [ ] 2.8 Make session restore the default (D11): set the default of `session.restore_on_startup` in `clair::RegisterProfilePrefOverrides`. Remove `--restore-last-session` from the runtime tests that relaunch, so they prove the default. Verify with the runtime tests in 3.11: a fresh data folder restores its windows and tabs after a relaunch with no setting changed, and "Open the New Tab page" in `chrome://settings/onStartup` still opens one new tab page.
+- [ ] 2.9 Build the engine with `gh workflow run engine.yml -f ref=<branch>`. Verify that `chromium-engine-<key>` is published and CI's engine check passes.
+- [ ] 2.10 Update `docs/native-window.md` with the Space store, the per-profile tab lists and the shown-Space invariant, and where each lives. Verify that every file and decision it names exists.
 
 ## 3. ClairUI
 
@@ -47,7 +48,7 @@ Read `design.md` in full before starting. Verify every Chromium call it names ag
   - Move to Space keeps the page's counter, and the window stays on its Space.
   - Manage Spaces: reorder, rename, add and remove from the dialog, each showing in the sidebar at once.
   - The close sequences of `arc-reference.md`, and closing a Space's last tab.
-  - Quit and relaunch with session restore: Spaces, each Space's tabs in order, and the shown Space come back. Restore Last Closed Tab returns a tab to its Space.
+  - Quit and relaunch, with no setting changed and no launch switch: windows, Spaces, each Space's tabs in order, and the shown Space come back. Restore Last Closed Tab returns a tab to its Space.
 
   Verify with a `quality.yml` run on the branch.
 

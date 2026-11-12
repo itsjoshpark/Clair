@@ -227,7 +227,7 @@ Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to 
 - **THEN** the first row of the same Space is active
 
 ### Requirement: Spaces restored after a relaunch
-After Clair quits and relaunches with session restore, each tab SHALL return to its Space at its place in the Space's order, and each window SHALL show the Space it showed. A tab whose Space no longer exists SHALL join the Space its window shows.
+After Clair quits and relaunches, each restored tab SHALL return to its Space at its place in the Space's order, and each window SHALL show the Space it showed. A tab whose Space no longer exists SHALL join the Space its window shows.
 
 #### Scenario: Relaunch
 - **WHEN** the user quits with a window showing "Work", which has three tabs, while "Home" has two, and relaunches
