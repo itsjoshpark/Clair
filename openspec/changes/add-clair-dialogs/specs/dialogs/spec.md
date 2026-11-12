@@ -26,7 +26,7 @@ A Clair dialog SHALL show as a rounded card with Clair's own layout, centred on 
 - **THEN** one dialog shows, and the other shows once the first is answered
 
 ### Requirement: Dialog buttons and keys
-A dialog's buttons SHALL sit at its bottom trailing corner, the default button last and filled with the accent colour, or with red when it destroys something. Esc SHALL choose the cancelling button and Return the default button, and each of those buttons SHALL show its key beside its title, as in Arc. A disabled default button SHALL ignore Return. A click outside the card SHALL do nothing.
+A dialog's buttons SHALL sit at its bottom trailing corner, the default button last and filled with the accent colour. A dialog MAY mark its default button as destructive, for an action that destroys something, and a destructive default button SHALL be filled with the system's red instead. Esc SHALL choose the cancelling button and Return the default button, and each of those buttons SHALL show its key beside its title, as in Arc. A disabled default button SHALL ignore Return. A click outside the card SHALL do nothing.
 
 #### Scenario: Esc
 - **WHEN** a dialog with Cancel shows and the user presses Esc

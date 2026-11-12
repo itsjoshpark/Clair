@@ -22,7 +22,7 @@ Before an extension is installed, Clair SHALL ask in a Clair dialog (`dialogs`) 
 - **THEN** the list scrolls inside the dialog, and the buttons stay visible
 
 ### Requirement: Remove confirmation as a native sheet
-When an extension is removed through a path that asks for confirmation, such as the store's "Remove from Clair" button, Clair SHALL ask in a Clair dialog (`dialogs`) on the window. The dialog SHALL have the title "Remove “<name>” from Clair?", the extension's icon, a "Remove Extension" button (default, Return) filled with the accent colour as Arc's is rather than red, "Cancel" (Esc), and no "report abuse" option.
+When an extension is removed through a path that asks for confirmation, such as the store's "Remove from Clair" button, Clair SHALL ask in a Clair dialog (`dialogs`) on the window. The dialog SHALL have the title "Remove “<name>” from Clair?", the extension's icon, a "Remove Extension" button (default, Return) that isn't marked destructive, as Arc's isn't, "Cancel" (Esc), and no "report abuse" option.
 
 #### Scenario: Removing from the store
 - **WHEN** the user clicks "Remove from Clair" on an installed extension's store page and clicks "Remove Extension"
