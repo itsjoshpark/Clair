@@ -7,8 +7,8 @@ import Foundation
 import XCTest
 
 extension Browser {
-  /// The Space header's name.
-  var spaceName: String { element("clair.spaceName").label }
+  /// The Space header's name, which SwiftUI exposes as the text's value.
+  var spaceName: String { element("clair.spaceName").value as? String ?? "" }
 
   /// The footer switcher's items, in order.
   var switcherItems: [XCUIElement] {
@@ -61,8 +61,10 @@ final class SpacesTests: NativeWindowTestCase {
   /// Creates a Space from the Spaces menu or the footer's plus menu.
   func createSpace(_ name: String, in browser: Browser, fromPlusMenu: Bool = false) async throws {
     if fromPlusMenu {
-      browser.element("clair.footerNew").click()
-      let item = browser.ui.menuItems["New Space…"]
+      let plus = browser.element("clair.footerNew")
+      plus.click()
+      // The plus menu's own item: the Spaces menu has one of the same title.
+      let item = plus.menuItems["New Space…"]
       try require(item.waitForExistence(timeout: 5), "The plus menu has no New Space…")
       item.click()
     } else {
@@ -165,7 +167,7 @@ final class SpacesTests: NativeWindowTestCase {
     }
     try require(opened, "Cmd+N didn't open a window")
     let names = browser.ui.windows.containing(.any, identifier: "clair.sidebar").allElementsBoundByIndex.map {
-      $0.descendants(matching: .any).matching(identifier: "clair.spaceName").firstMatch.label
+      $0.descendants(matching: .any).matching(identifier: "clair.spaceName").firstMatch.value as? String ?? ""
     }
     XCTAssertEqual(names, ["Work", "Work"], "The new window doesn't show the Space it was opened from")
     browser.ui.typeKey("w", modifierFlags: [.command, .shift])
@@ -385,8 +387,9 @@ final class SpacesTests: NativeWindowTestCase {
       sessions.append(try await browser.open(counter(name)))
     }
     defer { sessions.forEach { $0.close() } }
+    // Below them, the new tab page a fresh launch opens with.
     let listed = await browser.waitForTabs {
-      $0 == ["Counter E", "Counter D", "Counter C", "Counter B", "Counter A", "Counter I"]
+      $0.starts(with: ["Counter E", "Counter D", "Counter C", "Counter B", "Counter A", "Counter I"])
     }
     try require(listed, "The rows aren't E, D, C, B, A, I: \(browser.tabTitles)")
 
