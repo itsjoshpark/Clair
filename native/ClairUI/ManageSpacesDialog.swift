@@ -224,8 +224,8 @@ struct ManageSpacesView: View {
 }
 
 /// The dialog's list of Spaces: a click selects a row, and dragging one moves
-/// its Space to the row it's dropped on (`SpaceReorderDrag`). Rows rather than
-/// a List, whose own drag and drop didn't start in the dialog.
+/// its Space to the row it's dropped on. Rows rather than a List, whose own
+/// drag and drop didn't start in the dialog.
 struct ManageSpacesList: View {
   @Bindable var state: ManageSpacesState
 
@@ -250,14 +250,16 @@ struct ManageSpacesList: View {
               }
             }
             .contentShape(Rectangle())
-            .spaceReorderDrag(
-              for: space.spaceID, in: spaces.map(\.spaceID), along: .vertical, pitch: Self.rowHeight,
-              dragged: $dragged, offset: $dragOffset,
-              onClick: { state.select(space.spaceID) },
-              move: { spaceID, index in state.move(spaceID, to: index) }
-            )
             .offset(y: dragged == space.spaceID ? dragOffset : 0)
             .zIndex(dragged == space.spaceID ? 1 : 0)
+            .onTapGesture { state.select(space.spaceID) }
+            .gesture(
+              SpaceReorderDrag.gesture(
+                for: space.spaceID, in: spaces.map(\.spaceID), along: .vertical, pitch: Self.rowHeight,
+                dragged: $dragged, offset: $dragOffset
+              ) { spaceID, index in
+                state.move(spaceID, to: index)
+              })
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("clair.manageSpacesRow")
             .accessibilityAddTraits(selected ? .isSelected : [])

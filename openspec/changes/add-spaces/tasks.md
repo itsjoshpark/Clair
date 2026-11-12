@@ -44,11 +44,12 @@ Read `design.md` in full before starting. Verify every Chromium call it names ag
   - Switching to a Space with no tabs opens a new tab page with the command bar; Cmd+N opens on the same Space.
   - A new tab joins the shown Space; Cmd+number and Next Tab stay within it.
   - Rename, icon and Delete Space (with and without tabs).
-  - Reordering Spaces by dragging, and the order after a relaunch.
   - Move to Space keeps the page's counter, and the window stays on its Space.
-  - Manage Spaces: reorder, rename, add and remove from the dialog, each showing in the sidebar at once.
+  - Manage Spaces: rename, add and remove from the dialog, each showing in the sidebar at once.
   - The close sequences of `arc-reference.md`, and closing a Space's last tab.
   - Quit and relaunch, with no setting changed and no launch switch: Spaces, each Space's tabs in order, and the shown Space come back. Restore Last Closed Tab returns a tab to its Space.
+
+  Reordering Spaces by dragging, in the switcher and in Manage Spaces, has no runtime test: XCUITest's drags move neither on hosted runners, and the runner may not post real mouse events. Check both by hand with a real drag (`tests/probe/tools/drag.swift`); the drop slot and the order after a move have unit tests.
 
   Verify with a `quality.yml` run on the branch.
 

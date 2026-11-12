@@ -308,32 +308,6 @@ final class SpacesTests: NativeWindowTestCase {
     browser.ui.typeKey(.escape, modifierFlags: [])
   }
 
-  func testReorderingSpacesPersists() async throws {
-    let (browser, tab) = try await startWithPage("counter.html?a")
-    defer { tab.close() }
-    try await createSpace("Work", in: browser)
-    try await createSpace("Travel", in: browser)
-    let items = browser.switcherItems
-    try require(items.count == 3, "The switcher doesn't list three Spaces")
-    let drag = Harness.drag(from: items[2], to: items[0])
-    let moved = await Harness.wait(for: 10) { browser.switcherItems.map(\.label) == ["Travel", "Home", "Work"] }
-    XCTAssertTrue(
-      moved, "Dragging Travel onto Home with \(drag) didn't put it first: \(browser.switcherItems.map(\.label))")
-    XCTAssertEqual(browser.spacesMenuSpaces, ["Travel", "Home", "Work"], "The Spaces menu isn't in the new order")
-    browser.switcherItems[1].click()
-    browser.ui.typeKey("1", modifierFlags: .control)
-    let first = await browser.waitForSpace("Travel")
-    XCTAssertTrue(first, "Ctrl+1 doesn't follow the new order")
-
-    try await Task.sleep(for: .seconds(3))
-    tab.close()
-    try await browser.quit()
-    try await browser.start()
-    try require(browser.nativeWindow.waitForExistence(timeout: 60), "Clair didn't come back")
-    let kept = await Harness.wait(for: 30) { browser.switcherItems.map(\.label) == ["Travel", "Home", "Work"] }
-    XCTAssertTrue(kept, "The Spaces' order didn't persist: \(browser.switcherItems.map(\.label))")
-  }
-
   func testMoveToSpaceKeepsThePage() async throws {
     let (browser, tab) = try await startWithPage("counter.html?stay")
     defer { tab.close() }
@@ -395,14 +369,6 @@ final class SpacesTests: NativeWindowTestCase {
     browser.dialogButton("clair.manageSpacesRemove").click()
     let removed = await Harness.wait(for: 5) { browser.switcherItems.count == 3 }
     XCTAssertTrue(removed, "Remove didn't remove the Space without tabs at once")
-
-    // Reordering by dragging in the list.
-    let list = browser.dialogButton("clair.manageSpacesList")
-    let rows = list.descendants(matching: .any).matching(identifier: "clair.manageSpacesRow").allElementsBoundByIndex
-    try require(rows.count == 3, "The dialog doesn't list three Spaces")
-    let drag = Harness.drag(from: rows[2], to: rows[0])
-    let reordered = await Harness.wait(for: 10) { browser.switcherItems.first?.label == "Research" }
-    XCTAssertTrue(reordered, "Dragging in the dialog with \(drag) didn't reorder the Spaces")
 
     browser.dialogButton("clair.dialogDefault").click()
     let closed = await Harness.wait(for: 5) { !browser.dialog.exists }

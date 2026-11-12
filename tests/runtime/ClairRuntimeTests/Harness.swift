@@ -2,7 +2,6 @@
 // You can use, redistribute, and/or modify this source code under
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
-import CoreGraphics
 import Foundation
 import XCTest
 
@@ -33,40 +32,6 @@ struct Fixture: Decodable {
 @MainActor
 enum Harness {
   static let bundleID = "dev.joshuapark.Clair"
-
-  /// Drags from the middle of one element to the middle of another: with the
-  /// mouse's own events, at a hand's speed, where the runner may post them,
-  /// which is what a user's drag sends; otherwise with XCUITest's drag, as on
-  /// hosted runners. Returns which it used, for a failure's message.
-  @MainActor
-  @discardableResult
-  static func drag(from: XCUIElement, to: XCUIElement) -> String {
-    guard CGPreflightPostEventAccess() else {
-      // The call the tab list's drag test uses.
-      from.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
-        forDuration: 0.4, thenDragTo: to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
-      return "XCUITest's drag"
-    }
-    let start = CGPoint(x: from.frame.midX, y: from.frame.midY)
-    let end = CGPoint(x: to.frame.midX, y: to.frame.midY)
-    func post(_ type: CGEventType, _ point: CGPoint) {
-      CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?
-        .post(tap: .cghidEventTap)
-    }
-    post(.mouseMoved, start)
-    Thread.sleep(forTimeInterval: 0.2)
-    post(.leftMouseDown, start)
-    Thread.sleep(forTimeInterval: 0.3)
-    let steps = 30
-    for step in 1...steps {
-      let t = CGFloat(step) / CGFloat(steps)
-      post(.leftMouseDragged, CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t))
-      Thread.sleep(forTimeInterval: 0.016)
-    }
-    Thread.sleep(forTimeInterval: 0.3)
-    post(.leftMouseUp, end)
-    return "mouse events"
-  }
 
   /// Runs a tool to the end and returns its status and output.
   @discardableResult

@@ -2,7 +2,6 @@
 // You can use, redistribute, and/or modify this source code under
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
-import AppKit
 import ClairHost
 import SwiftUI
 
@@ -26,7 +25,8 @@ struct SpaceSwitcher: View {
   static let dotSize: CGFloat = 8
   static let iconSize: CGFloat = 15
 
-  /// The item being dragged, and how far (`SpaceReorderDrag`).
+  /// The item being dragged, and how far. A drag gesture rather than
+  /// SwiftUI's drag and drop, which a button's own tracking never lets start.
   @State private var dragged: SpaceID?
   @State private var dragOffset: CGFloat = 0
   @State private var stripWidth: CGFloat = 0
@@ -41,19 +41,12 @@ struct SpaceSwitcher: View {
   var body: some View {
     HStack(spacing: Self.spacing) {
       ForEach(items) { item in
-        // The button is for accessibility and the keyboard; the mouse's
-        // click and drag are the catcher's.
         SpaceSwitcherItem(item: item) { actions?.showSpace(item.spaceID) }
           .frame(minWidth: Self.minimumItemWidth, idealWidth: Self.itemWidth, maxWidth: Self.itemWidth)
           .frame(height: Self.itemHeight)
-          .spaceReorderDrag(
-            for: item.spaceID, in: items.map(\.spaceID), along: .horizontal, pitch: pitch,
-            dragged: $dragged, offset: $dragOffset,
-            onClick: { [weak actions] in actions?.showSpace(item.spaceID) },
-            move: { [weak actions] spaceID, index in actions?.moveSpace(spaceID, to: index) }
-          )
           .offset(x: dragged == item.spaceID ? dragOffset : 0)
           .zIndex(dragged == item.spaceID ? 1 : 0)
+          .highPriorityGesture(drag(item))
       }
       if showsNewSpaceDot {
         SpaceSwitcherItem(item: nil, action: {})
@@ -65,122 +58,52 @@ struct SpaceSwitcher: View {
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("clair.spaceSwitcher")
   }
-}
 
-/// The click and the drag on a Space, in the switcher and in Manage Spaces: a
-/// press that doesn't move is a click; one that moves `SpaceReorderDrag.slop`
-/// points drags the Space along `axis`, and moves it to the slot it's dropped
-/// on (`SpacesLogic.dragTarget`).
-///
-/// An AppKit view over the item takes the mouse, as `RowClickCatcher` does for
-/// a row's menu: a SwiftUI drag gesture never moved under XCUITest's drags on
-/// CI, where AppKit's own mouse tracking does, and SwiftUI's drag and drop
-/// never started from a button or in a dialog.
-struct SpaceReorderDrag: NSViewRepresentable {
-  /// The distance a press moves before it's a drag, as the gesture's was.
-  static let slop: CGFloat = 4
-
-  let axis: Axis
-  let onClick: () -> Void
-  /// The drag moved: how far along the axis, in the direction SwiftUI counts.
-  let onChanged: (CGFloat) -> Void
-  /// The drag ended, that far along.
-  let onEnded: (CGFloat) -> Void
-
-  func makeNSView(context: Context) -> CatcherView {
-    let view = CatcherView()
-    updateNSView(view, context: context)
-    return view
-  }
-
-  func updateNSView(_ view: CatcherView, context: Context) {
-    view.drag = self
-  }
-
-  final class CatcherView: NSView {
-    var drag: SpaceReorderDrag?
-    private var start: NSPoint?
-    private var isDragging = false
-
-    /// Only the left button's press: hovering, scrolling and right clicks go
-    /// to the item under it.
-    override func hitTest(_ point: NSPoint) -> NSView? {
-      guard let event = NSApp.currentEvent, event.type == .leftMouseDown,
-        !event.modifierFlags.contains(.control)
-      else { return nil }
-      return super.hitTest(point)
-    }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override var mouseDownCanMoveWindow: Bool { false }
-
-    /// How far `event` is from the press, along the axis; AppKit counts up
-    /// where SwiftUI counts down.
-    private func distance(_ event: NSEvent) -> CGFloat {
-      guard let start, let drag else { return 0 }
-      let point = event.locationInWindow
-      return drag.axis == .horizontal ? point.x - start.x : start.y - point.y
-    }
-
-    override func mouseDown(with event: NSEvent) {
-      start = event.locationInWindow
-      isDragging = false
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-      guard start != nil else { return }
-      let distance = distance(event)
-      if !isDragging, abs(distance) >= SpaceReorderDrag.slop {
-        isDragging = true
-      }
-      if isDragging {
-        drag?.onChanged(distance)
-      }
-    }
-
-    override func mouseUp(with event: NSEvent) {
-      guard start != nil else { return }
-      let distance = distance(event)
-      if isDragging {
-        drag?.onEnded(distance)
-      } else if bounds.contains(convert(event.locationInWindow, from: nil)) {
-        drag?.onClick()
-      }
-      start = nil
-      isDragging = false
+  /// Dragging an item along the strip moves its Space to the slot it's
+  /// dropped on (spaces spec, "Reordering Spaces"). A press that doesn't move
+  /// is the button's click.
+  private func drag(_ item: SpacesLogic.SwitcherItem) -> some Gesture {
+    SpaceReorderDrag.gesture(
+      for: item.spaceID, in: items.map(\.spaceID), along: .horizontal, pitch: pitch,
+      dragged: $dragged, offset: $dragOffset
+    ) { [weak actions] spaceID, index in
+      actions?.moveSpace(spaceID, to: index)
     }
   }
 }
 
-extension View {
-  /// Makes the view, which shows `spaceID`, clickable and draggable among
-  /// `order`, laid out `pitch` apart along `axis`. While it's dragged,
-  /// `dragged` is its Space and `offset` how far, for the view to follow the
-  /// pointer; `move` is called once, at the drop, when it lands on another
-  /// slot.
-  func spaceReorderDrag(
+/// The drag that reorders Spaces, in the switcher and in Manage Spaces: the
+/// dragged one follows the pointer along `axis`, and is moved to the slot
+/// it's dropped on (`SpacesLogic.dragTarget`).
+@MainActor
+enum SpaceReorderDrag {
+  /// - Parameters:
+  ///   - order: every Space, as laid out, `pitch` apart.
+  ///   - dragged: the Space being dragged, for the view to offset by `offset`.
+  ///   - move: called once, at the drop, when the Space lands on another slot.
+  static func gesture(
     for spaceID: SpaceID, in order: [SpaceID], along axis: Axis, pitch: CGFloat,
-    dragged: Binding<SpaceID?>, offset: Binding<CGFloat>, onClick: @escaping () -> Void,
-    move: @escaping (SpaceID, Int) -> Void
-  ) -> some View {
-    overlay {
-      SpaceReorderDrag(
-        axis: axis, onClick: onClick,
-        onChanged: { distance in
-          dragged.wrappedValue = spaceID
-          offset.wrappedValue = distance
-        },
-        onEnded: { distance in
-          if let from = order.firstIndex(of: spaceID) {
-            let to = SpacesLogic.dragTarget(from: from, translation: distance, pitch: pitch, count: order.count)
-            if to != from {
-              move(spaceID, to)
-            }
-          }
-          dragged.wrappedValue = nil
-          offset.wrappedValue = 0
-        })
+    dragged: Binding<SpaceID?>, offset: Binding<CGFloat>, move: @escaping (SpaceID, Int) -> Void
+  ) -> some Gesture {
+    func distance(_ value: DragGesture.Value) -> CGFloat {
+      axis == .horizontal ? value.translation.width : value.translation.height
     }
+    return DragGesture(minimumDistance: 4)
+      .onChanged { value in
+        dragged.wrappedValue = spaceID
+        offset.wrappedValue = distance(value)
+      }
+      .onEnded { value in
+        if let from = order.firstIndex(of: spaceID) {
+          let to = SpacesLogic.dragTarget(
+            from: from, translation: distance(value), pitch: pitch, count: order.count)
+          if to != from {
+            move(spaceID, to)
+          }
+        }
+        dragged.wrappedValue = nil
+        offset.wrappedValue = 0
+      }
   }
 }
 
