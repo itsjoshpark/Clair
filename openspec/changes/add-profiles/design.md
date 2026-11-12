@@ -84,6 +84,8 @@ While a group is in macOS full screen, one member, the **owner**, holds the full
 
 Each tab's session extra data gains `clair_window`, its group's UUID, beside `clair_space` and `clair_order`. A restored browser joins the group named by its first tagged tab, when that tab is inserted, which is before session restore shows the window. The group shows the member whose profile matches its Space in `clair.windows`; the others stay hidden.
 
+At launch, `add-spaces` merges each profile's restored windows into one, so the restored browsers of all profiles form a single group, showing `clair.last_space`.
+
 - **Why a tab tag for the group:** it needs no hook where Chromium creates the restored browser, and no second rebuild hook.
 
 ### D7. Profiles and Spaces stay consistent without a cascade
