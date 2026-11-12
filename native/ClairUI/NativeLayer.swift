@@ -17,6 +17,9 @@ final class NativeLayer {
 
   let host: any ClairHost
 
+  /// Every Space and its tabs, as the host reports them (add-spaces D10).
+  let spaces: SpacesModel
+
   /// Sparkle, once the layer is running inside Clair.app.
   private(set) var updates: UpdateController?
 
@@ -31,8 +34,12 @@ final class NativeLayer {
   /// The menu bar's Extensions menu.
   private(set) var extensionsMenu: ExtensionsMenu?
 
+  /// The menu bar's Spaces menu (add-spaces D8).
+  private(set) var spacesMenu: SpacesMenu?
+
   init(host: any ClairHost) {
     self.host = host
+    spaces = SpacesModel(host: host)
   }
 
   /// Runs what only makes sense inside the app: not in a unit test's process,
@@ -52,6 +59,9 @@ final class NativeLayer {
     let extensionsMenu = ExtensionsMenu()
     extensionsMenu.install(in: NSApp.mainMenu)
     self.extensionsMenu = extensionsMenu
+    let spacesMenu = SpacesMenu(spaces: spaces)
+    spacesMenu.install(in: NSApp.mainMenu)
+    self.spacesMenu = spacesMenu
 
     let updates = UpdateController(host: host, configuration: .current)
     updates.start()

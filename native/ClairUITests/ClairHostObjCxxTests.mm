@@ -32,6 +32,27 @@
 }
 - (void)openURL:(NSURL*)url {
 }
+- (NSArray<id<ClairSpace>>*)spaces {
+  return @[];
+}
+- (NSArray<id<ClairTab>>*)tabsInSpace:(ClairSpaceID)spaceID {
+  return @[];
+}
+- (void)addObserver:(id<ClairSpacesObserver>)observer {
+}
+- (ClairSpaceID)createSpaceNamed:(NSString*)name icon:(NSString*)icon {
+  return name.length ? [NSUUID UUID].UUIDString : nil;
+}
+- (void)renameSpace:(ClairSpaceID)spaceID to:(NSString*)name {
+}
+- (void)setIcon:(NSString*)icon forSpace:(ClairSpaceID)spaceID {
+}
+- (void)moveSpace:(ClairSpaceID)spaceID toIndex:(NSInteger)index {
+}
+- (void)deleteSpace:(ClairSpaceID)spaceID {
+}
+- (void)moveTab:(ClairTabID)tabID toSpace:(ClairSpaceID)spaceID {
+}
 @end
 
 @interface ClairHostObjCxxTests : XCTestCase
@@ -45,6 +66,13 @@
   XCTAssertEqualObjects(host.chromiumVersion, @"156.0.8078.73");
   XCTAssertEqual(host.silentRelaunchBlockers & ClairRelaunchBlockersIncognitoWindow,
                  ClairRelaunchBlockersIncognitoWindow);
+  // The Space calls (add-spaces design D9), as the overlay calls them.
+  ClairSpaceID space = [host createSpaceNamed:@(std::string("Work").c_str()) icon:nil];
+  XCTAssertNotNil(space);
+  XCTAssertNil([host createSpaceNamed:@"" icon:@"💼"]);
+  XCTAssertEqual([host tabsInSpace:space].count, 0u);
+  ClairBrowserID browser = 7;
+  XCTAssertEqual(browser, 7);
 }
 
 // The window contract's value types and protocols, used from C++ as the
@@ -67,7 +95,8 @@
          @protocol(ClairAutocomplete), @protocol(ClairAutocompleteDelegate),
          @protocol(ClairSuggestion), @protocol(ClairDownload),
          @protocol(ClairExtensionAction), @protocol(ClairExtensionPrompt), @protocol(ClairInfobar),
-         @protocol(ClairHistoryMenu), @protocol(ClairHistoryMenuDelegate), @protocol(ClairHistoryItem)
+         @protocol(ClairHistoryMenu), @protocol(ClairHistoryMenuDelegate), @protocol(ClairHistoryItem),
+         @protocol(ClairSpace), @protocol(ClairSpacesObserver)
        ]) {
     XCTAssertTrue(protocol_conformsToProtocol(protocol, @protocol(NSObject)));
   }

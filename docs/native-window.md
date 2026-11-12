@@ -21,13 +21,28 @@ Browser ── BrowserWindow ─▶ ClairBrowserWindow       BrowserWindowContro
 - **The contract is `native/ClairHost.h` (D3).** `ClairBrowser` is Chromium's side (tabs, commands, autocomplete sessions, downloads, extension actions), `ClairWindow` is `ClairUI`'s (callbacks for changes, the command bar, find, toasts, anchors for Chromium's bubbles). Chromium pushes immutable snapshots, coalesced to one per run-loop turn per tab; Swift never holds a C++ pointer. The header is an engine input: changing it changes the engine key and needs an engine build.
 - **Closing goes through Chromium.** The close button calls `requestClose`, which runs Chromium's `beforeunload` flow; the `NSWindow` closes only when Chromium calls `BrowserWindow::Close`.
 
+## Spaces
+
+The archived `add-spaces` change's `design.md` (`openspec/changes/archive/2026-11-12-add-spaces/`) has the reasoning (D1–D11).
+
+- **The Space store (D1).** `ClairSpaceStore` keeps the Spaces, in order, in Chromium's Local State (`clair.spaces`, and `clair.last_space` for the Space a new window shows). It creates "Home" when none is stored and refuses to delete the last Space. `clair::RegisterLocalStatePrefs` registers both prefs from `browser_prefs.cc`.
+- **The tab lists (D2).** `ClairSpaceTabs`, one per profile (kept as the profile's user data), observes the tab strip of every native window of the profile and keeps one ordered list of tab handles per Space, across windows. Each tab carries its Space as `WebContents` user data. A new tab joins the Space its window shows, a restored one its saved Space at its saved place, and a Peek its parent's. The tab strip's order no longer means anything to the user, except that a Peek follows its parent. An incognito or guest profile has one Space of its own, which isn't in the store. `ClairSpaceTabs` also owns the tab snapshots and pushes each Space's list and each tab's changes to the host's `ClairSpacesObserver`, once per run-loop turn, before a window hears that its active tab changed.
+- **The shown Space (D3, D4, D5).** Each `ClairBrowserWindow` shows one Space, and its active tab always belongs to it: when another tab becomes active for any reason, the window shows that tab's Space. Showing a Space activates the tab last active in it in that window, or opens a new tab page with the command bar. The window also keeps the tab the user came from and picks the next tab before a close Clair starts (that tab, else the row above, else the row below), or, for a page with unload handlers, once the page agrees to close (`ClairBrowserWindow::BeforeUnloadFired`). It runs the tab commands (Cmd+number, Next and Previous Tab, Ctrl+Shift+PageDown and PageUp, Close Tabs Below, Close Other Tabs) over its rows of the shown Space.
+- **Sessions (D6, D11).** Each tab's Space and its index in the Space's list ride in its session extra data (`clair_space`, `clair_order`), so session restore and Reopen Closed Tab put it back. `session.restore_on_startup` defaults to continuing where the user left off.
+- **`ClairUI` (D10).** `SpacesModel`, one per host, holds the Spaces and each Space's tabs; each window copies its own rows of its shown Space into its `BrowserWindowModel`. The sidebar's content between the URL field and the footer is a pager that slides between Spaces.
+
 ## Where each piece lives
 
 | Piece | File |
 |---|---|
 | `BrowserWindow` and its helpers | `overlay/chrome/browser/clair/window/clair_browser_window.{h,mm}` |
 | The `NSWindow`, key equivalents, menu validation | `overlay/chrome/browser/clair/window/clair_native_window.{h,mm}` |
-| The `ClairBrowser` bridge and tab snapshots | `overlay/chrome/browser/clair/window/clair_browser_bridge.{h,mm}` |
+| The `ClairBrowser` bridge | `overlay/chrome/browser/clair/window/clair_browser_bridge.{h,mm}` |
+| The Space store | `overlay/chrome/browser/clair/clair_space_store.{h,mm}` |
+| Each profile's tab lists per Space, tab snapshots, the host's Space calls | `overlay/chrome/browser/clair/clair_space_tabs.{h,mm}` |
+| The shown Space, the next tab after a close, tab commands over the rows | `overlay/chrome/browser/clair/window/clair_browser_window.{h,mm}` |
+| Tabs' Spaces in saved sessions | `overlay/chrome/browser/clair/window/clair_space_session.{h,mm}`, `patches/clair/space-session.patch` |
+| Opt+Cmd+arrows freed for Spaces and Next and Previous Tab | `patches/clair/space-shortcuts.patch` |
 | Command bar suggestions (Chromium's autocomplete, no bookmarks) | `overlay/chrome/browser/clair/window/clair_autocomplete.{h,mm}` |
 | Extension actions and popups | `overlay/chrome/browser/clair/window/clair_extensions.{h,mm}` |
 | Downloads | `overlay/chrome/browser/clair/window/clair_downloads.{h,mm}` |
@@ -38,9 +53,10 @@ Browser ── BrowserWindow ─▶ ClairBrowserWindow       BrowserWindowContro
 | The hooks into Chromium's own files | `patches/clair/native-window-hook.patch` |
 | Window, layout, card and overlays | `native/ClairUI/BrowserWindowController.swift`, `BrowserRootView.swift`, `PageCardView.swift`, `WindowLayout.swift`, `OverlayViews.swift` |
 | Sidebar, tab list, URL field, extensions and downloads | `native/ClairUI/SidebarView.swift`, `TabListLogic.swift`, `URLDisplay.swift`, `AnchorResolver.swift` |
+| Spaces: the model, header, switcher, New Space form, icon field, Spaces menu and Manage Spaces | `native/ClairUI/SpacesModel.swift`, `SpacesLogic.swift`, `SpaceHeaderView.swift`, `SpaceSwitcher.swift`, `NewSpaceForm.swift`, `SpaceIconField.swift`, `SpacesMenu.swift`, `ManageSpacesDialog.swift` |
 | Command bar | `native/ClairUI/CommandBarModel.swift`, `OverlayViews.swift` |
-| Unit tests against a fake Chromium | `native/ClairUITests/` (`FakeBrowser.swift`) |
-| Runtime tests on a packaged Clair | `tests/runtime/ClairRuntimeTests/NativeWindowTests.swift` |
+| Unit tests against a fake Chromium | `native/ClairUITests/` (`FakeBrowser.swift`, `FakeHost.swift`) |
+| Runtime tests on a packaged Clair | `tests/runtime/ClairRuntimeTests/NativeWindowTests.swift`, `SpacesTests.swift` |
 
 ## Working on it
 

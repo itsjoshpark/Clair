@@ -20,8 +20,9 @@
 // Every call happens on the main thread.
 //
 // Rules for the window contract:
-// - Push, coalesced. Chromium tells each ClairWindow what changed, at most once
-//   per run-loop turn for each tab. ClairUI never polls.
+// - Push, coalesced. Chromium tells each ClairWindow, and the host's Spaces
+//   observers, what changed, at most once per run-loop turn for each tab and
+//   each Space. ClairUI never polls.
 // - Snapshots, not pointers. Tabs, suggestions, downloads, extension actions
 //   and infobars reach ClairUI as immutable value objects with IDs. A command
 //   naming an ID that no longer exists does nothing.
@@ -56,6 +57,24 @@ typedef NS_OPTIONS(NSUInteger, ClairRelaunchBlockers) {
   ClairRelaunchBlockersCapturingTab = 1 << 3,
 } NS_SWIFT_NAME(RelaunchBlockers);
 
+// A tab's ID: Chromium's tab handle, stable for the tab's lifetime and never
+// reused while Clair runs.
+typedef NSInteger ClairTabID NS_SWIFT_NAME(TabID);
+
+// No tab, as in a window whose last tab is closing.
+static const ClairTabID ClairTabIDNone = -1;
+
+// A browser window's ID, stable for its lifetime and never reused while Clair
+// runs.
+typedef NSInteger ClairBrowserID NS_SWIFT_NAME(BrowserID);
+
+// A Space's ID, a UUID string that never changes (add-spaces design D1).
+typedef NSString *ClairSpaceID NS_SWIFT_BRIDGED_TYPEDEF NS_SWIFT_NAME(SpaceID);
+
+@protocol ClairSpace;
+@protocol ClairSpacesObserver;
+@protocol ClairTab;
+
 // What Chromium does for ClairUI. Chromium implements it.
 NS_SWIFT_UI_ACTOR
 NS_SWIFT_NAME(ClairHost)
@@ -86,18 +105,50 @@ NS_SWIFT_NAME(ClairHost)
 // recently active browser window, or in a new browser window if none is open.
 - (void)openURL:(NSURL *)url NS_SWIFT_NAME(open(_:));
 
+// --- Spaces (add-spaces design D1, D2 and D9) ---
+// Spaces are app-wide and kept in Chromium's Local State. There is always at
+// least one. Changes reach every observer, coalesced to once per run-loop turn
+// for each Space and each tab.
+
+// Every Space, in the user's order.
+@property(nonatomic, readonly, copy) NSArray<id<ClairSpace>> *spaces;
+
+// The tabs of a Space, in its order, across every browser window: a window
+// lists those whose `browserID` is its own. A Peek directly follows its
+// parent. An incognito or guest window's Space (-[ClairBrowser shownSpaceID])
+// lists that window's tabs. Empty for an unknown Space.
+- (NSArray<id<ClairTab>> *)tabsInSpace:(ClairSpaceID)spaceID NS_SWIFT_NAME(tabs(inSpace:));
+
+// Starts telling `observer` what changes. Chromium keeps it weakly.
+- (void)addObserver:(id<ClairSpacesObserver>)observer NS_SWIFT_NAME(addObserver(_:));
+
+// Adds a Space after the last one and returns its ID. `icon` is one emoji, or
+// nil. An empty name is ignored, and returns nil.
+- (nullable ClairSpaceID)createSpaceNamed:(NSString *)name
+                                     icon:(nullable NSString *)icon
+    NS_SWIFT_NAME(createSpace(named:icon:));
+// Renames a Space. An empty name is ignored.
+- (void)renameSpace:(ClairSpaceID)spaceID to:(NSString *)name NS_SWIFT_NAME(renameSpace(_:to:));
+// Sets a Space's icon, one emoji, or removes it with nil.
+- (void)setIcon:(nullable NSString *)icon forSpace:(ClairSpaceID)spaceID
+    NS_SWIFT_NAME(setIcon(_:forSpace:));
+// Moves a Space to `index` in the order.
+- (void)moveSpace:(ClairSpaceID)spaceID toIndex:(NSInteger)index NS_SWIFT_NAME(moveSpace(_:to:));
+// Deletes a Space: each window showing it shows the Space before it, or the
+// one after when it was first, then its tabs close in every window, each with
+// its leave-page confirmation. Ignored for the only Space. ClairUI asks the
+// user first.
+- (void)deleteSpace:(ClairSpaceID)spaceID NS_SWIFT_NAME(deleteSpace(_:));
+// Moves a tab, with its Peek, to the top of another Space's list, keeping its
+// page and its window. If it was its window's active tab, the window first
+// shows the tab a close would have shown, so it stays on its Space.
+- (void)moveTab:(ClairTabID)tabID toSpace:(ClairSpaceID)spaceID NS_SWIFT_NAME(move(tab:toSpace:));
+
 @end
 
 // ---------------------------------------------------------------------------
 // The window contract (replace-browser-window design D3).
 // ---------------------------------------------------------------------------
-
-// A tab's ID: Chromium's tab handle, stable for the tab's lifetime and never
-// reused while Clair runs.
-typedef NSInteger ClairTabID NS_SWIFT_NAME(TabID);
-
-// No tab, as in a window whose last tab is closing.
-static const ClairTabID ClairTabIDNone = -1;
 
 // The kind of profile a browser window shows.
 typedef NS_ENUM(NSInteger, ClairProfileKind) {
@@ -324,6 +375,40 @@ NS_SWIFT_NAME(ClairTab)
 @property(nonatomic, readonly) ClairTabID peekParentID;
 // The tab's Peek, or ClairTabIDNone.
 @property(nonatomic, readonly) ClairTabID peekID;
+// The Space the tab belongs to (add-spaces design D2). A Peek's is its
+// parent's. An incognito or guest tab's is its window's own Space.
+@property(nonatomic, readonly, copy) ClairSpaceID spaceID;
+// The browser window that holds the tab.
+@property(nonatomic, readonly) ClairBrowserID browserID;
+@end
+
+// A Space, as a snapshot (add-spaces design D9). Chromium implements it.
+NS_SWIFT_UI_ACTOR
+NS_SWIFT_NAME(ClairSpace)
+@protocol ClairSpace <NSObject>
+@property(nonatomic, readonly, copy) ClairSpaceID spaceID;
+// Never empty.
+@property(nonatomic, readonly, copy) NSString *name;
+// One emoji, or nil.
+@property(nonatomic, readonly, copy, nullable) NSString *icon;
+@end
+
+// What ClairUI implements to hear about Spaces and their tabs, app-wide
+// (add-spaces design D9). Chromium posts at most once per run-loop turn for
+// each Space and each tab, and posts a Space's tab list before any window
+// hears that one of its new tabs became active.
+NS_SWIFT_UI_ACTOR
+NS_SWIFT_NAME(ClairSpacesObserver)
+@protocol ClairSpacesObserver <NSObject>
+// Spaces were added, removed, renamed, given an icon or reordered. `spaces`
+// is the new list, in order.
+- (void)spacesDidChange:(NSArray<id<ClairSpace>> *)spaces NS_SWIFT_NAME(spacesDidChange(_:));
+// A Space's tabs were added, closed or moved, in any window. `tabs` is its
+// new list, in order, as -[ClairHost tabsInSpace:] returns it.
+- (void)tabsDidChange:(NSArray<id<ClairTab>> *)tabs inSpace:(ClairSpaceID)spaceID
+    NS_SWIFT_NAME(tabsDidChange(_:inSpace:));
+// One tab's state changed.
+- (void)tabDidChange:(id<ClairTab>)tab NS_SWIFT_NAME(tabDidChange(_:));
 @end
 
 // A suggestion in the command bar. Chromium implements it as a snapshot of an
@@ -580,8 +665,15 @@ NS_SWIFT_NAME(ClairBrowser)
 // The kind of profile the window's tabs use.
 @property(nonatomic, readonly) ClairProfileKind profileKind;
 
-// The window's tabs, in Chromium's tab strip order, which is the sidebar's.
-@property(nonatomic, readonly, copy) NSArray<id<ClairTab>> *tabs;
+// The window's ID, which its tabs carry as their `browserID`.
+@property(nonatomic, readonly) ClairBrowserID browserID;
+
+// The Space the window shows (add-spaces design D3). Its active tab always
+// belongs to it: when another tab becomes active for any reason, the window
+// shows that tab's Space. Its rows are -[ClairHost tabsInSpace:] with this
+// window's `browserID`. An incognito or guest window shows a Space of its own,
+// which isn't in -[ClairHost spaces] and can't be switched.
+@property(nonatomic, readonly, copy) ClairSpaceID shownSpaceID;
 
 // The active tab, or ClairTabIDNone.
 @property(nonatomic, readonly) ClairTabID activeTabID;
@@ -603,14 +695,26 @@ NS_SWIFT_NAME(ClairBrowser)
 // The whole app's download progress, as the Dock shows it.
 @property(nonatomic, readonly) ClairDownloadProgress downloadProgress;
 
+// --- Spaces ---
+// Shows a Space (add-spaces design D3): activates the tab last active in it in
+// this window, or else its first row here, or else opens a new tab page in it
+// with the command bar. Ignored for an unknown Space and in incognito and
+// guest windows.
+- (void)showSpace:(ClairSpaceID)spaceID NS_SWIFT_NAME(showSpace(_:));
+
 // --- Tabs ---
 // Makes the tab active.
 - (void)activateTab:(ClairTabID)tabID NS_SWIFT_NAME(activate(tab:));
-// Closes the tab, with its leave-page confirmation.
+// Closes the tab, with its leave-page confirmation. Closing the active tab
+// first shows, in order, the tab the user selected it from, the row above or
+// the row below in the window's Space (add-spaces design D4).
 - (void)closeTab:(ClairTabID)tabID NS_SWIFT_NAME(close(tab:));
-// Closes every tab below it, each with its leave-page confirmation.
+// Closes every tab of the window below it in its Space, each with its
+// leave-page confirmation.
 - (void)closeTabsBelowTab:(ClairTabID)tabID NS_SWIFT_NAME(closeTabs(below:));
-// Moves the tab to `index` in the tab order.
+// Moves the tab, with its Peek, to `index` in its Space's list, as
+// -[ClairHost tabsInSpace:] counts it, Peeks included. The tab ends at
+// `index` and its Peek right after it.
 - (void)moveTab:(ClairTabID)tabID toIndex:(NSInteger)index NS_SWIFT_NAME(move(tab:to:));
 // Opens a copy of the tab, with its history, as Chromium's Duplicate does.
 - (void)duplicateTab:(ClairTabID)tabID NS_SWIFT_NAME(duplicate(tab:));
@@ -730,11 +834,13 @@ NS_SWIFT_NAME(ClairWindow)
 // another Esc closes the Peek; ClairUI shows Confirm for as long.
 - (void)peekDidKeepEscape:(NSTimeInterval)duration NS_SWIFT_NAME(peekDidKeepEscape(for:));
 
-// --- Tabs ---
-// Tabs were added, closed or moved. `tabs` is the new list, in order.
-- (void)tabsDidChange:(NSArray<id<ClairTab>> *)tabs NS_SWIFT_NAME(tabsDidChange(_:));
-// One tab's state changed.
-- (void)tabDidChange:(id<ClairTab>)tab NS_SWIFT_NAME(tabDidChange(_:));
+// --- Tabs and Spaces ---
+// The tabs themselves reach ClairUI through the host's ClairSpacesObserver.
+// The window shows another Space (add-spaces design D3). `previousSpaceID` is
+// the Space it showed before, or nil for none. It comes before the
+// -activeTabDidChange: that shows the new Space's tab.
+- (void)shownSpaceDidChange:(ClairSpaceID)spaceID from:(nullable ClairSpaceID)previousSpaceID
+    NS_SWIFT_NAME(shownSpaceDidChange(_:from:));
 // Another tab became active; its page view is -[ClairBrowser pageViewForTab:].
 - (void)activeTabDidChange:(ClairTabID)tabID NS_SWIFT_NAME(activeTabDidChange(_:));
 // The active tab's docked DevTools view or layout changed.

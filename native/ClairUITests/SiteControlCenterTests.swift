@@ -145,7 +145,7 @@ struct SiteControlCenterLogicTests {
   @Test func anUnpinnedActionOpensFromTheSiteControls() {
     let browser = FakeBrowser()
     let controller = BrowserWindowController(
-      browser: browser, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function)!))
+      browser: browser, spaces: browser.spaces, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function)!))
     browser.clairWindow = controller
     controller.runExtension("a", pinned: false)
     controller.runExtension("b", pinned: true)

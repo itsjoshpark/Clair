@@ -119,7 +119,7 @@ struct TabListTests {
   @Test func newTabsAppearAtTheTopOfTheList() {
     let browser = FakeBrowser()
     let controller = BrowserWindowController(
-      browser: browser, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function)!))
+      browser: browser, spaces: browser.spaces, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function)!))
     browser.clairWindow = controller
     browser.addTab(title: "Old")
     browser.addTab(title: "New", at: 0, activate: false)
@@ -129,7 +129,7 @@ struct TabListTests {
   @Test func closeTabsBelowClosesEveryLaterTab() {
     let browser = FakeBrowser()
     let controller = BrowserWindowController(
-      browser: browser, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function)!))
+      browser: browser, spaces: browser.spaces, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function)!))
     browser.clairWindow = controller
     for index in 0..<5 {
       browser.addTab(title: "\(index)", at: index, activate: index == 0)

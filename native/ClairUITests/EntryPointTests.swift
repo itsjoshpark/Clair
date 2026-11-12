@@ -26,15 +26,22 @@ struct EntryPointTests {
   @Test func startKeepsTheFirstHost() throws {
     let first = FakeHost()
     let second = FakeHost(chromiumVersion: "157.0.0.0")
+    // Another test may have started the layer already; either way, a later
+    // call keeps the host it has.
     ClairUIMain.start(host: first)
+    let kept = try #require(NativeLayer.current).host
     ClairUIMain.start(host: second)
     let layer = try #require(NativeLayer.current)
-    #expect(layer.host === first)
+    #expect(layer.host === kept)
+    #expect(layer.host !== second)
   }
 
   @Test(arguments: [ProfileKind.regular, .incognito, .guest])
   func windowForEveryBrowser(kind: ProfileKind) throws {
-    let browser = FakeBrowser(profileKind: kind)
+    // The window reads its tabs from the running layer's host.
+    let layer = NativeLayer.current ?? NativeLayer.start(host: FakeHost())
+    let host = try #require(layer.host as? FakeHost)
+    let browser = FakeBrowser(host: host, profileKind: kind)
     browser.addTab(title: "Example", url: "https://example.com/")
     let clairWindow = ClairUIMain.window(for: browser)
     let controller = try #require(clairWindow as? BrowserWindowController)

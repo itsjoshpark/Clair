@@ -43,9 +43,12 @@ tests/probe/probe.sh stop
 tests/probe/serve.sh stop
 ```
 
-- `launch-clair.sh [--port <n>] [url]` packages the checkout's ClairUI into
-  `build/probe/clair/` and launches it with a fresh throwaway profile and the
-  mock keychain, then prints its windows. Launching again quits the previous
+- `launch-clair.sh [--port <n>] [--flag <switch>]... [url]` packages the
+  checkout's ClairUI into `build/probe/clair/` and launches it with a fresh
+  throwaway profile and the mock keychain, then prints its windows. `--flag`
+  passes a Chromium switch, such as
+  `--extension-mime-request-handling=always-prompt-for-install` to let a CRX
+  from a local server ask to install. Launching again quits the previous
   test copy, and the probe stops with it: start the probe again.
 - `probe.sh start [bundle id]` builds the probe once, starts it, and attaches
   it to the app (Arc, `company.thebrowser.Browser`, by default). For Clair it
@@ -81,13 +84,14 @@ Coordinates are in points from the top-left corner of the app's main window
 | `click x y [mods]` | click, holding `shift`, `cmd`, `opt`, `ctrl` (comma-separated) |
 | `rclick x y`, `hover x y` | right-click, move the pointer |
 | `scroll x y dy` | scroll by `dy` |
-| `drag x1 y1 x2 y2` | press, then drag |
+| `drag x1 y1 x2 y2` | press, then drag at a hand's speed and hold before letting go |
 | `key <name> [mods]` | a single character, or `return`, `escape`, `tab`, `space`, `delete`, `forwarddelete`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown` |
 | `type <text>` | type text |
+| `paste <text>` | put text on the pasteboard and press Cmd+V, for emoji, which `type` doesn't type reliably |
 | `tree` | the accessibility tree, with identifiers, labels and frames |
 | `frame` | the main window's frame |
 | `sleep <s>` | wait |
-| `menu <title>` | click a menu item |
+| `menu <title>` | click a menu item; with several of that title, the one in the open menu |
 | `quit` | stop the probe |
 
 ## Recording and measuring
@@ -105,7 +109,8 @@ build/probe/bin/measure track build/probe/rec/peek/frames white 0 0 2400 2012 80
   (Arc, Clair). `measure` works in the image's pixels: halve them for points.
 - `tools/` holds small Swift tools, compiled into `build/probe/bin/` on first
   use (or by `tools/build.sh`); each describes its arguments at the top:
-  `windows` (window IDs and frames, by app name or process ID), `cdp` (DevTools
+  `windows` (window IDs and frames, by app name or process ID), `drag` (a drag
+  with real mouse events, in screen points), `cdp` (DevTools
   protocol commands for the test copy), `frames` (a movie's frames), `sheet` (a
   labelled contact sheet), `crop` (a pixel rectangle; `sips --cropOffset`
   centres instead), and `measure`:
@@ -159,6 +164,13 @@ These come from the add-peek change (its design.md has the numbers):
   a tab in the owner's main window (their Personal space): close it there
   afterwards. Cmd+W on a blank window's last tab closes the window. A drag
   that misses Arc's sidebar edge moves the window.
+- **Drags in Clair**: on the owner's Mac the probe's `drag` reaches Clair
+  with no events at all, though `click` and `hover` do, so it moves nothing
+  there. Drag with the mouse's own events instead:
+  `build/probe/bin/drag x1 y1 x2 y2`, in screen points, after `activate`. It
+  moves the real pointer and needs the shell to have permission to post
+  events. The XCUITest runner has no such permission, so the probe can't do
+  this itself.
 - **Never toggle the sidebar** from the probe: a new Clair window opens with
   the last chosen state, and the owner often sets the window up. Look at a
   screenshot first.
@@ -169,5 +181,9 @@ These come from the add-peek change (its design.md has the numbers):
   not `ZoomWindow`.
 - **Read a frame before clicking**: a button can disappear after the click,
   failing a later query.
+- **The emoji picker takes typing.** A field that opens macOS's emoji picker,
+  such as a Space's icon field, loses keys to it while it's open, as its
+  search field: `type`, `paste` and Return go to the picker. Send
+  `key escape` once to close it; the field keeps editing.
 - **The probe shares Clair's defaults**: the test copy uses the bundle ID's
   user defaults domain (sidebar width and state), as an installed Clair does.

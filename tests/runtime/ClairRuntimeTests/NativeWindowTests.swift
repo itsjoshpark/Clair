@@ -50,7 +50,20 @@ extension Browser {
     nativeWindow.descendants(matching: .any).matching(identifier: "clair.tabRow").allElementsBoundByIndex
   }
 
-  var tabTitles: [String] { tabRows.map(\.label) }
+  /// The rows' titles, read from one snapshot of the window: reading each
+  /// row's label in turn fails the test when a row closes meanwhile.
+  var tabTitles: [String] {
+    guard let window = try? nativeWindow.snapshot() else { return [] }
+    var titles: [String] = []
+    func collect(_ element: any XCUIElementSnapshot) {
+      if element.identifier == "clair.tabRow" {
+        titles.append(element.label)
+      }
+      element.children.forEach(collect)
+    }
+    collect(window)
+    return titles
+  }
 
   /// Waits for the sidebar's tab titles to satisfy `condition`.
   func waitForTabs(_ seconds: TimeInterval = 15, _ condition: @escaping ([String]) -> Bool) async -> Bool {
@@ -240,7 +253,8 @@ final class PageHostingTests: NativeWindowTestCase {
     try await Task.sleep(for: .seconds(3))
     try await browser.quit()
 
-    try await browser.start(arguments: ["--restore-last-session"])
+    // With no switch: tabs come back at launch by default (add-spaces D11).
+    try await browser.start()
     for (search, size) in expected {
       var target: Browser.Target?
       let restored = await Harness.wait(for: 60) {

@@ -17,6 +17,7 @@
 #import "chrome/browser/clair/window/clair_browser_bridge.h"
 #include "chrome/browser/clair/window/clair_browser_window.h"
 #include "chrome/browser/clair/window/clair_peek_session.h"
+#import "chrome/browser/clair/clair_space_tabs.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
@@ -248,6 +249,10 @@ void ClairPeeks::Link(tabs::TabInterface* parent, tabs::TabInterface* peek) {
       std::make_unique<EscapeWatcher>(this, peek->GetContents());
   // D9: session restore and Reopen Closed Window leave it out.
   clair::TagPeekInSession(window_->browser(), peek->GetContents(), true);
+  // It joins its parent's Space, right after it (add-spaces D2).
+  if (ClairSpaceTabs* lists = window_->space_tabs()) {
+    lists->PeekLinked(parent, peek);
+  }
   Changed();
   ScheduleRepair();
   ActivateTab(peek);
@@ -514,17 +519,6 @@ tabs::TabInterface* ClairPeeks::LastOfFamily(tabs::TabInterface* tab) const {
   return peek ? peek : tab;
 }
 
-std::vector<tabs::TabInterface*> ClairPeeks::Rows() const {
-  std::vector<tabs::TabInterface*> rows;
-  for (int i = 0; model_ && i < strip()->count(); ++i) {
-    tabs::TabInterface* tab = strip()->GetTabAtIndex(i);
-    if (FindByPeek(tab) == pairs_.end()) {
-      rows.push_back(tab);
-    }
-  }
-  return rows;
-}
-
 void ClairPeeks::ActivateTab(tabs::TabInterface* tab) {
   const int index =
       model_ && tab ? strip()->GetIndexOfTab(tab) : TabStripModel::kNoTab;
@@ -533,11 +527,6 @@ void ClairPeeks::ActivateTab(tabs::TabInterface* tab) {
         index, TabStripUserGestureDetails(
                    TabStripUserGestureDetails::GestureType::kOther));
   }
-}
-
-void ClairPeeks::ActivateRow(tabs::TabInterface* row) {
-  tabs::TabInterface* peek = PeekOf(row);
-  ActivateTab(peek ? peek : row);
 }
 
 tabs::TabInterface* ClairPeeks::ActivePeek() const {
@@ -549,36 +538,10 @@ bool ClairPeeks::ExecuteCommand(int command) {
   if (!model_ || pairs_.empty()) {
     return false;
   }
+  // The tab commands over the rows are the window's, which knows the
+  // Space's order (add-spaces D5).
   tabs::TabInterface* peek = ActivePeek();
   tabs::TabInterface* parent = peek ? ParentOf(peek) : nullptr;
-  const bool select_index =
-      command >= IDC_SELECT_TAB_0 && command <= IDC_SELECT_TAB_7;
-  if (command == IDC_SELECT_NEXT_TAB || command == IDC_SELECT_PREVIOUS_TAB ||
-      command == IDC_SELECT_LAST_TAB || select_index) {
-    // Over the tabs in the sidebar, where a tab and its Peek are one stop.
-    std::vector<tabs::TabInterface*> rows = Rows();
-    if (rows.empty()) {
-      return true;
-    }
-    const int count = static_cast<int>(rows.size());
-    if (select_index) {
-      const int index = command - IDC_SELECT_TAB_0;
-      if (index < count) {
-        ActivateRow(rows[index]);
-      }
-      return true;
-    }
-    if (command == IDC_SELECT_LAST_TAB) {
-      ActivateRow(rows.back());
-      return true;
-    }
-    tabs::TabInterface* current = parent ? parent : strip()->GetActiveTab();
-    auto it = std::ranges::find(rows, current);
-    const int position = it == rows.end() ? 0 : static_cast<int>(it - rows.begin());
-    const int step = command == IDC_SELECT_NEXT_TAB ? 1 : -1;
-    ActivateRow(rows[(position + step + count) % count]);
-    return true;
-  }
   if (!peek) {
     return false;
   }

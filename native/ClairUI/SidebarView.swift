@@ -8,7 +8,7 @@ import SwiftUI
 
 /// What the sidebar asks the window to do.
 @MainActor
-protocol SidebarActions: AnyObject {
+protocol SidebarActions: SpaceActions {
   // Tabs.
   func activate(tab: TabID)
   func close(tab: TabID)
@@ -90,31 +90,34 @@ struct SidebarView: View {
       TopRow(model: model, actions: actions)
         // The row's empty space acts as the window's title bar.
         .background { TitleBarArea { actions?.titleBarDoubleClicked() } }
-      URLField(
-        model: model, actions: actions,
-        showsButtons: (isHovered && model.isWindowKey) || model.isSiteControlCenterOpen)
-        .padding(.horizontal, 8)
-        .padding(.top, 6)
-      if !model.pinnedExtensionActions.isEmpty {
+      // The New Space form takes the URL field's place too, as in Arc.
+      if model.newSpaceForm == nil {
+        URLField(
+          model: model, actions: actions,
+          showsButtons: (isHovered && model.isWindowKey) || model.isSiteControlCenterOpen)
+          .padding(.horizontal, 8)
+          .padding(.top, 6)
+      }
+      if !model.pinnedExtensionActions.isEmpty && model.newSpaceForm == nil {
         ToolsRow(model: model, actions: actions)
           .padding(.horizontal, 8)
           .padding(.top, 8)
       }
-      if model.profileKind == .incognito {
+      if model.profileKind == .incognito && model.newSpaceForm == nil {
         // Arc's row: 37 pt from 8 pt below the URL field.
         IncognitoBadge()
           .padding(.leading, 14)
           .frame(height: 37)
           .padding(.top, 8)
       }
-      TabList(model: model, actions: actions)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tabListHeight = $0 }
+      // The Space's header and tabs, or the New Space form, between the URL
+      // field and the footer: the part that slides between Spaces
+      // (add-spaces D10). The footer stays at the bottom however short the
+      // list is; the space between moves the window like the rest of the
+      // sidebar.
+      SpacePager(model: model, actions: actions, tabListHeight: $tabListHeight)
         .padding(.top, tabListTopPadding)
-        // Ahead of the spacer, which would otherwise take half the room.
-        .layoutPriority(1)
-      // The footer stays at the bottom however short the list is; the space
-      // between moves the window like the rest of the sidebar.
-      Spacer(minLength: 0)
+        .frame(maxHeight: .infinity, alignment: .top)
       SidebarFooter(model: model, actions: actions)
         .overlay(alignment: .top) {
           // Arc's line between a list that scrolls and the footer: 1 pt
@@ -143,9 +146,14 @@ struct SidebarView: View {
     }
   }
 
-  /// 8 pt under the URL field or the pinned extensions.
+  /// Under the URL field or the pinned extensions: the Space name's text
+  /// starts 17 pt below, as in Arc, or the list 8 pt below in a guest window.
   private var tabListTopPadding: CGFloat {
-    model.profileKind == .incognito ? 0 : 8
+    switch model.profileKind {
+    case .incognito: 0
+    case .regular: 9
+    default: 8
+    }
   }
 }
 
@@ -500,6 +508,14 @@ struct SidebarFooter: View {
   static let glyphWeight: Font.Weight = .medium
 
   var body: some View {
+    // While the New Space form shows, the footer shows only the Spaces and a
+    // dot for the new one, as in Arc.
+    let creating = model.newSpaceForm != nil
+    // The form's dot follows every Space's, even the only one's.
+    let items =
+      model.showsSpaces
+      ? SpacesLogic.switcherItems(
+        model.spaces.spaces, shown: model.shownSpaceID, includingOne: creating) : []
     HStack(spacing: 0) {
       DownloadsButton(progress: model.downloadProgress, hasUnseen: model.hasUnseenDownloads) {
         model.isDownloadsListOpen.toggle()
@@ -509,17 +525,120 @@ struct SidebarFooter: View {
       .popover(isPresented: $model.isDownloadsListOpen, arrowEdge: .trailing) {
         DownloadsList(model: model, actions: actions)
       }
-      Spacer(minLength: 0)
-      // Arc's plus offers new Spaces and folders; Clair has only tabs so far.
+      .opacity(creating ? 0 : 1)
+      .allowsHitTesting(!creating)
+      // Arc's strip runs from 2 pt after the downloads button to 2 pt before
+      // the plus.
+      Spacer(minLength: 2)
+      if !items.isEmpty || (creating && model.showsSpaces) {
+        SpaceSwitcher(
+          items: creating ? items.map { $0.notCurrent } : items, showsNewSpaceDot: creating, actions: actions)
+        Spacer(minLength: 2)
+      }
+      // Arc's plus also offers folders, Easels and Boosts, which Clair hasn't.
       IconMenu(help: "New") {
+        if model.showsSpaces {
+          Button("New Space…") { actions?.beginNewSpace() }
+        }
         Button("New Tab") { actions?.newTab() }.keyboardShortcut("t", modifiers: .command)
       } label: {
         SymbolGlyph(systemImage: "plus", size: Self.glyphSize, weight: Self.glyphWeight)
       }
       .accessibilityIdentifier("clair.footerNew")
+      .opacity(creating ? 0 : 1)
+      .allowsHitTesting(!creating)
     }
     .padding(.horizontal, 8)
     .frame(height: Self.height)
+  }
+}
+
+/// The sidebar's content between the URL field and the footer: the Space's
+/// header and tab list, sliding sideways to another Space's as in Arc, or the
+/// New Space form (add-spaces D10).
+struct SpacePager: View {
+  let model: BrowserWindowModel
+  weak var actions: (any SidebarActions)?
+  @Binding var tabListHeight: CGFloat
+
+  @State private var width: CGFloat = 0
+  /// 0 as a slide starts, 1 once the new Space is in place.
+  @State private var progress: CGFloat = 1
+  /// The slide `progress` animates; a newer one starts from 0 before its
+  /// first frame.
+  @State private var animatedSlide: UUID?
+
+  /// Arc's slide, recorded at 60 fps on an M1 Pro (add-spaces task 3.4):
+  /// about 90% of the way within two frames, settled by about 100 ms. A
+  /// critically damped spring of 0.08 s is 90% there at 50 ms and settled by
+  /// 85 ms.
+  static let slide = Animation.spring(response: 0.08, dampingFraction: 1)
+
+  var body: some View {
+    ZStack(alignment: .topLeading) {
+      if model.newSpaceForm != nil {
+        NewSpaceFormView(model: model, actions: actions)
+      } else {
+        let slide = model.spaceSlide
+        let direction: CGFloat = slide?.fromTrailing == false ? -1 : 1
+        let progress = slide != nil && slide?.id != animatedSlide ? 0 : self.progress
+        // The earlier Space stays for the whole slide, and goes without a
+        // transition of its own once it's out: removed inside the slide's
+        // animation, it would fade where it was instead of sliding out.
+        if let slide {
+          SpacePage(model: model, space: slide.fromSpace, tabs: slide.fromTabs, actions: nil)
+            .offset(x: -direction * width * progress)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .transition(.identity)
+        }
+        SpacePage(
+          model: model, space: model.shownSpace, tabs: model.tabs, actions: actions,
+          tabListHeight: $tabListHeight
+        )
+        .offset(x: slide == nil ? 0 : direction * width * (1 - progress))
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .clipped()
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    .onChange(of: model.spaceSlide?.id) { _, id in
+      guard id != nil else { return }
+      animatedSlide = id
+      progress = 0
+      withAnimation(Self.slide) {
+        progress = 1
+      } completion: {
+        if model.spaceSlide?.id == id {
+          var done = Transaction()
+          done.disablesAnimations = true
+          withTransaction(done) { model.spaceSlide = nil }
+        }
+      }
+    }
+  }
+}
+
+/// One Space's header and tab list.
+struct SpacePage: View {
+  let model: BrowserWindowModel
+  let space: (any ClairSpace)?
+  let tabs: [any ClairTab]
+  weak var actions: (any SidebarActions)?
+  var tabListHeight: Binding<CGFloat>?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      if model.showsSpaces {
+        SpaceHeaderView(model: model, space: space, actions: actions)
+      }
+      TabList(model: model, tabs: tabs, actions: actions)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tabListHeight?.wrappedValue = $0 }
+        // Ahead of the space below, which would otherwise take half the room.
+        .layoutPriority(1)
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 }
 
@@ -687,6 +806,8 @@ struct DownloadRow: View {
 /// The "New Tab" row and the tab list, in Chromium's tab order.
 struct TabList: View {
   let model: BrowserWindowModel
+  /// The rows' tabs: the window's in its Space, or the Space sliding out's.
+  let tabs: [any ClairTab]
   weak var actions: (any SidebarActions)?
 
   /// Room beyond the rows, so a list that fits never scrolls.
@@ -707,9 +828,10 @@ struct TabList: View {
   var body: some View {
     // A Peek has no row; its parent's row stands for both (add-peek D4).
     // Worked out once per update, not per row.
-    let rows = TabListLogic.rows(model.tabs)
-    let peeks = TabListLogic.peeksByRow(model.tabs)
-    let highlighted = TabListLogic.highlightedRow(activeTabID: model.activeTabID, in: model.tabs)
+    let rows = TabListLogic.rows(tabs)
+    let peeks = TabListLogic.peeksByRow(tabs)
+    let highlighted = TabListLogic.highlightedRow(activeTabID: model.activeTabID, in: tabs)
+    let moveTargets = model.showsSpaces ? SpacesLogic.moveTargets(from: model.shownSpaceID, in: model.spaces.spaces) : []
     List {
       NewTabRow(isHighlighted: model.commandBar?.mode == .newTab) { actions?.newTab() }
         // From inside a row, where it can reach the list's scroll view.
@@ -722,7 +844,7 @@ struct TabList: View {
         TabRow(
           tab: tab, isActive: tab.tabID == highlighted, isWindowKey: model.isWindowKey,
           isIncognito: model.profileKind == .incognito,
-          peek: peeks[tab.tabID], actions: actions)
+          peek: peeks[tab.tabID], moveTargets: moveTargets, actions: actions)
           .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: -1))
           .listRowSeparator(.hidden)
           .listRowBackground(Color.clear)
@@ -731,7 +853,7 @@ struct TabList: View {
         // The offsets count the rows only, not the "New Tab" row or Peeks.
         guard let from = source.first,
           let target = TabListLogic.moveTarget(from: from, to: destination, count: rows.count),
-          let index = TabListLogic.stripIndex(movingRow: from, toRow: target, in: model.tabs)
+          let index = TabListLogic.stripIndex(movingRow: from, toRow: target, in: tabs)
         else { return }
         actions?.move(tab: rows[from].tabID, to: index)
       }
@@ -823,6 +945,9 @@ struct TabRow: View {
   var isIncognito = false
   /// The tab's Peek, whose favicon the row shows as a badge (add-peek D4).
   var peek: (any ClairTab)?
+  /// The Spaces "Move to Space" lists: every other one, or none with one
+  /// Space (add-spaces D7).
+  var moveTargets: [any ClairSpace] = []
   weak var actions: (any SidebarActions)?
 
   @State private var isHovered = false
@@ -1021,14 +1146,28 @@ extension TabRow {
   /// The row's context menu.
   var menuItems: [RowClickCatcher.Item] {
     let tabID = tab.tabID, isMuted = tab.isMuted
-    return [
+    var items: [RowClickCatcher.Item] = [
       .action("Copy Link") { actions?.copyLink(of: tabID) },
       .action("Duplicate") { actions?.duplicate(tab: tabID) },
       .action(isMuted ? "Unmute" : "Mute") { actions?.setMuted(!isMuted, tab: tabID) },
+    ]
+    // add-spaces D7: every other Space, and no item with one Space.
+    if !moveTargets.isEmpty {
+      items.append(.separator)
+      items.append(
+        .submenu(
+          "Move to Space",
+          moveTargets.map { space in
+            let spaceID = space.spaceID
+            return .action(SpacesLogic.label(of: space)) { actions?.moveTab(tabID, toSpace: spaceID) }
+          }))
+    }
+    items += [
       .separator,
       .action("Close Tab") { actions?.close(tab: tabID) },
       .action("Close Tabs Below") { actions?.closeTabs(below: tabID) },
     ]
+    return items
   }
 }
 
@@ -1038,7 +1177,18 @@ extension TabRow {
 struct RowClickCatcher: NSViewRepresentable {
   enum Item {
     case action(String, () -> Void)
+    /// Shown, but can't be chosen.
+    case disabled(String)
+    case submenu(String, [Item])
     case separator
+
+    /// The item's title, or nil for a separator.
+    var title: String? {
+      switch self {
+      case .action(let title, _), .disabled(let title), .submenu(let title, _): title
+      case .separator: nil
+      }
+    }
   }
 
   let onMiddleClick: () -> Void
@@ -1096,15 +1246,29 @@ struct RowClickCatcher: NSViewRepresentable {
       if let menuProvider {
         return menuProvider()
       }
+      return Self.menu(menuItems, target: self)
+    }
+
+    /// The menu for `items`, whose actions `target` runs.
+    static func menu(_ items: [Item], target: CatcherView) -> NSMenu {
       let menu = NSMenu()
-      for item in menuItems {
+      menu.autoenablesItems = false
+      for item in items {
         switch item {
         case .separator:
           menu.addItem(.separator())
         case .action(let title, let action):
           let menuItem = NSMenuItem(title: title, action: #selector(runItem(_:)), keyEquivalent: "")
-          menuItem.target = self
+          menuItem.target = target
           menuItem.representedObject = ItemAction(run: action)
+          menu.addItem(menuItem)
+        case .disabled(let title):
+          let menuItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+          menuItem.isEnabled = false
+          menu.addItem(menuItem)
+        case .submenu(let title, let items):
+          let menuItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+          menuItem.submenu = Self.menu(items, target: target)
           menu.addItem(menuItem)
         }
       }

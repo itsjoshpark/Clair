@@ -6,6 +6,8 @@
 
 #import <AppKit/AppKit.h>
 
+#include <algorithm>
+#include <climits>
 #include <string>
 
 #include "base/apple/bundle_locations.h"
@@ -20,6 +22,8 @@
 #include "base/time/time.h"
 #import "chrome/browser/app_controller_mac.h"
 #import "chrome/browser/clair/ClairHost.h"
+#include "chrome/browser/clair/clair_space_store.h"
+#import "chrome/browser/clair/clair_space_tabs.h"
 #include "chrome/browser/clair/ungoogled_version.h"
 #include "chrome/browser/clair/window/clair_window_hooks.h"
 #include "chrome/browser/download/download_core_service.h"
@@ -34,6 +38,7 @@
 #include "chrome/browser/ui/navigator/browser_navigator.h"
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "components/tabs/public/tab_interface.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/page_transition_types.h"
@@ -144,6 +149,65 @@ void OpenURLInProfile(const GURL& url, Profile* profile) {
   app_controller_mac::RunInLastProfileSafely(
       base::BindOnce(&OpenURLInProfile, gurl),
       app_controller_mac::kShowProfilePickerOnFailure);
+}
+
+// --- Spaces (add-spaces design D1, D2, D7, D9) ---
+
+- (NSArray<id<ClairSpace>>*)spaces {
+  CHECK([NSThread isMainThread]);
+  return clair::SpaceSnapshots();
+}
+
+- (NSArray<id<ClairTab>>*)tabsInSpace:(ClairSpaceID)spaceID {
+  CHECK([NSThread isMainThread]);
+  return spaceID ? clair::TabsInSpace(base::SysNSStringToUTF8(spaceID)) : @[];
+}
+
+- (void)addObserver:(id<ClairSpacesObserver>)observer {
+  CHECK([NSThread isMainThread]);
+  if (observer) {
+    clair::AddSpacesObserver(observer);
+  }
+}
+
+- (ClairSpaceID)createSpaceNamed:(NSString*)name icon:(NSString*)icon {
+  CHECK([NSThread isMainThread]);
+  const std::string id = clair::ClairSpaceStore::Get()->Create(
+      base::SysNSStringToUTF8(name ?: @""), base::SysNSStringToUTF8(icon ?: @""));
+  return id.empty() ? nil : base::SysUTF8ToNSString(id);
+}
+
+- (void)renameSpace:(ClairSpaceID)spaceID to:(NSString*)name {
+  CHECK([NSThread isMainThread]);
+  clair::ClairSpaceStore::Get()->Rename(base::SysNSStringToUTF8(spaceID ?: @""),
+                                        base::SysNSStringToUTF8(name ?: @""));
+}
+
+- (void)setIcon:(NSString*)icon forSpace:(ClairSpaceID)spaceID {
+  CHECK([NSThread isMainThread]);
+  clair::ClairSpaceStore::Get()->SetIcon(base::SysNSStringToUTF8(spaceID ?: @""),
+                                         base::SysNSStringToUTF8(icon ?: @""));
+}
+
+- (void)moveSpace:(ClairSpaceID)spaceID toIndex:(NSInteger)index {
+  CHECK([NSThread isMainThread]);
+  clair::ClairSpaceStore::Get()->Move(
+      base::SysNSStringToUTF8(spaceID ?: @""),
+      static_cast<int>(std::clamp<NSInteger>(index, 0, INT_MAX)));
+}
+
+- (void)deleteSpace:(ClairSpaceID)spaceID {
+  CHECK([NSThread isMainThread]);
+  clair::DeleteSpace(base::SysNSStringToUTF8(spaceID ?: @""));
+}
+
+- (void)moveTab:(ClairTabID)tabID toSpace:(ClairSpaceID)spaceID {
+  CHECK([NSThread isMainThread]);
+  if (tabID == ClairTabIDNone || !spaceID) {
+    return;
+  }
+  tabs::TabInterface* tab = tabs::TabHandle(static_cast<int32_t>(tabID)).Get();
+  clair::MoveTabToSpace(tab, base::SysNSStringToUTF8(spaceID));
 }
 
 @end
