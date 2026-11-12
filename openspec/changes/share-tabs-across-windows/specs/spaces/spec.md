@@ -47,35 +47,6 @@ When the tab a window shows a still of is closed, the window SHALL show a new ta
 - **WHEN** window A shows a still of "Docs" and the user selects another tab in A
 - **THEN** A shows that tab's page, and "Docs" stays live in window B
 
-### Requirement: Showing a Space takes a tab from another window
-When a window switches to a Space, it SHALL show the tab last active in that Space in this window; otherwise the Space's most recently active tab that no window is showing; otherwise a new tab page with the command bar open.
-
-#### Scenario: The Space's tabs are elsewhere
-- **WHEN** "Work" has two tabs, both opened in window A and neither showing there, and the user switches window B to "Work"
-- **THEN** B shows the more recently active of the two
-
-#### Scenario: Every tab is showing elsewhere
-- **WHEN** the only tab of "Work" is showing in window A, and the user switches window B to "Work"
-- **THEN** B shows a new tab page in "Work", and A is unchanged
-
-### Requirement: The next tab after a close can come from another window
-The tab chosen after a close SHALL be chosen from the whole list the sidebar shows. A tab that another window shows SHALL NOT be skipped: this window shows it, and the other window shows its still.
-
-#### Scenario: The row above lives in another window
-- **WHEN** the row above the closed tab was opened in another window and isn't showing there
-- **THEN** this window shows it
-
-#### Scenario: The next tab is showing in another window
-- **WHEN** the row above the closed tab is showing in another window
-- **THEN** this window shows it, and the other window shows its still
-
-### Requirement: Tab commands act on the shared list
-Cmd+1 to Cmd+9, Next Tab, Previous Tab, Ctrl+Tab and Close Tabs Below SHALL act on the rows the sidebar lists, whichever window holds them.
-
-#### Scenario: Cmd+number on a tab from another window
-- **WHEN** a window shows "Work", whose rows are X, Y and Z, and Y was opened in another window
-- **THEN** Cmd+2 shows Y in this window
-
 ### Requirement: Closing a window keeps its tabs
 Closing a window while another window that isn't incognito or guest is open SHALL keep its tabs, which stay listed in their Spaces in the remaining windows. Closing the last such window SHALL close its tabs, each with its usual leave-page confirmation.
 
@@ -100,3 +71,78 @@ After a relaunch with session restore, no window SHALL show a still, and no tab 
 #### Scenario: Relaunch with a still showing
 - **WHEN** the user quits while a window shows a still of a tab, and relaunches
 - **THEN** that window shows a new tab page, and the tab is listed once
+
+## MODIFIED Requirements
+
+### Requirement: Showing a Space that has no tab here
+A window SHALL always show a tab. When it switches to a Space, it SHALL show the tab last active in that Space in this window, unless another window shows it; otherwise the Space's most recently active tab that no window is showing, whichever window it was opened in; otherwise a new tab page in that Space, with the command bar open. A new window SHALL show the Space of the window it was opened from, or the Space last shown when no window is open, on a new tab page with the command bar open.
+
+#### Scenario: Empty Space
+- **WHEN** the user switches to a Space that has no tabs
+- **THEN** the window shows a new tab page in that Space, with the command bar open
+
+#### Scenario: New window
+- **WHEN** the user presses Cmd+N in a window showing "Work"
+- **THEN** a new window shows "Work" with a new tab page and the command bar open
+
+#### Scenario: The Space's tabs are elsewhere
+- **WHEN** "Work" has two tabs, both opened in window A and neither showing there, and the user switches window B to "Work"
+- **THEN** B shows the more recently active of the two
+
+#### Scenario: Every tab is showing elsewhere
+- **WHEN** the only tab of "Work" is showing in window A, and the user switches window B to "Work"
+- **THEN** B shows a new tab page in "Work", and A is unchanged
+
+### Requirement: Tab chosen after a close
+When the user closes the active tab, the window SHALL show, in order: the tab the user selected it from, if that tab is still listed in the Space; otherwise the row above it; otherwise the row below it. The tab SHALL be chosen from the whole list the sidebar shows. A tab that another window shows SHALL NOT be skipped: this window shows it, and the other window shows its still. When the Space has no other tab, the window SHALL show a tab of another Space that no window is showing, switching to that Space, or close if there is none.
+
+#### Scenario: Back to where the user came from
+- **WHEN** the rows are E, D, C, B, A, and the user selects A, then C, then closes C
+- **THEN** A is active
+
+#### Scenario: The row above
+- **WHEN** a close has just made E active in the rows F, E, B, and the user closes E
+- **THEN** F, the row above, is active
+
+#### Scenario: The top row
+- **WHEN** the top row is active, wasn't selected from another tab, and the user closes it
+- **THEN** the row below is active
+
+#### Scenario: The Space's last tab
+- **WHEN** the user closes the only tab of "Work" while "Home" has a tab that no window is showing
+- **THEN** the window shows "Home"
+
+#### Scenario: Staying on a page that asks
+- **WHEN** the user closes the active tab, its page asks whether to leave, and the user cancels
+- **THEN** the tab stays active, and closing it again still returns to the tab the user selected it from
+
+#### Scenario: Leaving a page that asks
+- **WHEN** the rows are B, P, A, the user selects A, then P, closes P, and confirms leaving its page
+- **THEN** A is active, and the window shows the same Space
+
+#### Scenario: The row above lives in another window
+- **WHEN** the user closes the active tab, and the row above it was opened in another window and isn't showing there
+- **THEN** this window shows the row above
+
+#### Scenario: The next tab is showing in another window
+- **WHEN** the user closes the active tab, and the row above it is showing in another window
+- **THEN** this window shows the row above, and the other window shows its still
+
+### Requirement: Tab commands follow the Space
+Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to Cmd+9 and Close Tabs Below SHALL act on the rows the sidebar lists, in its order, whichever window holds them, and never on a tab of another Space. Ctrl+Shift+PageDown and Ctrl+Shift+PageUp SHALL move the active row one row down or up in the list, stopping at its ends.
+
+#### Scenario: Moving a row with the keyboard
+- **WHEN** a window shows "Work", whose rows are X, Y and Z, Z is active, and the user presses Ctrl+Shift+PageUp
+- **THEN** the rows are X, Z and Y, and Z is still active
+
+#### Scenario: Cmd+number
+- **WHEN** a window shows "Work", whose rows are X, Y and Z, and the user presses Cmd+2
+- **THEN** Y is active
+
+#### Scenario: Next tab at the Space's end
+- **WHEN** the last row of the Space is active and the user presses Opt+Cmd+Down
+- **THEN** the first row of the same Space is active
+
+#### Scenario: Cmd+number on a tab from another window
+- **WHEN** a window shows "Work", whose rows are X, Y and Z, Y was opened in another window, and the user presses Cmd+2
+- **THEN** this window shows Y

@@ -27,12 +27,12 @@ None.
 
 ### Modified Capabilities
 
-- `spaces`: adds the shared tab list, a tab showing in one window at a time with a still in the other, tabs outliving their window, and choosing the next tab and running tab commands over the shared list. These are added requirements; the ones `add-spaces` wrote for a window's own rows are revised when this change's design is finished.
+- `spaces`: adds the shared tab list, a tab showing in one window at a time with a still in the other, tabs outliving their window, and choosing the next tab and running tab commands over the shared list. It also modifies the three requirements `add-spaces` wrote for a window's own rows: "Showing a Space that has no tab here", "Tab chosen after a close" and "Tab commands follow the Space".
 - `sidebar`: "Tab list" lists the Space's tabs from every window.
 
 ## Impact
 
-- **Depends on `add-spaces`,** whose per-profile tab lists and contract this change extends. Its design and tasks are finished once `add-spaces` has landed and shown how those behave; `design.md` holds the decisions made so far.
+- **Builds on `add-spaces`** (archived as `2026-11-12-add-spaces`), whose per-profile tab lists and contract this change extends.
 - **`native/ClairHost.h`** changes, so the engine key changes and the engine is rebuilt once.
 - **Overlay:** `clair_space_tabs`, the browser window and the bridge. No new patch is expected.
 - **`ClairUI`:** the window model stops filtering rows to its own window; the card draws the still.
