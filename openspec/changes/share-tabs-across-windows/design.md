@@ -57,6 +57,13 @@ The still ends when:
 
 A placeholder carries no session tags, so it needs no session work: restored, it is an ordinary new tab page, which joins the Space its window shows as any untagged tab does (`add-spaces` D2).
 
+Found while implementing:
+
+- **The copy isn't waited for.** `CopyFromSurface` copies whatever the page's surface shows when viz serves the request, which is the same frame whether the tab has moved yet or not, so the overlay moves the tab at once and records the image when it arrives; `stillDidChange` then fires a second time.
+- **A click that makes the window key finishes first.** Taking back on becoming key waits for the mouse-up of the click that made the window key. A click on another row then selects that row, which ends the still, and the tab stays where it is, as "Moving on" in the spaces spec asks.
+- **While a still shows, the still's row stands for the active row**: Cmd+W closes it in the window that holds it, and the tab commands count from it, as the sidebar highlights it.
+- **Duplicate of a row another window holds** opens the copy in this window, right below the row, as `WebContents::Clone` and an insert, since Chromium's `DuplicateTabAt` works only within one strip.
+
 - **Why a placeholder:** Chromium needs an active tab, and activating any real tab would run its page as visible behind the still.
 
 ### D3. Showing a Space, and choosing the next tab, look across windows

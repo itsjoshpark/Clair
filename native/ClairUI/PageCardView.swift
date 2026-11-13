@@ -26,6 +26,9 @@ final class PageCardView: NSView {
   private(set) weak var parentPageView: NSView?
   /// Moves the window from the top of the page (drag-window-from-page-top).
   let dragStrip = PageTopDragStrip()
+  /// The dimmed still of a page another window took, over the hidden
+  /// placeholder tab (share-tabs-across-windows D2).
+  let stillView = StillView()
   private(set) weak var devToolsView: NSView?
 
   /// Holds the page, and the parent page while a Peek shows: the page stays
@@ -121,6 +124,8 @@ final class PageCardView: NSView {
     pageHolder.wantsLayer = true
     container.addSubview(pageHolder)
     container.addSubview(dragStrip)
+    stillView.isHidden = true
+    container.addSubview(stillView)
     container.addSubview(wash)
     container.addSubview(peekClickCatcher)
     cardScaler.wantsLayer = true
@@ -290,6 +295,14 @@ final class PageCardView: NSView {
     }
   }
 
+  /// Shows the dimmed still, with `image` or as a dimmed background alone,
+  /// or hides it.
+  func showStill(_ shows: Bool, image: NSImage?) {
+    stillView.image = shows ? image : nil
+    stillView.isHidden = !shows
+    needsLayout = true
+  }
+
   /// Shows the active tab's docked DevTools, or none.
   func show(devTools view: NSView?, layout: DevToolsLayout) {
     if view !== devToolsView {
@@ -314,6 +327,7 @@ final class PageCardView: NSView {
     container.frame = cardScaler.bounds
     layer?.shadowPath = isBare ? nil : cardShadowPath(peeking: isPeeking)
     pageHolder.frame = container.bounds
+    stillView.frame = container.bounds
     if isPeeking {
       parentPageView?.frame = pageHolder.bounds
       if let scalerLayer = cardScaler.layer {
@@ -565,6 +579,78 @@ enum PeekWash {
 
 /// An NSView whose origin is at the top left, as Chromium's and DevTools'
 /// coordinates are.
+/// A still of a page, dimmed, as Arc shows a tab another window took: the
+/// image fills the card from its top, over the page's background colour.
+final class StillView: NSView {
+  /// How much the still darkens.
+  static let dimming: CGFloat = 0.35
+
+  private let imageLayer = CALayer()
+  private let dimLayer = CALayer()
+
+  var image: NSImage? {
+    didSet {
+      imageLayer.contents = image
+      imageLayer.isHidden = image == nil
+    }
+  }
+
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    wantsLayer = true
+    imageLayer.contentsGravity = .resizeAspectFill
+    imageLayer.masksToBounds = true
+    imageLayer.isHidden = true
+    dimLayer.backgroundColor = NSColor.black.withAlphaComponent(Self.dimming).cgColor
+    layer?.addSublayer(imageLayer)
+    layer?.addSublayer(dimLayer)
+    setAccessibilityElement(true)
+    setAccessibilityRole(.image)
+    setAccessibilityLabel("Open in another window")
+    setAccessibilityIdentifier("clair.still")
+    updateBackground()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not used")
+  }
+
+  override var isFlipped: Bool { true }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    updateBackground()
+  }
+
+  private func updateBackground() {
+    effectiveAppearance.performAsCurrentDrawingAppearance {
+      layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+    }
+  }
+
+  override func layout() {
+    super.layout()
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    // The page's top stays at the card's top when the window's size changed
+    // since the copy.
+    if let image, image.size.width > 0, bounds.width > 0 {
+      let height = bounds.width * image.size.height / image.size.width
+      imageLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: max(height, bounds.height))
+    } else {
+      imageLayer.frame = bounds
+    }
+    dimLayer.frame = bounds
+    CATransaction.commit()
+  }
+
+  // The still stands for the page: a click goes nowhere else.
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    isHidden ? nil : super.hitTest(point)
+  }
+}
+
 final class FlippedView: NSView {
   override var isFlipped: Bool { true }
 }

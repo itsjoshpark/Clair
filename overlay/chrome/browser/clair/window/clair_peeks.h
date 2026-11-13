@@ -92,6 +92,14 @@ class ClairPeeks : public TabStripModelObserver {
   // Turns the Peek of `tab` into a normal, active tab (D8).
   void Expand(tabs::TabInterface* tab);
 
+  // share-tabs-across-windows D1: `parent` and its Peek are about to move to
+  // another window. Forgets the pair here without closing or unlinking the
+  // Peek, and returns it, or null when `parent` has none.
+  tabs::TabInterface* Release(tabs::TabInterface* parent);
+  // The pair moved here from another window: `peek` sits right after
+  // `parent`. Links them again without activating either.
+  void Adopt(tabs::TabInterface* parent, tabs::TabInterface* peek);
+
   // Moves `tab` to `to_index` in the tab strip, taking its Peek along, so that
   // `tab` ends at `to_index` and its Peek right after it.
   void MoveTab(tabs::TabInterface* tab, int to_index);

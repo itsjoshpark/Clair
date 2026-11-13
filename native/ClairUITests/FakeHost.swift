@@ -2,6 +2,7 @@
 // You can use, redistribute, and/or modify this source code under
 // the terms of the GPL-3.0 license that can be found in the LICENSE file.
 
+import AppKit
 import ClairHost
 import Foundation
 
@@ -84,6 +85,64 @@ final class FakeHost: NSObject, ClairHost {
 
   func register(_ browser: FakeBrowser) {
     browsers.add(browser)
+    activated(browser)
+  }
+
+  // MARK: Tabs shared across windows (share-tabs-across-windows D1 to D4)
+
+  /// Every tab's page view, which moves with it between windows.
+  var pageViews: [TabID: NSView] = [:]
+  /// Unique across browsers, as Chromium's tab handles are.
+  private var nextTabID: TabID = 1
+  /// When each tab was last active, as a count.
+  private var stamps: [TabID: Int] = [:]
+  private var clock = 0
+  /// Browsers, most recently active first.
+  private var activationOrder: [BrowserID] = []
+
+  func newTabID() -> TabID {
+    defer { nextTabID += 1 }
+    return nextTabID
+  }
+
+  /// A tab became active.
+  func stamp(_ tabID: TabID) {
+    clock += 1
+    stamps[tabID] = clock
+  }
+
+  /// When the user last looked at a row or its Peek.
+  func lastActive(row: TabID) -> Int {
+    let peek = tab(row)?.peekID ?? ClairTabIDNone
+    return max(stamps[row] ?? 0, stamps[peek] ?? 0)
+  }
+
+  /// Whether a window other than `browser` shows the row.
+  func isShown(_ row: TabID, except browser: FakeBrowser) -> Bool {
+    guard let tab = tab(row), tab.browserID != browser.browserID, let holder = self.browser(tab.browserID) else {
+      return false
+    }
+    return holder.isActiveRow(row)
+  }
+
+  /// A window became the most recently active.
+  func activated(_ browser: FakeBrowser) {
+    activationOrder.removeAll { $0 == browser.browserID }
+    activationOrder.insert(browser.browserID, at: 0)
+  }
+
+  /// The most recently active other regular window, open.
+  func mostRecentBrowser(except browser: FakeBrowser) -> FakeBrowser? {
+    activationOrder.lazy.compactMap { self.browser($0) }.first {
+      $0 !== browser && $0.profileKind == .regular && !$0.isClosed
+    }
+  }
+
+  /// A tab closed: a window showing a still of it shows a new tab page.
+  func tabClosed(_ tabID: TabID) {
+    for browser in allBrowsers where browser.stillTabID == tabID {
+      browser.stillTabClosedForHost()
+    }
   }
 
   var allBrowsers: [FakeBrowser] { browsers.allObjects }

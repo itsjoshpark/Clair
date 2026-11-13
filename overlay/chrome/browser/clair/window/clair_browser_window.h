@@ -41,10 +41,12 @@
 @class ClairChromiumBrowser;
 @class ClairNativeWindow;
 @class NSEvent;
+@class NSImage;
 @protocol ClairWindow;
 
 class Browser;
 class ClairBrowserWindow;
+class SkBitmap;
 class ClairDownloads;
 class ClairExtensions;
 class ClairPeeks;
@@ -288,40 +290,71 @@ class ClairBrowserWindow : public BrowserWindow {
   // The tab lists of the window's profile (add-spaces design D2).
   ClairSpaceTabs* space_tabs() const { return space_tabs_; }
 
-  // --- Spaces (add-spaces design D3, D4, D5) ---
-  // The Space the window shows. Its active tab always belongs to it.
+  // --- Spaces (add-spaces design D3, D4, D5; share-tabs-across-windows
+  // design D1 to D4) ---
+  // The Space the window shows. Its active tab always belongs to it, except
+  // its placeholder while it shows a still.
   const std::string& shown_space() const { return shown_space_; }
-  // Shows `space`: activates the tab last active in it here, or else its
-  // first row here, or else opens a new tab page in it with the command bar.
-  // Ignored for an unknown Space and in incognito and guest windows.
+  // Shows `space`: activates the tab last active in it here unless another
+  // window shows it, or else the Space's most recently active row that no
+  // window shows, taking it from the window that holds it, or else opens a
+  // new tab page in it with the command bar. Ignored for an unknown Space and
+  // in incognito and guest windows.
   void ShowSpace(const std::string& space);
-  // The window's tabs in its shown Space, in the Space's order: with Peeks,
-  // or only the rows the sidebar lists.
+  // The tabs of the shown Space, in its order, whichever window of the
+  // profile holds them: with Peeks, or only the rows the sidebar lists. An
+  // incognito or guest window's are its own.
   std::vector<tabs::TabInterface*> SpaceTabs() const;
   std::vector<tabs::TabInterface*> Rows() const;
   // Whether `tab` is the row the window shows: the active tab, or the parent
-  // of the active Peek.
+  // of the active Peek. Never while the window shows a still.
   bool IsActiveRow(const tabs::TabInterface* tab) const;
+  // The row the window shows or highlights: the active row, or the still's
+  // tab; null when there's none.
+  tabs::TabInterface* HighlightedRow() const;
   // D4: before the active row `row` leaves the Space, shows the row the user
   // came from, if it's still listed, or else the row above, or else the row
-  // below. Returns false, changing nothing, when there's none.
+  // below, taking it from another window if need be. Returns false, changing
+  // nothing, when there's none.
   bool ShowNextRow(tabs::TabInterface* row);
-  // D4: closes `tab`, with its leave-page confirmation, first showing the
-  // next row if it's the active one. A page with unload handlers is asked
-  // first, and the next row shows once it agrees.
+  // D4: closes `tab`, in whichever window holds it, with its leave-page
+  // confirmation, first showing the next tab if it's the active one. A page
+  // with unload handlers is asked first, and the next tab shows once it
+  // agrees.
   void CloseTab(tabs::TabInterface* tab);
   // D4: `contents` answered a close. If Clair started it and the page agreed,
   // shows the next row before Chromium closes the tab.
   void BeforeUnloadFired(content::WebContents* contents, bool proceed);
-  // Closes the window's tabs below `tab` in its Space, from its Peek.
+  // Closes the rows below `tab` in its Space, from its Peek, in whichever
+  // window holds each.
   void CloseTabsBelow(tabs::TabInterface* tab);
-  // Activates `row`, or its Peek if it has one.
+  // Activates `row`, or its Peek if it has one, taking it from another window
+  // if need be.
   void ActivateRow(tabs::TabInterface* row);
+  // Activates `tab` exactly, taking it from another window if need be.
+  void ActivateTab(tabs::TabInterface* tab);
   // Opens a new tab page in the shown Space, optionally with the command bar.
   void OpenNewTabPage(bool show_command_bar);
   // D5: runs a tab command over the rows of the shown Space. Returns whether
   // it ran; otherwise Chromium runs it.
   bool ExecuteTabCommand(int command);
+
+  // --- Tabs shared across windows (share-tabs-across-windows D1, D2) ---
+  // The window holding `tab`, or null.
+  static ClairBrowserWindow* HolderOf(const tabs::TabInterface* tab);
+  // Whether another window of the profile shows `row`.
+  bool IsShownElsewhere(const tabs::TabInterface* row) const;
+  // D1: moves `tab` and its Peek here from the window that holds them and
+  // activates `tab`. The other window keeps a still if it showed them.
+  void Take(tabs::TabInterface* tab);
+  // D2: the tab the window shows a still of, or a null handle.
+  tabs::TabHandle still_tab() const { return still_tab_; }
+  NSImage* still_image() const { return still_image_; }
+  // While the window inserts its placeholder (D2).
+  bool inserting_placeholder() const { return inserting_placeholder_; }
+  // D2: the still's tab closed: the placeholder becomes a new tab page of the
+  // shown Space, with the command bar.
+  void StillTabClosed();
   ClairExclusiveAccessContext* exclusive_access_context() {
     return &exclusive_access_context_;
   }
@@ -492,6 +525,26 @@ class ClairBrowserWindow : public BrowserWindow {
   void DetachFromClairUI();
   // D3: the window now shows `space`; ClairUI hears of it with the next push.
   void SetShownSpace(const std::string& space);
+  // share-tabs-across-windows D3: shows `row` as Clair's choice of the next
+  // tab, which sets no came-from.
+  void ChooseRow(tabs::TabInterface* row);
+  // D3: before the active row `row`, the last of its Space, closes: shows the
+  // most recently active row of another Space that no window shows. Returns
+  // false, changing nothing, when there's none.
+  bool ShowTabOfAnotherSpace(tabs::TabInterface* row);
+  // D1: moves `row` and its Peek from `from` to this window's strip, keeping
+  // their place in the Space's list. Activates nothing.
+  void MoveFamilyHere(ClairBrowserWindow* from, tabs::TabInterface* row);
+  // D2: starts a still of `row`, which another window is taking: copies its
+  // page and activates a placeholder.
+  void BeginStill(tabs::TabInterface* row);
+  // D2: ends the still, closing the placeholder unless it became a tab.
+  void EndStill();
+  void StillCopied(int generation, const SkBitmap& bitmap);
+  // D4: moves the window's tabs to the most recently active other regular
+  // window of the profile. Returns whether it did.
+  bool HandTabsToAnotherWindow();
+  tabs::TabInterface* placeholder() const;
   // The pages the card shows while `active` is the active tab: it and its
   // Peek or parent (add-peek D4).
   std::set<content::WebContents*> PagesShownWith(
@@ -520,6 +573,14 @@ class ClairBrowserWindow : public BrowserWindow {
   // While Clair activates the next tab before a close, which sets no
   // came-from.
   bool choosing_next_ = false;
+  // share-tabs-across-windows D2: the tab the window shows a still of, its
+  // page's copy, the placeholder under it, and a count that tells a late copy
+  // from the current still's.
+  tabs::TabHandle still_tab_;
+  NSImage* __strong still_image_ = nil;
+  tabs::TabHandle placeholder_;
+  int still_generation_ = 0;
+  bool inserting_placeholder_ = false;
   // D4: the active row Clair is closing, while its page is asked; or null.
   tabs::TabHandle pending_close_;
   // Owned by the browser's FindBarController once created.

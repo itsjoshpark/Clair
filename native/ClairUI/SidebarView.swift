@@ -229,7 +229,6 @@ struct TopRow: View {
   }
 
   var body: some View {
-    let tab = model.activeTab
     // The button's own state, which holds stop under the pointer (design D2);
     // the tab rows' spinners read the tab's `isLoading`.
     let reloadStop = model.reloadStop.mode
@@ -238,23 +237,23 @@ struct TopRow: View {
     let isCompact = controls.hasCompactTopRow(width: model.sidebar.width)
     let size = isCompact ? IconButtonSize.small : IconButtonSize.regular
     let back = IconButton(
-      systemImage: "arrow.left", help: "Go back", shortcut: ["⌘", "["], isEnabled: tab?.canGoBack ?? false, size: size
+      systemImage: "arrow.left", help: "Go back", shortcut: ["⌘", "["], isEnabled: model.canGoBack, size: size
     ) {
       actions?.goBack()
     }
     .overlay(
       HistoryButtonCatcher(
-        isEnabled: tab?.canGoBack ?? false, makeMenu: { actions?.historyMenu(.back) }))
+        isEnabled: model.canGoBack, makeMenu: { actions?.historyMenu(.back) }))
     .accessibilityIdentifier("clair.back")
     let forward = IconButton(
-      systemImage: "arrow.right", help: "Go forward", shortcut: ["⌘", "]"], isEnabled: tab?.canGoForward ?? false,
+      systemImage: "arrow.right", help: "Go forward", shortcut: ["⌘", "]"], isEnabled: model.canGoForward,
       size: size
     ) {
       actions?.goForward()
     }
     .overlay(
       HistoryButtonCatcher(
-        isEnabled: tab?.canGoForward ?? false, makeMenu: { actions?.historyMenu(.forward) }))
+        isEnabled: model.canGoForward, makeMenu: { actions?.historyMenu(.forward) }))
     .accessibilityIdentifier("clair.forward")
     // The row is centred on the window controls (design D3b).
     if isCompact {
@@ -270,7 +269,7 @@ struct TopRow: View {
               Button("Reload") { actions?.reloadOrStop() }.keyboardShortcut("r", modifiers: .command)
             }
           }
-          .disabled(tab == nil || !reloadStop.isEnabled)
+          .disabled(!model.canReload || !reloadStop.isEnabled)
           Button("Hide Sidebar") { actions?.toggleSidebar() }.keyboardShortcut("s", modifiers: .command)
         } label: {
           SymbolGlyph(systemImage: "ellipsis")
@@ -298,7 +297,7 @@ struct TopRow: View {
           forward
           IconButton(
             help: isLoading ? "Stop loading this page" : "Reload this page",
-            shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: tab != nil && reloadStop.isEnabled
+            shortcut: isLoading ? ["esc"] : ["⌘", "R"], isEnabled: model.canReload && reloadStop.isEnabled
           ) {
             actions?.reloadOrStop()
           } label: {
@@ -347,7 +346,7 @@ struct URLField: View {
 
   var body: some View {
     let tab = model.activeTab
-    let display = URLDisplay.text(for: tab)
+    let display = model.urlFieldText
     let hasSiteControls = tab != nil
     let showsNotSecure = URLDisplay.showsNotSecure(for: tab)
     HStack(spacing: 0) {
@@ -829,8 +828,8 @@ struct TabList: View {
     // A Peek has no row; its parent's row stands for both (add-peek D4).
     // Worked out once per update, not per row.
     let rows = TabListLogic.rows(tabs)
-    let peeks = TabListLogic.peeksByRow(tabs)
-    let highlighted = TabListLogic.highlightedRow(activeTabID: model.activeTabID, in: tabs)
+    let peeks = model.rowPeeks(in: tabs)
+    let highlighted = model.highlightedRow(in: tabs)
     let moveTargets = model.showsSpaces ? SpacesLogic.moveTargets(from: model.shownSpaceID, in: model.spaces.spaces) : []
     List {
       NewTabRow(isHighlighted: model.commandBar?.mode == .newTab) { actions?.newTab() }

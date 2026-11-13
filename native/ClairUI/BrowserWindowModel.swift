@@ -21,10 +21,21 @@ final class BrowserWindowModel {
   /// The Space the window shows (add-spaces design D3).
   private(set) var shownSpaceID: SpaceID
 
-  /// The window's tabs in the Space it shows, in the Space's order, which is
-  /// the sidebar's, Peeks included.
+  /// The tabs of the Space the window shows, in the Space's order, which is
+  /// the sidebar's, Peeks included: every window's in a regular window
+  /// (share-tabs-across-windows D1), its own in an incognito or guest one.
   private(set) var tabs: [any ClairTab] = []
   private(set) var activeTabID: TabID = ClairTabIDNone
+
+  /// The tab another window took, whose dimmed still the card shows, or none
+  /// (share-tabs-across-windows D2). Its row stays highlighted.
+  private(set) var stillTabID: TabID = ClairTabIDNone
+  /// The page as it was when it left, or nil when the copy failed: the card
+  /// then dims its background alone.
+  private(set) var stillImage: NSImage?
+
+  /// Whether the card shows a still over the hidden placeholder tab.
+  var isShowingStill: Bool { stillTabID != ClairTabIDNone }
 
   /// The Space the window shows, or nil in an incognito or guest window,
   /// whose Space isn't one of the user's.
@@ -38,9 +49,34 @@ final class BrowserWindowModel {
     profileKind == .regular
   }
 
+  /// The tab whose page the card shows, which the URL field and the
+  /// navigation buttons follow: none while the card shows a still.
   var activeTab: (any ClairTab)? {
-    tabs.first { $0.tabID == activeTabID }
+    isShowingStill ? nil : tabs.first { $0.tabID == activeTabID }
   }
+
+  /// The row highlighted in `tabs`: the still's while there's one, else the
+  /// active tab's, or its parent's while a Peek shows.
+  func highlightedRow(in tabs: [any ClairTab]) -> TabID {
+    isShowingStill ? stillTabID : TabListLogic.highlightedRow(activeTabID: activeTabID, in: tabs)
+  }
+
+  /// Each row's Peek, whose favicon the row shows as a badge; the still's
+  /// row shows none, as the still shows the page without its Peek.
+  func rowPeeks(in tabs: [any ClairTab]) -> [TabID: any ClairTab] {
+    var peeks = TabListLogic.peeksByRow(tabs)
+    if isShowingStill {
+      peeks[stillTabID] = nil
+    }
+    return peeks
+  }
+
+  /// What the URL field shows, or nil for its placeholder.
+  var urlFieldText: String? { URLDisplay.text(for: activeTab) }
+  /// Whether back, forward and reload can act on the page the card shows.
+  var canGoBack: Bool { activeTab?.canGoBack ?? false }
+  var canGoForward: Bool { activeTab?.canGoForward ?? false }
+  var canReload: Bool { activeTab != nil }
 
   private(set) var extensionActions: [any ClairExtensionAction] = []
   private(set) var downloads: [any ClairDownload] = []
@@ -116,9 +152,21 @@ final class BrowserWindowModel {
     reloadTabs()
   }
 
+  /// Whether the window lists only the tabs it holds: an incognito or guest
+  /// window, whose tabs never leave it.
+  var listsOwnTabsOnly: Bool { profileKind != .regular }
+
   /// Reads the window's rows of its Space again from `spaces`.
   func reloadTabs() {
-    tabs = spaces.tabs(inSpace: shownSpaceID, browser: browserID)
+    tabs =
+      listsOwnTabsOnly
+      ? spaces.tabs(inSpace: shownSpaceID, browser: browserID) : spaces.tabs(inSpace: shownSpaceID)
+  }
+
+  /// The window shows a still of `tabID`, with `image`, or none.
+  func setStill(_ tabID: TabID, image: NSImage?) {
+    stillTabID = tabID
+    stillImage = tabID == ClairTabIDNone ? nil : image
   }
 
   /// Replaces the snapshot of one tab; a tab the list doesn't have is ignored,

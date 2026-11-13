@@ -470,6 +470,41 @@ void ClairPeeks::Expand(tabs::TabInterface* tab) {
   }
 }
 
+// --- Moving between windows (share-tabs-across-windows D1) ---
+
+tabs::TabInterface* ClairPeeks::Release(tabs::TabInterface* parent) {
+  auto pair = FindByParent(parent);
+  if (pair == pairs_.end()) {
+    return nullptr;
+  }
+  tabs::TabInterface* peek = pair->closing ? nullptr : pair->peek.Get();
+  if (!peek) {
+    // A closing Peek stays to close here, as when its parent leaves.
+    return nullptr;
+  }
+  // Out of the table before the strip hears of the move, so the move neither
+  // orphans the Peek nor unlinks it as a tab that left on its own.
+  if (confirm_peek_ == pair->peek) {
+    confirm_peek_.reset();
+  }
+  pairs_.erase(pair);
+  return peek;
+}
+
+void ClairPeeks::Adopt(tabs::TabInterface* parent, tabs::TabInterface* peek) {
+  if (!model_ || !parent || !peek || parent == peek ||
+      FindByParent(parent) != pairs_.end() || FindByPeek(peek) != pairs_.end()) {
+    return;
+  }
+  pairs_.emplace_back(parent->GetHandle(), peek->GetHandle());
+  pairs_.back().escape_watcher =
+      std::make_unique<EscapeWatcher>(this, peek->GetContents());
+  // D9: the session leaves it out under its new window too.
+  clair::TagPeekInSession(window_->browser(), peek->GetContents(), true);
+  Changed();
+  ScheduleRepair();
+}
+
 // --- Tab commands (D7, D8) ---
 
 void ClairPeeks::MoveQuietly(int from, int to) {

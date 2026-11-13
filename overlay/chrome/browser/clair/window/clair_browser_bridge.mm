@@ -340,6 +340,7 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   id<ClairWindow> __weak _window;
   BOOL _flushPosted;
   BOOL _activeTabChanged;
+  BOOL _stillChanged;
   // add-spaces D3: the Space the window showed before the change ClairUI
   // hasn't heard of yet.
   std::optional<std::string> _previousSpace;
@@ -382,15 +383,31 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   return tab ? strip->GetIndexOfTab(tab) : TabStripModel::kNoTab;
 }
 
-- (ClairPeeks*)peeks {
-  return _browserWindow ? _browserWindow->peeks() : nullptr;
-}
-
 // The tab named by `tabID`, or null.
 - (tabs::TabInterface*)tabWithID:(ClairTabID)tabID {
   const int index = [self indexOfTab:tabID];
   return index == TabStripModel::kNoTab ? nullptr
                                         : self.tabStrip->GetTabAtIndex(index);
+}
+
+// The tab named by `tabID` among the window's rows, whichever window holds it
+// (share-tabs-across-windows D1): one of this window's, or one another
+// window of the profile holds in a Space. An incognito or guest window's tabs
+// never leave it. Null otherwise.
+- (tabs::TabInterface*)rowTabWithID:(ClairTabID)tabID {
+  if (tabs::TabInterface* tab = [self tabWithID:tabID]) {
+    return tab;
+  }
+  ClairSpaceTabs* lists = _browserWindow ? _browserWindow->space_tabs() : nullptr;
+  if (!lists || !lists->is_regular() || tabID == ClairTabIDNone) {
+    return nullptr;
+  }
+  tabs::TabInterface* tab = tabs::TabHandle(static_cast<int32_t>(tabID)).Get();
+  ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(tab);
+  if (!holder || holder->space_tabs() != lists || lists->SpaceOf(tab).empty()) {
+    return nullptr;
+  }
+  return tab;
 }
 
 - (id<ClairTab>)snapshotOf:(content::WebContents*)contents {
@@ -440,6 +457,11 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   [self flush];
 }
 
+- (void)stillChanged {
+  _stillChanged = YES;
+  [self postFlush];
+}
+
 - (void)flush {
   _flushPosted = NO;
   // The tab lists first, so ClairUI knows a tab before it becomes active
@@ -449,6 +471,7 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   if (!window || !_browserWindow) {
     _previousSpace.reset();
     _activeTabChanged = NO;
+    _stillChanged = NO;
     return;
   }
   if (_previousSpace) {
@@ -460,6 +483,11 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
                                       ? nil
                                       : base::SysUTF8ToNSString(previous)];
     }
+  }
+  // The still before the placeholder it covers becomes active.
+  if (_stillChanged) {
+    _stillChanged = NO;
+    [window stillDidChange];
   }
   if (_activeTabChanged) {
     _activeTabChanged = NO;
@@ -500,6 +528,18 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   TabStripModel* strip = self.tabStrip;
   content::WebContents* active = strip ? strip->GetActiveWebContents() : nullptr;
   return clair::TabIDOf(active);
+}
+
+- (ClairTabID)stillTabID {
+  tabs::TabInterface* tab =
+      _browserWindow ? _browserWindow->still_tab().Get() : nullptr;
+  return tab ? tab->GetHandle().raw_value() : ClairTabIDNone;
+}
+
+- (NSImage*)stillImage {
+  return _browserWindow && self.stillTabID != ClairTabIDNone
+             ? _browserWindow->still_image()
+             : nil;
 }
 
 - (NSView*)pageViewForTab:(ClairTabID)tabID {
@@ -584,26 +624,30 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
     self.tabStrip->ActivateTabAt(
         index, TabStripUserGestureDetails(
                    TabStripUserGestureDetails::GestureType::kMouse));
+  } else if (tabs::TabInterface* tab = [self rowTabWithID:tabID]) {
+    // share-tabs-across-windows D1: taken from the window that holds it.
+    _browserWindow->Take(tab);
   }
 }
 
 - (void)closeTab:(ClairTabID)tabID {
-  // add-spaces D4: Clair picks the next tab before the close.
-  if (tabs::TabInterface* tab = [self tabWithID:tabID]) {
+  // add-spaces D4: Clair picks the next tab before the close, in whichever
+  // window holds it.
+  if (tabs::TabInterface* tab = [self rowTabWithID:tabID]) {
     _browserWindow->CloseTab(tab);
   }
 }
 
 - (void)closeTabsBelowTab:(ClairTabID)tabID {
   // Below it in its Space, from its Peek (add-peek D8, add-spaces D5).
-  if (tabs::TabInterface* tab = [self tabWithID:tabID]) {
+  if (tabs::TabInterface* tab = [self rowTabWithID:tabID]) {
     _browserWindow->CloseTabsBelow(tab);
   }
 }
 
 - (void)moveTab:(ClairTabID)tabID toIndex:(NSInteger)toIndex {
   // In the Space's list, with its Peek; no strip changes (add-spaces D2).
-  tabs::TabInterface* tab = [self tabWithID:tabID];
+  tabs::TabInterface* tab = [self rowTabWithID:tabID];
   ClairSpaceTabs* lists = _browserWindow ? _browserWindow->space_tabs() : nullptr;
   if (tab && lists && toIndex >= 0) {
     lists->MoveTab(tab, static_cast<int>(
@@ -613,32 +657,55 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
 
 - (void)duplicateTab:(ClairTabID)tabID {
   const int index = [self indexOfTab:tabID];
-  if (index != TabStripModel::kNoTab &&
-      chrome::CanDuplicateTabAt(self.browser, index)) {
-    chrome::DuplicateTabAt(self.browser, index);
+  if (index != TabStripModel::kNoTab) {
+    if (chrome::CanDuplicateTabAt(self.browser, index)) {
+      chrome::DuplicateTabAt(self.browser, index);
+    }
+    return;
+  }
+  // share-tabs-across-windows D1: a copy of another window's tab opens here,
+  // as Chromium's Duplicate does, right below it in the Space.
+  tabs::TabInterface* source = [self rowTabWithID:tabID];
+  if (!source) {
+    return;
+  }
+  std::unique_ptr<content::WebContents> copy = source->GetContents()->Clone();
+  content::WebContents* raw_copy = copy.get();
+  TabStripModel* strip = self.tabStrip;
+  strip->InsertWebContentsAt(
+      strip->count(), std::move(copy),
+      AddTabTypes::ADD_ACTIVE | AddTabTypes::ADD_INHERIT_OPENER);
+  tabs::TabInterface* copied = tabs::TabInterface::MaybeGetFromContents(raw_copy);
+  if (ClairSpaceTabs* lists = _browserWindow->space_tabs(); lists && copied) {
+    lists->MoveTabBeside(copied, source, /*after=*/true);
   }
 }
 
 - (void)setMuted:(BOOL)muted forTab:(ClairTabID)tabID {
-  const int index = [self indexOfTab:tabID];
-  if (index != TabStripModel::kNoTab) {
-    SetTabAudioMuted(self.tabStrip->GetWebContentsAt(index), muted,
+  if (tabs::TabInterface* tab = [self rowTabWithID:tabID]) {
+    SetTabAudioMuted(tab->GetContents(), muted,
                      TabMutedReason::kAudioIndicator, std::string());
   }
 }
 
 // --- ClairBrowser: Peek ---
 
+// The Peeks of the window holding `tab`.
+- (ClairPeeks*)peeksHolding:(tabs::TabInterface*)tab {
+  ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(tab);
+  return holder ? holder->peeks() : nullptr;
+}
+
 - (void)closePeekOfTab:(ClairTabID)tabID {
-  ClairPeeks* peeks = self.peeks;
-  if (tabs::TabInterface* tab = peeks ? [self tabWithID:tabID] : nullptr) {
+  tabs::TabInterface* tab = [self rowTabWithID:tabID];
+  if (ClairPeeks* peeks = tab ? [self peeksHolding:tab] : nullptr) {
     peeks->Close(tab);
   }
 }
 
 - (void)expandPeekOfTab:(ClairTabID)tabID {
-  ClairPeeks* peeks = self.peeks;
-  if (tabs::TabInterface* tab = peeks ? [self tabWithID:tabID] : nullptr) {
+  tabs::TabInterface* tab = [self rowTabWithID:tabID];
+  if (ClairPeeks* peeks = tab ? [self peeksHolding:tab] : nullptr) {
     peeks->Expand(tab);
   }
 }

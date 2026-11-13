@@ -24,6 +24,8 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/time/time.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -39,6 +41,7 @@
 #include "chrome/browser/clair/window/clair_window_hooks.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/global_keyboard_shortcuts_mac.h"
+#include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_handler.h"
@@ -47,6 +50,7 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_active_state_manager/browser_active_state_manager.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window_state.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble.h"
@@ -55,6 +59,7 @@
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/find_bar/find_bar_controller.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
+#include "chrome/browser/ui/tabs/tab_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
 #include "chrome/browser/ui/unload_controller.h"
@@ -71,8 +76,11 @@
 #include "components/web_modal/modal_dialog_host.h"
 #include "components/zoom/zoom_controller.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
+#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents.h"
+#include "skia/ext/skia_utils_mac.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/color/color_provider_manager.h"
@@ -858,18 +866,69 @@ void ClairBrowserWindow::SetShownSpace(const std::string& space) {
   [bridge_ shownSpaceChangedFrom:previous];
 }
 
+namespace {
+
+// share-tabs-across-windows D2: the key window takes back the tab of its
+// still, unless the still has ended meanwhile.
+void PostTakeBack(base::WeakPtr<ClairBrowserWindow> window) {
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(
+                     [](base::WeakPtr<ClairBrowserWindow> window) {
+                       if (!window || !window->IsActive()) {
+                         return;
+                       }
+                       if (tabs::TabInterface* still =
+                               window->still_tab().Get()) {
+                         window->ActivateRow(still);
+                       }
+                     },
+                     window));
+}
+
+}  // namespace
+
+// static
+ClairBrowserWindow* ClairBrowserWindow::HolderOf(const tabs::TabInterface* tab) {
+  return tab ? FromBrowser(tab->GetBrowserWindowInterface()) : nullptr;
+}
+
+namespace {
+
+// The row `tab` shows in: its parent if it's a Peek, in whichever window.
+tabs::TabInterface* RowOf(tabs::TabInterface* tab) {
+  ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(tab);
+  ClairPeeks* peeks = holder ? holder->peeks() : nullptr;
+  tabs::TabInterface* parent = peeks && tab ? peeks->ParentOf(tab) : nullptr;
+  return parent ? parent : tab;
+}
+
+// When the user last looked at `row`, or at its Peek.
+base::Time LastActive(tabs::TabInterface* row) {
+  base::Time time = row->GetLastActiveTime();
+  ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(row);
+  ClairPeeks* peeks = holder ? holder->peeks() : nullptr;
+  if (tabs::TabInterface* peek = peeks ? peeks->PeekOf(row) : nullptr) {
+    time = std::max(time, peek->GetLastActiveTime());
+  }
+  return time;
+}
+
+}  // namespace
+
 std::vector<tabs::TabInterface*> ClairBrowserWindow::SpaceTabs() const {
-  return space_tabs_ ? space_tabs_->TabsIn(shown_space_, browser_)
-                     : std::vector<tabs::TabInterface*>();
+  if (!space_tabs_) {
+    return std::vector<tabs::TabInterface*>();
+  }
+  // share-tabs-across-windows D1: every window lists the Space's tabs; an
+  // incognito or guest window lists its own.
+  return space_tabs_->is_regular() ? space_tabs_->TabsIn(shown_space_)
+                                   : space_tabs_->TabsIn(shown_space_, browser_);
 }
 
 std::vector<tabs::TabInterface*> ClairBrowserWindow::Rows() const {
   std::vector<tabs::TabInterface*> rows = SpaceTabs();
-  if (peeks_) {
-    std::erase_if(rows, [this](tabs::TabInterface* tab) {
-      return peeks_->ParentOf(tab) != nullptr;
-    });
-  }
+  std::erase_if(rows,
+                [](tabs::TabInterface* tab) { return RowOf(tab) != tab; });
   return rows;
 }
 
@@ -881,12 +940,32 @@ bool ClairBrowserWindow::IsActiveRow(const tabs::TabInterface* tab) const {
   return active == tab || (peeks_ && peeks_->ParentOf(active) == tab);
 }
 
-void ClairBrowserWindow::ActivateRow(tabs::TabInterface* row) {
-  if (!row) {
+tabs::TabInterface* ClairBrowserWindow::HighlightedRow() const {
+  if (tabs::TabInterface* still = still_tab_.Get()) {
+    return still;
+  }
+  tabs::TabInterface* active = browser_->tab_strip_model()->GetActiveTab();
+  if (!active || ClairSpaceTabs::IsPlaceholder(active->GetContents())) {
+    return nullptr;
+  }
+  tabs::TabInterface* parent = peeks_ ? peeks_->ParentOf(active) : nullptr;
+  return parent ? parent : active;
+}
+
+bool ClairBrowserWindow::IsShownElsewhere(const tabs::TabInterface* row) const {
+  ClairBrowserWindow* holder = HolderOf(row);
+  return holder && holder != this && holder->IsActiveRow(row);
+}
+
+void ClairBrowserWindow::ActivateTab(tabs::TabInterface* tab) {
+  if (!tab) {
     return;
   }
-  tabs::TabInterface* peek = peeks_ ? peeks_->PeekOf(row) : nullptr;
-  tabs::TabInterface* tab = peek ? peek : row;
+  ClairBrowserWindow* holder = HolderOf(tab);
+  if (holder && holder != this) {
+    Take(tab);
+    return;
+  }
   TabStripModel* strip = browser_->tab_strip_model();
   const int index = strip->GetIndexOfTab(tab);
   if (index != TabStripModel::kNoTab) {
@@ -896,12 +975,32 @@ void ClairBrowserWindow::ActivateRow(tabs::TabInterface* row) {
   }
 }
 
+void ClairBrowserWindow::ActivateRow(tabs::TabInterface* row) {
+  if (!row) {
+    return;
+  }
+  ClairBrowserWindow* holder = HolderOf(row);
+  ClairPeeks* peeks = holder ? holder->peeks() : nullptr;
+  tabs::TabInterface* peek = peeks ? peeks->PeekOf(row) : nullptr;
+  ActivateTab(peek ? peek : row);
+}
+
+void ClairBrowserWindow::ChooseRow(tabs::TabInterface* row) {
+  {
+    base::AutoReset<bool> choosing(&choosing_next_, true);
+    ActivateRow(row);
+  }
+  came_from_ = tabs::TabHandle::Null();
+}
+
 bool ClairBrowserWindow::ShowNextRow(tabs::TabInterface* row) {
   const std::vector<tabs::TabInterface*> rows = Rows();
   auto it = std::ranges::find(rows, row);
   if (it == rows.end()) {
     return false;
   }
+  // share-tabs-across-windows D3: from every row, a row another window shows
+  // included; it's taken from there.
   tabs::TabInterface* next = nullptr;
   tabs::TabInterface* came_from = came_from_.Get();
   if (came_from && came_from != row &&
@@ -915,11 +1014,34 @@ bool ClairBrowserWindow::ShowNextRow(tabs::TabInterface* row) {
   if (!next) {
     return false;
   }
-  {
-    base::AutoReset<bool> choosing(&choosing_next_, true);
-    ActivateRow(next);
+  ChooseRow(next);
+  return true;
+}
+
+bool ClairBrowserWindow::ShowTabOfAnotherSpace(tabs::TabInterface* row) {
+  if (!row || !space_tabs_ || !space_tabs_->is_regular()) {
+    return false;
   }
-  came_from_ = tabs::TabHandle::Null();
+  const std::string space = space_tabs_->SpaceOf(row);
+  tabs::TabInterface* best = nullptr;
+  for (const std::string& other : space_tabs_->SpacesWithTabs()) {
+    if (other == space) {
+      continue;
+    }
+    for (tabs::TabInterface* tab : space_tabs_->TabsIn(other)) {
+      if (RowOf(tab) != tab || IsShownElsewhere(tab)) {
+        continue;
+      }
+      if (!best || LastActive(tab) > LastActive(best)) {
+        best = tab;
+      }
+    }
+  }
+  if (!best) {
+    return false;
+  }
+  // The window's shown Space follows the tab (add-spaces D3).
+  ChooseRow(best);
   return true;
 }
 
@@ -927,16 +1049,22 @@ void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
   if (!tab) {
     return;
   }
-  // D4: Clair picks the next tab first; without one, Chromium's choice
-  // stands and D3 moves the window to that tab's Space.
+  // share-tabs-across-windows D3: in whichever window holds it, which picks
+  // its own next tab.
+  if (ClairBrowserWindow* holder = HolderOf(tab); holder && holder != this) {
+    holder->CloseTab(tab);
+    return;
+  }
+  // D4: Clair picks the next tab first; without one in the Space, the most
+  // recently active tab of another Space, or else Chromium's choice stands.
   if (IsActiveRow(tab)) {
     if (tab->GetContents()->NeedToFireBeforeUnloadOrUnloadEvents()) {
       // Chromium asks the page before it closes the tab, and its leave-page
       // confirmation makes the tab active again. The choice waits for the
       // page's answer, in BeforeUnloadFired().
       pending_close_ = tab->GetHandle();
-    } else {
-      ShowNextRow(tab);
+    } else if (!ShowNextRow(tab) && RowOf(tab) == tab) {
+      ShowTabOfAnotherSpace(tab);
     }
   }
   TabStripModel* strip = browser_->tab_strip_model();
@@ -956,20 +1084,24 @@ void ClairBrowserWindow::BeforeUnloadFired(content::WebContents* contents,
   }
   pending_close_ = tabs::TabHandle::Null();
   // Staying on the page leaves everything as it was, the came-from row too.
-  if (proceed && IsActiveRow(tab)) {
-    ShowNextRow(tab);
+  if (proceed && IsActiveRow(tab) && !ShowNextRow(tab) && RowOf(tab) == tab) {
+    ShowTabOfAnotherSpace(tab);
   }
 }
 
 void ClairBrowserWindow::CloseTabsBelow(tabs::TabInterface* tab) {
-  if (!tab) {
+  if (!tab || !space_tabs_) {
     return;
   }
-  // Below the tab's Peek, which goes only with the tab (add-peek D8).
-  tabs::TabInterface* last = peeks_ ? peeks_->LastOfFamily(tab) : tab;
+  // Below the tab's Peek, which goes only with the tab (add-peek D8), over
+  // the Space's rows in every window (share-tabs-across-windows D3).
+  ClairBrowserWindow* holder = HolderOf(tab);
+  ClairPeeks* peeks = holder ? holder->peeks() : nullptr;
+  tabs::TabInterface* last = peeks ? peeks->LastOfFamily(tab) : tab;
+  const std::string space = space_tabs_->SpaceOf(tab);
   const std::vector<tabs::TabInterface*> tabs =
-      space_tabs_ ? space_tabs_->TabsIn(space_tabs_->SpaceOf(tab), browser_)
-                  : std::vector<tabs::TabInterface*>();
+      space_tabs_->is_regular() ? space_tabs_->TabsIn(space)
+                                : space_tabs_->TabsIn(space, browser_);
   auto it = std::ranges::find(tabs, last);
   if (it == tabs.end()) {
     return;
@@ -1002,20 +1134,26 @@ void ClairBrowserWindow::ShowSpace(const std::string& space) {
       space == shown_space_) {
     return;
   }
-  const std::vector<tabs::TabInterface*> tabs =
-      space_tabs_->TabsIn(space, browser_);
+  // share-tabs-across-windows D3: the tab last active in the Space here,
+  // unless another window shows it; else the Space's most recently active row
+  // that no window shows, from any window.
+  std::vector<tabs::TabInterface*> rows = space_tabs_->TabsIn(space);
+  std::erase_if(rows,
+                [](tabs::TabInterface* tab) { return RowOf(tab) != tab; });
   tabs::TabInterface* target = nullptr;
   if (auto last = last_active_.find(space); last != last_active_.end()) {
     tabs::TabInterface* tab = last->second.Get();
-    if (tab && std::ranges::find(tabs, tab) != tabs.end()) {
+    tabs::TabInterface* row = tab ? RowOf(tab) : nullptr;
+    if (row && std::ranges::find(rows, row) != rows.end() &&
+        !IsShownElsewhere(row)) {
       target = tab;
     }
   }
   if (!target) {
-    for (tabs::TabInterface* tab : tabs) {
-      if (!peeks_ || !peeks_->ParentOf(tab)) {
-        target = tab;
-        break;
+    for (tabs::TabInterface* row : rows) {
+      if (!IsShownElsewhere(row) &&
+          (!target || LastActive(row) > LastActive(target))) {
+        target = row;
       }
     }
   }
@@ -1025,14 +1163,10 @@ void ClairBrowserWindow::ShowSpace(const std::string& space) {
     OpenNewTabPage(/*show_command_bar=*/true);
     return;
   }
-  TabStripModel* strip = browser_->tab_strip_model();
-  if (peeks_ && !peeks_->ParentOf(target)) {
+  if (RowOf(target) == target) {
     ActivateRow(target);
-  } else if (const int index = strip->GetIndexOfTab(target);
-             index != TabStripModel::kNoTab) {
-    strip->ActivateTabAt(index,
-                         TabStripUserGestureDetails(
-                             TabStripUserGestureDetails::GestureType::kOther));
+  } else {
+    ActivateTab(target);
   }
 }
 
@@ -1045,12 +1179,13 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
                     command == IDC_CYCLE_TO_PREV_TAB;
   TabStripModel* strip = browser_->tab_strip_model();
   tabs::TabInterface* active = strip->GetActiveTab();
-  tabs::TabInterface* active_row =
-      active && peeks_ && peeks_->ParentOf(active) ? peeks_->ParentOf(active)
-                                                   : active;
+  // While the window shows a still, the still's row stands for the active
+  // one, as the sidebar highlights it.
+  tabs::TabInterface* active_row = HighlightedRow();
   if (select_index || step || command == IDC_SELECT_LAST_TAB) {
     // Over the rows the sidebar lists, where a tab and its Peek are one
-    // stop, and never into another Space.
+    // stop, and never into another Space. A row another window holds is
+    // taken from it (share-tabs-across-windows D3).
     const std::vector<tabs::TabInterface*> rows = Rows();
     if (rows.empty()) {
       return true;
@@ -1093,8 +1228,9 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
       return true;
     }
     case IDC_CLOSE_TAB:
-      // A Peek's Cmd+W is ClairPeeks'; it runs first.
-      CloseTab(active);
+      // A Peek's Cmd+W is ClairPeeks'; it runs first. While the window shows
+      // a still, the still's row is the one closed.
+      CloseTab(still_tab_.Get() ? still_tab_.Get() : active);
       return true;
     case IDC_WINDOW_CLOSE_TABS_TO_RIGHT:
       CloseTabsBelow(active_row);
@@ -1116,6 +1252,243 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
   }
 }
 
+// --- Tabs shared across windows (share-tabs-across-windows D1, D2, D4) ---
+
+void ClairBrowserWindow::Take(tabs::TabInterface* tab) {
+  ClairBrowserWindow* holder = HolderOf(tab);
+  if (!tab || !holder || holder == this || !space_tabs_ ||
+      !space_tabs_->is_regular() || holder->space_tabs() != space_tabs_ ||
+      detached_ || browser_->IsDeleteScheduled() ||
+      ClairSpaceTabs::IsPlaceholder(tab->GetContents())) {
+    return;
+  }
+  tabs::TabInterface* row = RowOf(tab);
+  const tabs::TabHandle handle = tab->GetHandle();
+  // D2: the holder keeps a still of what it showed.
+  if (holder->IsActiveRow(row)) {
+    holder->BeginStill(row);
+  }
+  MoveFamilyHere(holder, row);
+  TabStripModel* strip = browser_->tab_strip_model();
+  tabs::TabInterface* moved = handle.Get();
+  const int index =
+      moved ? strip->GetIndexOfTab(moved) : TabStripModel::kNoTab;
+  if (index != TabStripModel::kNoTab) {
+    strip->ActivateTabAt(index,
+                         TabStripUserGestureDetails(
+                             TabStripUserGestureDetails::GestureType::kOther));
+  }
+}
+
+void ClairBrowserWindow::MoveFamilyHere(ClairBrowserWindow* from,
+                                        tabs::TabInterface* row) {
+  if (!from || from == this || !row || !space_tabs_) {
+    return;
+  }
+  TabStripModel* source = from->browser()->tab_strip_model();
+  TabStripModel* target = browser_->tab_strip_model();
+  // The pair leaves the Peek table there before the strip hears of it.
+  tabs::TabInterface* peek = from->peeks() ? from->peeks()->Release(row) : nullptr;
+  std::vector<tabs::TabInterface*> family{row};
+  if (peek) {
+    family.push_back(peek);
+  }
+  for (tabs::TabInterface* member : family) {
+    space_tabs_->BeginMove(member);
+  }
+  // The tabs and their handles survive the move (design Context).
+  std::vector<std::unique_ptr<tabs::TabModel>> models;
+  for (tabs::TabInterface* member : family) {
+    const int index = source->GetIndexOfTab(member);
+    if (index != TabStripModel::kNoTab) {
+      models.push_back(source->DetachTabAtForInsertion(index));
+    }
+  }
+  for (std::unique_ptr<tabs::TabModel>& model : models) {
+    target->InsertDetachedTabAt(target->count(), std::move(model),
+                                AddTabTypes::ADD_NONE);
+  }
+  for (tabs::TabInterface* member : family) {
+    space_tabs_->EndMove(member);
+  }
+  if (peek && peeks_ && target->GetIndexOfTab(row) != TabStripModel::kNoTab &&
+      target->GetIndexOfTab(peek) != TabStripModel::kNoTab) {
+    peeks_->Adopt(row, peek);
+  }
+}
+
+tabs::TabInterface* ClairBrowserWindow::placeholder() const {
+  tabs::TabInterface* tab = placeholder_.Get();
+  return tab && ClairSpaceTabs::IsPlaceholder(tab->GetContents()) &&
+                 browser_->tab_strip_model()->GetIndexOfTab(tab) !=
+                     TabStripModel::kNoTab
+             ? tab
+             : nullptr;
+}
+
+void ClairBrowserWindow::BeginStill(tabs::TabInterface* row) {
+  if (!row || detached_ || browser_->IsDeleteScheduled()) {
+    return;
+  }
+  const int generation = ++still_generation_;
+  still_tab_ = row->GetHandle();
+  still_image_ = nil;
+  // The tab's own page, never its Peek's, which stays visible under the Peek
+  // until the tab leaves. The copy may arrive once the tab has moved.
+  if (content::RenderWidgetHostView* view =
+          row->GetContents()->GetRenderWidgetHostView()) {
+    // On the UI thread, as Chromium's tab thumbnails take theirs.
+    view->CopyFromSurface(
+        gfx::Rect(), gfx::Size(), base::Milliseconds(250),
+        base::BindOnce(
+            [](base::WeakPtr<ClairBrowserWindow> window, int generation,
+               const content::CopyFromSurfaceResult& result) {
+              if (window && result.has_value()) {
+                window->StillCopied(generation, result->bitmap);
+              }
+            },
+            weak_factory_.GetWeakPtr(), generation));
+  }
+  // The placeholder: Chromium needs an active tab, and any real tab would run
+  // as visible behind the still. It's in no Space, so the window keeps the
+  // one it shows.
+  {
+    base::AutoReset<bool> inserting(&inserting_placeholder_, true);
+    content::WebContents* contents = chrome::AddAndReturnTabAt(
+        browser_, GURL(), browser_->tab_strip_model()->count(),
+        /*foreground=*/true);
+    if (contents) {
+      ClairSpaceTabs::MarkPlaceholder(contents);
+      if (tabs::TabInterface* tab =
+              tabs::TabInterface::MaybeGetFromContents(contents)) {
+        placeholder_ = tab->GetHandle();
+      }
+    }
+  }
+  [bridge_ stillChanged];
+}
+
+void ClairBrowserWindow::StillCopied(int generation, const SkBitmap& bitmap) {
+  if (generation != still_generation_ || !still_tab_.Get() ||
+      bitmap.drawsNothing()) {
+    return;
+  }
+  NSImage* image = skia::SkBitmapToNSImage(bitmap);
+  // In points, as the card lays it out.
+  const CGFloat scale = ns_window_.backingScaleFactor > 0
+                            ? ns_window_.backingScaleFactor
+                            : 1;
+  image.size = NSMakeSize(bitmap.width() / scale, bitmap.height() / scale);
+  still_image_ = image;
+  [bridge_ stillChanged];
+}
+
+void ClairBrowserWindow::EndStill() {
+  const bool had_still = still_tab_ != tabs::TabHandle::Null();
+  still_tab_ = tabs::TabHandle::Null();
+  still_image_ = nil;
+  ++still_generation_;
+  tabs::TabInterface* placeholder = this->placeholder();
+  placeholder_ = tabs::TabHandle::Null();
+  if (had_still) {
+    [bridge_ stillChanged];
+  }
+  if (!placeholder) {
+    return;
+  }
+  // Not from inside the strip's notification, which can't be re-entered.
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](base::WeakPtr<ClairBrowserWindow> window, tabs::TabHandle handle) {
+            tabs::TabInterface* tab = handle.Get();
+            if (!window || !tab ||
+                !ClairSpaceTabs::IsPlaceholder(tab->GetContents())) {
+              return;
+            }
+            TabStripModel* strip = window->browser()->tab_strip_model();
+            const int index = strip->GetIndexOfTab(tab);
+            if (index != TabStripModel::kNoTab && strip->GetActiveTab() != tab) {
+              strip->CloseWebContentsAt(index, TabCloseTypes::CLOSE_NONE);
+            }
+          },
+          weak_factory_.GetWeakPtr(), placeholder->GetHandle()));
+}
+
+void ClairBrowserWindow::StillTabClosed() {
+  tabs::TabInterface* placeholder = this->placeholder();
+  still_tab_ = tabs::TabHandle::Null();
+  still_image_ = nil;
+  ++still_generation_;
+  placeholder_ = tabs::TabHandle::Null();
+  [bridge_ stillChanged];
+  if (!placeholder || !space_tabs_) {
+    return;
+  }
+  // D2: an ordinary new tab page at the top of the shown Space, with the
+  // command bar.
+  space_tabs_->ListPlaceholder(browser_->tab_strip_model(), placeholder);
+  last_active_[shown_space_] = placeholder->GetHandle();
+  came_from_ = tabs::TabHandle::Null();
+  [clair_window_ showCommandBarWithMode:ClairCommandBarModeCurrentTab];
+}
+
+bool ClairBrowserWindow::HandTabsToAnotherWindow() {
+  if (!space_tabs_ || !space_tabs_->is_regular() || detached_ ||
+      browser_shutdown::IsTryingToQuit()) {
+    return false;
+  }
+  // D4: the most recently active other regular window of the profile.
+  ClairBrowserWindow* target = nullptr;
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [this, &target](BrowserWindowInterface* candidate) {
+        ClairBrowserWindow* window = FromBrowser(candidate);
+        if (window && window != this && window->space_tabs_ == space_tabs_ &&
+            !window->detached_ && !window->browser()->IsDeleteScheduled()) {
+          target = window;
+          return false;
+        }
+        return true;
+      });
+  if (!target) {
+    return false;
+  }
+  // Each row with its Peek, the placeholder left out, the active row last so
+  // Chromium picks this window's next tab only once.
+  TabStripModel* strip = browser_->tab_strip_model();
+  tabs::TabInterface* active = strip->GetActiveTab();
+  tabs::TabInterface* active_row =
+      active && peeks_ && peeks_->ParentOf(active) ? peeks_->ParentOf(active)
+                                                   : active;
+  std::vector<tabs::TabHandle> rows;
+  for (int i = 0; i < strip->count(); ++i) {
+    tabs::TabInterface* tab = strip->GetTabAtIndex(i);
+    if (!tab || tab == active_row ||
+        ClairSpaceTabs::IsPlaceholder(tab->GetContents()) ||
+        (peeks_ && peeks_->ParentOf(tab))) {
+      continue;
+    }
+    rows.push_back(tab->GetHandle());
+  }
+  if (active_row && !ClairSpaceTabs::IsPlaceholder(active_row->GetContents())) {
+    rows.push_back(active_row->GetHandle());
+  }
+  if (rows.empty()) {
+    return false;
+  }
+  for (const tabs::TabHandle& handle : rows) {
+    if (tabs::TabInterface* row = handle.Get()) {
+      target->MoveFamilyHere(this, row);
+    }
+  }
+  // The other window showed a still of one of them: it shows the tab now.
+  if (tabs::TabInterface* still = target->still_tab_.Get();
+      still && HolderOf(still) == target) {
+    target->ActivateRow(still);
+  }
+  return true;
+}
+
 void ClairBrowserWindow::ForgetFindBar() {
   find_bar_ = nullptr;
 }
@@ -1128,6 +1501,31 @@ void ClairBrowserWindow::WindowDidBecomeKey() {
   if (space_tabs_ && space_tabs_->is_regular()) {
     clair::ClairSpaceStore::Get()->SetLastSpace(shown_space_);
   }
+  // share-tabs-across-windows D2: a window showing a still takes its tab
+  // back, once AppKit has finished making it key. A click that made it key
+  // finishes first: a click on another row selects that row, which ends the
+  // still, and the tab stays where it is.
+  if (still_tab_ == tabs::TabHandle::Null()) {
+    return;
+  }
+  base::WeakPtr<ClairBrowserWindow> weak = weak_factory_.GetWeakPtr();
+  NSEvent* event = NSApp.currentEvent;
+  if (event.type != NSEventTypeLeftMouseDown || event.window != ns_window_) {
+    PostTakeBack(weak);
+    return;
+  }
+  __block id monitor = nil;
+  monitor = [NSEvent
+      addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp
+                                   handler:^NSEvent*(NSEvent* up) {
+                                     if (monitor) {
+                                       [NSEvent removeMonitor:monitor];
+                                       monitor = nil;
+                                     }
+                                     // After ClairUI has handled the click.
+                                     PostTakeBack(weak);
+                                     return up;
+                                   }];
 }
 
 void ClairBrowserWindow::WindowDidResignKey() {
@@ -1276,6 +1674,13 @@ void ClairBrowserWindow::ShowInactive() {
 }
 
 void ClairBrowserWindow::Close() {
+  // share-tabs-across-windows D4: while another regular window of the
+  // profile is open, the window's tabs move there and none closes. Moving
+  // the last one empties the strip, and TabStripEmpty() closes the browser.
+  if (!browser_->IsDeleteScheduled() && HandTabsToAnotherWindow() &&
+      (browser_->tab_strip_model()->empty() || browser_->IsDeleteScheduled())) {
+    return;
+  }
   // add-peek D9: Peeks close with the window's other tabs; session restore
   // and Reopen Closed Window leave them out by their tag.
   // Chromium's close flow: beforeunload may veto it; then the tabs close, and
@@ -1423,7 +1828,18 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
   // carries its Space, and a new one joins the shown Space.
   tabs::TabInterface* new_tab =
       tabs::TabInterface::MaybeGetFromContents(new_contents);
-  if (space_tabs_ && new_tab) {
+  // share-tabs-across-windows D2: the placeholder under a still is in no
+  // Space, and leaves the shown Space and the came-from row alone.
+  if (inserting_placeholder_) {
+    ClairSpaceTabs::MarkPlaceholder(new_contents);
+    if (new_tab) {
+      placeholder_ = new_tab->GetHandle();
+    }
+  }
+  const bool new_is_placeholder = ClairSpaceTabs::IsPlaceholder(new_contents);
+  const bool old_is_placeholder =
+      old_contents && ClairSpaceTabs::IsPlaceholder(old_contents);
+  if (space_tabs_ && new_tab && !new_is_placeholder) {
     const std::string space = space_tabs_->IntendedSpaceOf(new_tab);
     if (!space.empty() && space != shown_space_) {
       SetShownSpace(space);
@@ -1438,7 +1854,15 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
   const bool old_closed =
       !old_tab || browser_->tab_strip_model()->GetIndexOfTab(old_tab) ==
                       TabStripModel::kNoTab;
-  if (choosing_next_ || old_closed) {
+  if (new_is_placeholder) {
+    // The still keeps the row the user came to it from.
+  } else if (old_is_placeholder) {
+    // Taking the still's tab back keeps it too; moving on forgets it.
+    tabs::TabInterface* still = still_tab_.Get();
+    if (!still || !new_tab || RowOf(new_tab) != still) {
+      came_from_ = tabs::TabHandle::Null();
+    }
+  } else if (choosing_next_ || old_closed) {
     came_from_ = tabs::TabHandle::Null();
   } else if (new_tab) {
     tabs::TabInterface* row =
@@ -1449,6 +1873,11 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
     if (!same_family) {
       came_from_ = row->GetHandle();
     }
+  }
+  // D2: another tab became active, which ends the still: the still's tab came
+  // back, or the user selected another row or Space.
+  if (!new_is_placeholder && still_tab_ != tabs::TabHandle::Null()) {
+    EndStill();
   }
   // ClairUI swaps the page in the card now, before visibility changes.
   [bridge_ activeTabChanged];

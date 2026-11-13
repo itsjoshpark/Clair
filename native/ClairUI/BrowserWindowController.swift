@@ -117,6 +117,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.reloadTabs()
     model.setExtensionActions(browser.extensionActions)
     model.setDownloads(browser.downloads, progress: browser.downloadProgress)
+    stillDidChange()
     activeTabDidChange(browser.activeTabID)
   }
 
@@ -412,7 +413,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func spaceTabDidChange(_ tab: any ClairTab) {
-    guard tab.browserID == model.browserID, tab.spaceID == model.shownSpaceID else { return }
+    guard tab.spaceID == model.shownSpaceID, !model.listsOwnTabsOnly || tab.browserID == model.browserID else {
+      return
+    }
     tabChanged(tab)
   }
 
@@ -458,6 +461,21 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     guard model.tabs.count == 1, tab.isNewTabPage, model.commandBar == nil else { return }
     editURL()
     offeredCommandBar = model.commandBar
+  }
+
+  // MARK: The still (share-tabs-across-windows D2)
+
+  func stillDidChange() {
+    guard let browser else { return }
+    let wasShowing = model.isShowingStill
+    model.setStill(browser.stillTabID, image: browser.stillImage)
+    if model.isShowingStill && !wasShowing {
+      // The command bar belonged to the page that left.
+      model.commandBar?.cancel()
+    }
+    rootView.card.showStill(model.isShowingStill, image: model.stillImage)
+    model.reloadStop.loadingChanged(model.activeTab?.isLoading == true)
+    rootView.loadingIndicator.loadingChanged(model.activeTab?.isLoading == true)
   }
 
   func activeTabDidChange(_ tabID: TabID) {
@@ -667,6 +685,7 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     closeExtensionPopup()
     dialogs.cancelAll()
     rootView.card.show(page: nil)
+    rootView.card.showStill(false, image: nil)
     removeSafetyNet()
     stopCommandBarKeyMonitor()
     rootView.card.show(devTools: nil, layout: DevToolsLayout(dockSide: .none, pageBounds: .zero, hidesPage: false))
@@ -705,8 +724,14 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func move(tab: TabID, to index: Int) {
-    // The index counts the window's tabs; the engine counts the Space's,
-    // which other windows' tabs share (add-spaces D2).
+    // A regular window lists the Space's whole list, so the index is the
+    // engine's (share-tabs-across-windows D1).
+    guard model.listsOwnTabsOnly else {
+      browser?.move(tab: tab, to: index)
+      return
+    }
+    // An incognito or guest window's index counts its own tabs; the engine
+    // counts the Space's, which its other windows' tabs share (add-spaces D2).
     let spaceTabs = model.spaces.tabs(inSpace: model.shownSpaceID)
     guard
       let spaceIndex = TabListLogic.spaceIndex(

@@ -26,6 +26,20 @@ func spacesWindow(
   return (host, browser, controller)
 }
 
+/// An incognito window on a fake host, as `spacesWindow` makes a regular one.
+@MainActor
+func incognitoWindow(tabs: Int = 1, suite: String = #function) -> (FakeHost, FakeBrowser, BrowserWindowController) {
+  let host = FakeHost()
+  let browser = FakeBrowser(host: host, profileKind: .incognito)
+  for index in 0..<tabs {
+    browser.addTab(title: "Tab \(index)", url: "https://\(index).example/", at: index, activate: index == 0)
+  }
+  let controller = BrowserWindowController(
+    browser: browser, spaces: browser.spaces, preferences: SidebarPreferences(defaults: UserDefaults(suiteName: suite)!))
+  browser.clairWindow = controller
+  return (host, browser, controller)
+}
+
 extension FakeHost {
   @discardableResult
   func addSpaces(_ names: [String]) -> [SpaceID] {
@@ -266,11 +280,13 @@ struct SpaceActionsTests {
     #expect(controller.model.tabs.map(\.title) == ["Tab 0", "Tab 1"])
   }
 
+  /// An incognito window's tabs stay its own (share-tabs-across-windows D1);
+  /// a regular window lists every window's, in SharedTabsTests.
   @Test func anotherWindowsTabsAreLeftOut() {
-    let (host, _, controller) = spacesWindow(tabs: 1)
-    let other = FakeBrowser(host: host)
+    let (host, _, controller) = incognitoWindow(tabs: 1)
+    let other = FakeBrowser(host: host, profileKind: .incognito)
     other.addTab(title: "Elsewhere")
-    #expect(host.list(FakeHost.homeID).count == 2)
+    #expect(host.list(controller.model.shownSpaceID).count == 2)
     #expect(controller.model.tabs.map(\.title) == ["Tab 0"])
   }
 
@@ -364,9 +380,10 @@ struct SpaceActionsTests {
     #expect(!controller.model.tabs.contains { $0.tabID == active })
   }
 
+  /// In an incognito window, which lists its own tabs only.
   @Test func draggingARowCountsTheWindowsTabsOnly() {
-    let (host, browser, controller) = spacesWindow(tabs: 2)
-    let other = FakeBrowser(host: host)
+    let (host, browser, controller) = incognitoWindow(tabs: 2)
+    let other = FakeBrowser(host: host, profileKind: .incognito)
     other.addTab(title: "Elsewhere", at: 1, activate: false)
     // The Space's list: Tab 0, Tab 1, Elsewhere, wherever the other window
     // put its tab; this window's rows are Tab 0 and Tab 1.
@@ -375,7 +392,7 @@ struct SpaceActionsTests {
     #expect(windowIndex == 1)
     controller.move(tab: first, to: windowIndex ?? 0)
     #expect(controller.model.tabs.map(\.title) == ["Tab 1", "Tab 0"])
-    #expect(host.list(FakeHost.homeID).contains { $0.title == "Elsewhere" })
+    #expect(host.list(controller.model.shownSpaceID).contains { $0.title == "Elsewhere" })
   }
 
   @Test func spaceIndexSkipsOtherWindowsTabs() {

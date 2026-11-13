@@ -113,10 +113,12 @@ NS_SWIFT_NAME(ClairHost)
 // Every Space, in the user's order.
 @property(nonatomic, readonly, copy) NSArray<id<ClairSpace>> *spaces;
 
-// The tabs of a Space, in its order, across every browser window: a window
-// lists those whose `browserID` is its own. A Peek directly follows its
+// The tabs of a Space, in its order, across every browser window of the
+// profile: every window showing the Space lists all of them, whichever window
+// holds each (share-tabs-across-windows design D1). A Peek directly follows its
 // parent. An incognito or guest window's Space (-[ClairBrowser shownSpaceID])
-// lists that window's tabs. Empty for an unknown Space.
+// lists that window's tabs alone, whose `browserID` is its own. Empty for an
+// unknown Space.
 - (NSArray<id<ClairTab>> *)tabsInSpace:(ClairSpaceID)spaceID NS_SWIFT_NAME(tabs(inSpace:));
 
 // Starts telling `observer` what changes. Chromium keeps it weakly.
@@ -670,13 +672,30 @@ NS_SWIFT_NAME(ClairBrowser)
 
 // The Space the window shows (add-spaces design D3). Its active tab always
 // belongs to it: when another tab becomes active for any reason, the window
-// shows that tab's Space. Its rows are -[ClairHost tabsInSpace:] with this
-// window's `browserID`. An incognito or guest window shows a Space of its own,
-// which isn't in -[ClairHost spaces] and can't be switched.
+// shows that tab's Space, except while it shows a still (-stillTabID), whose
+// placeholder tab belongs to no Space. Its rows are all of -[ClairHost
+// tabsInSpace:], whichever window holds each (share-tabs-across-windows design
+// D1). An incognito or guest window shows a Space of its own, which isn't in
+// -[ClairHost spaces] and can't be switched, and lists only the tabs with its
+// own `browserID`.
 @property(nonatomic, readonly, copy) ClairSpaceID shownSpaceID;
 
-// The active tab, or ClairTabIDNone.
+// The active tab, or ClairTabIDNone. While the window shows a still, it is
+// the hidden placeholder tab, which has no row.
 @property(nonatomic, readonly) ClairTabID activeTabID;
+
+// --- The still (share-tabs-across-windows design D2) ---
+// When another window takes the tab this window shows, this window keeps a
+// still of its page over a hidden placeholder tab, until it becomes key again
+// (and takes the tab back), the user selects another row or Space, or the tab
+// closes. -[ClairWindow stillDidChange] tells ClairUI when either changes.
+// The tab the still shows, whose row stays highlighted, or ClairTabIDNone when
+// the window shows no still.
+@property(nonatomic, readonly) ClairTabID stillTabID;
+// The page as it was when the tab left, without its Peek, or nil when the copy
+// failed or there's no still. ClairUI draws it dimmed over the card, or dims
+// the card alone when it is nil.
+@property(nonatomic, readonly, nullable) NSImage *stillImage;
 
 // The view holding a tab's page, or nil for an unknown tab. The card shows the
 // active tab's view.
@@ -696,21 +715,27 @@ NS_SWIFT_NAME(ClairBrowser)
 @property(nonatomic, readonly) ClairDownloadProgress downloadProgress;
 
 // --- Spaces ---
-// Shows a Space (add-spaces design D3): activates the tab last active in it in
-// this window, or else its first row here, or else opens a new tab page in it
+// Shows a Space (add-spaces design D3, share-tabs-across-windows design D3):
+// activates the tab last active in it in this window unless another window
+// shows it, or else the Space's most recently active tab that no window shows,
+// taking it from the window that holds it, or else opens a new tab page in it
 // with the command bar. Ignored for an unknown Space and in incognito and
 // guest windows.
 - (void)showSpace:(ClairSpaceID)spaceID NS_SWIFT_NAME(showSpace(_:));
 
 // --- Tabs ---
-// Makes the tab active.
+// Every command naming a tab works on any tab of the window's rows, whichever
+// window holds it (share-tabs-across-windows design D1 and D3).
+// Makes the tab active. A tab another window holds moves here with its Peek,
+// without reloading; if that window was showing it, it keeps a still.
 - (void)activateTab:(ClairTabID)tabID NS_SWIFT_NAME(activate(tab:));
-// Closes the tab, with its leave-page confirmation. Closing the active tab
-// first shows, in order, the tab the user selected it from, the row above or
-// the row below in the window's Space (add-spaces design D4).
+// Closes the tab, in whichever window holds it, with its leave-page
+// confirmation. Closing the active tab first shows, in order, the tab the user
+// selected it from, the row above or the row below in the window's Space
+// (add-spaces design D4), taking it from another window if need be.
 - (void)closeTab:(ClairTabID)tabID NS_SWIFT_NAME(close(tab:));
-// Closes every tab of the window below it in its Space, each with its
-// leave-page confirmation.
+// Closes every row below it in its Space, in whichever window holds each, each
+// with its leave-page confirmation.
 - (void)closeTabsBelowTab:(ClairTabID)tabID NS_SWIFT_NAME(closeTabs(below:));
 // Moves the tab, with its Peek, to `index` in its Space's list, as
 // -[ClairHost tabsInSpace:] counts it, Peeks included. The tab ends at
@@ -807,8 +832,10 @@ NS_SWIFT_NAME(ClairBrowser)
     NS_SWIFT_NAME(infobar(_:tab:didChoose:));
 
 // --- The window ---
-// The window's close button: runs Chromium's close flow, with its
-// beforeunload prompts, which may keep the window open.
+// The window's close button. While another regular window of the profile is
+// open, the window's tabs move to the most recently active one and no tab
+// closes (share-tabs-across-windows design D4); otherwise it runs Chromium's
+// close flow, with its beforeunload prompts, which may keep the window open.
 - (void)requestClose;
 
 @end
@@ -861,6 +888,9 @@ NS_SWIFT_NAME(ClairWindow)
 - (void)findResultDidChange:(ClairFindResult)result NS_SWIFT_NAME(findResultDidChange(_:));
 
 // --- What the card shows ---
+// The window started or stopped showing a still, or its image changed
+// (-[ClairBrowser stillTabID] and -stillImage).
+- (void)stillDidChange;
 // The URL of the link under the pointer, or nil to hide the status capsule.
 - (void)statusTextDidChange:(nullable NSString *)text NS_SWIFT_NAME(statusTextDidChange(_:));
 // Shows a short confirmation at the bottom of the card, such as "Image copied".
