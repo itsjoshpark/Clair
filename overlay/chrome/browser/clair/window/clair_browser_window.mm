@@ -73,6 +73,7 @@
 #include "components/find_in_page/find_types.h"
 #include "components/input/native_web_keyboard_event.h"
 #include "components/tabs/public/tab_interface.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/web_modal/modal_dialog_host.h"
 #include "components/zoom/zoom_controller.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
