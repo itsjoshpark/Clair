@@ -602,6 +602,18 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
 }
 
 // Let CommandDispatcher recognize events it is redispatching.
+// add-profiles D4: a window covering its group's full-screen window never
+// goes full screen itself; the request goes to that window.
+- (void)toggleFullScreen:(id)sender {
+  NSWindow* fullscreen =
+      _browserWindow ? _browserWindow->FullscreenNSWindow() : self;
+  if (fullscreen && fullscreen != self) {
+    [fullscreen toggleFullScreen:sender];
+    return;
+  }
+  [super toggleFullScreen:sender];
+}
+
 - (void)sendEvent:(NSEvent*)event {
   if ([_commandDispatcher preSendEvent:event]) {
     return;

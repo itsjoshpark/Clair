@@ -1576,6 +1576,14 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
       // (share-tabs-across-windows D4).
       WindowCloseRequested();
       return true;
+    case IDC_FULLSCREEN:
+      // add-profiles D4: a window covering its group's full-screen one
+      // leaves the group's full screen; Chromium would try to enter its own.
+      if (NSWindow* fullscreen = FullscreenNSWindow(); fullscreen != ns_window_) {
+        [fullscreen toggleFullScreen:nil];
+        return true;
+      }
+      return false;
     case IDC_CLOSE_TAB:
       // A Peek's Cmd+W is ClairPeeks'; it runs first. While the window shows
       // a still, the still's row is the one closed.
