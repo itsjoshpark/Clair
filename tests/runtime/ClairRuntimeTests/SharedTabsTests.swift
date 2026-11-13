@@ -161,13 +161,13 @@ final class SharedTabsTests: NativeWindowTestCase {
     // Cmd+N lists the Space's tabs, below its new tab page.
     let listedBefore = windowA.tabTitles
     browser.ui.typeKey("n", modifierFlags: .command)
-    let windows = try await browser.waitForNativeWindows(3)
+    _ = try await browser.waitForNativeWindows(3)
     browser.ui.typeKey(.escape, modifierFlags: [])
-    guard let windowC = windows.first(where: { $0.frame != windowA.frame && $0.frame != windowB.frame }) else {
-      throw HarnessError("Can't find the new window")
-    }
-    same = await windowC.waitForTabs { $0 == ["New Tab"] + listedBefore }
-    XCTAssertTrue(same, "The new window doesn't list the Space's tabs: \(windowC.tabTitles)")
+    // The new window may open over another, at the same frame: it's the one
+    // in front.
+    let front = NativeWindow(browser: browser, frame: browser.nativeWindow.frame)
+    same = await front.waitForTabs { $0 == ["New Tab"] + listedBefore }
+    XCTAssertTrue(same, "The new window doesn't list the Space's tabs: \(front.tabTitles)")
     browser.ui.typeKey("w", modifierFlags: [.command, .shift])
   }
 

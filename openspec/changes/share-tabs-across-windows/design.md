@@ -60,8 +60,8 @@ A placeholder carries no session tags, so it needs no session work: restored, it
 
 Found while implementing:
 
-- **The copy is waited for.** Moving the tab first, and recording the image when it arrived, lost the copy in most takes when compared by hand: viz serves a copy only for a surface it still draws. The take now waits for the copy, or for 250 ms, and then moves the tab.
-- **A click that makes the window key finishes first.** Taking back on becoming key waits for the mouse-up of the click that made the window key. The click doesn't reach the sidebar's rows in an inactive window, as in Arc, so it takes the tab back, and the next click selects.
+- **The copy is waited for.** Moving the tab first, and recording the image when it arrived, lost the copy in most takes when compared by hand: viz serves a copy only for a surface it still draws. A take the user starts waits for the copy, or for 250 ms, and then moves the tab. When Clair picks the next tab before a close, the close waits for that take too, so a window whose only tab is closing isn't left empty meanwhile. Where Chromium acts at once, after a page agreed to close and before Move to Space, the tab moves at once and the still's image follows if the copy comes.
+- **Taking back doesn't wait for the click.** The click that makes a window key doesn't reach the sidebar's rows, as in Arc, so the window takes its tab back as soon as it is key. Waiting for the click's mouse-up hung on a click in the sidebar's empty space, which drags the window and never delivers one.
 - **While a still shows, the still's row stands for the active row**: Cmd+W closes it in the window that holds it, and the tab commands count from it, as the sidebar highlights it.
 - **Duplicate of a row another window holds** opens the copy in this window, right below the row, as `WebContents::Clone` and an insert, since Chromium's `DuplicateTabAt` works only within one strip.
 

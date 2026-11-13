@@ -249,6 +249,25 @@ class ClairStatusBubble : public StatusBubble {
   std::u16string url_;
 };
 
+// share-tabs-across-windows D1, D2: how a window takes a tab another window
+// holds.
+struct ClairTakeOptions {
+  ClairTakeOptions();
+  ClairTakeOptions(ClairTakeOptions&&);
+  ClairTakeOptions& operator=(ClairTakeOptions&&);
+  ~ClairTakeOptions();
+
+  // Whether the tab waits for its page's copy before it moves, when the
+  // other window shows it; otherwise it moves at once, and the still's image
+  // follows if the copy comes.
+  bool wait_for_copy = true;
+  // Clair's choice of the next tab, which sets no came-from (add-spaces D4).
+  bool choosing = false;
+  // Runs once the tab is active here, or at once when there's nothing to
+  // take.
+  base::OnceClosure then;
+};
+
 // Chromium's BrowserWindow for a native window (D1). Chromium keeps the
 // browser, its tabs, session restore, commands and extensions; ClairUI draws
 // the window.
@@ -317,7 +336,10 @@ class ClairBrowserWindow : public BrowserWindow {
   // came from, if it's still listed, or else the row above, or else the row
   // below, taking it from another window if need be. Returns false, changing
   // nothing, when there's none.
-  bool ShowNextRow(tabs::TabInterface* row);
+  // With `then`, a tab another window shows waits for its page's copy, and
+  // `then` moves into the take and runs once the tab is here; without, the
+  // tab moves at once.
+  bool ShowNextRow(tabs::TabInterface* row, base::OnceClosure* then = nullptr);
   // D4: closes `tab`, in whichever window holds it, with its leave-page
   // confirmation, first showing the next tab if it's the active one. A page
   // with unload handlers is asked first, and the next tab shows once it
@@ -331,9 +353,11 @@ class ClairBrowserWindow : public BrowserWindow {
   void CloseTabsBelow(tabs::TabInterface* tab);
   // Activates `row`, or its Peek if it has one, taking it from another window
   // if need be.
-  void ActivateRow(tabs::TabInterface* row);
+  void ActivateRow(tabs::TabInterface* row,
+                   ClairTakeOptions options = ClairTakeOptions());
   // Activates `tab` exactly, taking it from another window if need be.
-  void ActivateTab(tabs::TabInterface* tab);
+  void ActivateTab(tabs::TabInterface* tab,
+                   ClairTakeOptions options = ClairTakeOptions());
   // Opens a new tab page in the shown Space, optionally with the command bar.
   void OpenNewTabPage(bool show_command_bar);
   // D5: runs a tab command over the rows of the shown Space. Returns whether
@@ -347,7 +371,8 @@ class ClairBrowserWindow : public BrowserWindow {
   bool IsShownElsewhere(const tabs::TabInterface* row) const;
   // D1: moves `tab` and its Peek here from the window that holds them and
   // activates `tab`. The other window keeps a still if it showed them.
-  void Take(tabs::TabInterface* tab);
+  void Take(tabs::TabInterface* tab,
+            ClairTakeOptions options = ClairTakeOptions());
   // D2: the tab the window shows a still of, or a null handle.
   tabs::TabHandle still_tab() const { return still_tab_; }
   NSImage* still_image() const { return still_image_; }
@@ -528,17 +553,26 @@ class ClairBrowserWindow : public BrowserWindow {
   void SetShownSpace(const std::string& space);
   // share-tabs-across-windows D3: shows `row` as Clair's choice of the next
   // tab, which sets no came-from.
-  void ChooseRow(tabs::TabInterface* row);
+  // With `then`, as ShowNextRow().
+  void ChooseRow(tabs::TabInterface* row, base::OnceClosure* then);
   // D3: before the active row `row`, the last of its Space, closes: shows the
   // most recently active row of another Space that no window shows. Returns
   // false, changing nothing, when there's none.
-  bool ShowTabOfAnotherSpace(tabs::TabInterface* row);
+  bool ShowTabOfAnotherSpace(tabs::TabInterface* row,
+                             base::OnceClosure* then = nullptr);
+  // Closes `handle`'s tab, with its leave-page confirmation.
+  void CloseTabNow(tabs::TabHandle handle);
   // D1: whether `tab` is one this window can take: another regular window's
   // of the same profile, and not a placeholder.
   bool CanTake(const tabs::TabInterface* tab) const;
   // D1, D2: moves the tab named by `handle` here once its page's copy has
   // come (empty without one), leaving a still in the window that showed it.
-  void FinishTake(tabs::TabHandle handle, const SkBitmap& copy);
+  void FinishTake(tabs::TabHandle handle,
+                  ClairTakeOptions options,
+                  const SkBitmap& copy);
+  // D2: the copy of the still's page came after the tab left.
+  void SetStillImage(tabs::TabHandle handle, const SkBitmap& copy);
+  NSImage* StillImageFrom(const SkBitmap& copy) const;
   // D2: copies `row`'s page, waiting at most 250 ms, and hands `done` the
   // copy, or an empty bitmap.
   void CopyPage(tabs::TabInterface* row,
