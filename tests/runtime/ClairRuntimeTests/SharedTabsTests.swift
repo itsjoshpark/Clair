@@ -91,17 +91,39 @@ extension Browser {
 final class SharedTabsTests: NativeWindowTestCase {
   func counter(_ name: String) -> String { url("counter.html?\(name)") }
 
+  /// Puts the windows of `tabs` side by side, left to right, so a click
+  /// meant for one never lands on another.
+  func tile(_ tabs: [DevToolsSession], in browser: Browser) async throws {
+    let session = try await browser.browserSession()
+    defer { session.close() }
+    let screen = NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)
+    let width = Int(screen.width) / tabs.count
+    let height = Int(min(900, screen.height - 80))
+    for (index, tab) in tabs.enumerated() {
+      guard let targetID = try await tab.targetID(in: browser) else {
+        throw HarnessError("A tab to tile has no target")
+      }
+      let window = try await session.send("Browser.getWindowForTarget", ["targetId": targetID])
+      guard let windowID = window["windowId"] as? Int else {
+        throw HarnessError("A tab to tile has no window")
+      }
+      try await session.send(
+        "Browser.setWindowBounds",
+        ["windowId": windowID, "bounds": ["left": index * width, "top": 40, "width": width, "height": height]])
+    }
+  }
+
   /// Starts Clair with Counter a in window A, then opens Counter b in a new
-  /// window B, which is key.
+  /// window B, which is key, and puts A on the left and B on the right.
   func startWithTwoWindows() async throws -> (Browser, NativeWindow, NativeWindow, DevToolsSession, DevToolsSession) {
     let (browser, a) = try await startWithPage("counter.html?a")
-    let windowsBefore = browser.nativeWindows
-    try require(windowsBefore.count == 1, "Clair didn't start with one window")
+    try require(browser.nativeWindows.count == 1, "Clair didn't start with one window")
     let b = try await browser.open(counter("b"), newWindow: true)
-    let windows = try await browser.waitForNativeWindows(2)
-    guard let windowA = windows.first(where: { $0.frame == windowsBefore[0].frame }),
-      let windowB = windows.first(where: { $0.frame != windowsBefore[0].frame })
-    else { throw HarnessError("Can't tell the two windows apart") }
+    _ = try await browser.waitForNativeWindows(2)
+    try await tile([a, b], in: browser)
+    try await Task.sleep(for: .seconds(1))
+    let windows = try await browser.waitForNativeWindows(2).sorted { $0.frame.minX < $1.frame.minX }
+    let windowA = windows[0], windowB = windows[1]
     let shown = await windowB.waitForActiveRow("Counter b")
     try require(shown, "Window B doesn't show Counter b: \(windowB.activeRow ?? "none")")
     return (browser, windowA, windowB, a, b)
@@ -137,13 +159,14 @@ final class SharedTabsTests: NativeWindowTestCase {
     XCTAssertTrue(closed, "A tab closed in B is still listed in A: \(windowA.tabTitles)")
 
     // Cmd+N lists the Space's tabs, below its new tab page.
+    let listedBefore = windowA.tabTitles
     browser.ui.typeKey("n", modifierFlags: .command)
     let windows = try await browser.waitForNativeWindows(3)
     browser.ui.typeKey(.escape, modifierFlags: [])
     guard let windowC = windows.first(where: { $0.frame != windowA.frame && $0.frame != windowB.frame }) else {
       throw HarnessError("Can't find the new window")
     }
-    same = await windowC.waitForTabs { $0.count == windowA.tabTitles.count + 1 && $0.dropFirst().elementsEqual(windowA.tabTitles) }
+    same = await windowC.waitForTabs { $0 == ["New Tab"] + listedBefore }
     XCTAssertTrue(same, "The new window doesn't list the Space's tabs: \(windowC.tabTitles)")
     browser.ui.typeKey("w", modifierFlags: [.command, .shift])
   }
@@ -331,9 +354,6 @@ final class SharedTabsTests: NativeWindowTestCase {
       x.close()
       w.close()
     }
-    windowB.click()
-    browser.ui.typeKey(.pageDown, modifierFlags: [.control, .shift])
-    browser.ui.typeKey(.pageDown, modifierFlags: [.control, .shift])
     let listed = await windowB.waitForTabs { $0.starts(with: ["Counter w", "Counter x", "Counter b", "Counter a"]) }
     try require(listed, "The rows aren't w, x, b, a: \(windowB.tabTitles)")
 
