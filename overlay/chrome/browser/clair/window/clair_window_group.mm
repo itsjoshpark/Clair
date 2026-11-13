@@ -336,11 +336,11 @@ void ClairWindowGroup::EnsureMember(
             BrowserWindowCreateParams params(*profile,
                                              /*from_user_gesture=*/true);
             params.initial_bounds = group->shown_->GetBounds();
-            Browser* browser = nullptr;
+            BrowserWindowInterface* browser = nullptr;
             {
               base::AutoReset<ClairWindowGroup*> joining(&g_joining,
                                                          group.get());
-              browser = Browser::Create(std::move(params));
+              browser = CreateBrowserWindow(std::move(params));
             }
             std::move(done).Run(browser ? ClairBrowserWindow::FromBrowser(browser)
                                         : nullptr);
@@ -629,7 +629,7 @@ void ClairWindowGroup::OpenInSpace(const std::string& space, const GURL& url) {
             if (!profile || !clair::ClairSpaceStore::Get()->Contains(space)) {
               return;
             }
-            Browser* browser = Browser::Create(
+            BrowserWindowInterface* browser = CreateBrowserWindow(
                 BrowserWindowCreateParams(*profile, /*from_user_gesture=*/true));
             ClairBrowserWindow* window =
                 browser ? ClairBrowserWindow::FromBrowser(browser) : nullptr;
