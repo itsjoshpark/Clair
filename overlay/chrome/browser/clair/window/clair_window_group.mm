@@ -422,6 +422,7 @@ bool ClairWindowGroup::IsFullscreen() const {
 }
 
 void ClairWindowGroup::Cover(ClairBrowserWindow* member) {
+  LOG(WARNING) << "ClairDebug Cover " << member->ns_window().windowNumber;
   ClairBrowserWindow* owner = fullscreen_owner_;
   if (!owner) {
     return;
@@ -473,6 +474,8 @@ void ClairWindowGroup::Uncover() {
 
 void ClairWindowGroup::FullscreenChanged(ClairBrowserWindow* member,
                                          bool entered) {
+  LOG(WARNING) << "ClairDebug FullscreenChanged "
+               << member->ns_window().windowNumber << " entered " << entered;
   if (entered) {
     if (member == shown_ && !cover_) {
       fullscreen_owner_ = member;

@@ -3,9 +3,11 @@
 # probe (tests/probe/README.md), with a fresh throwaway profile and the mock
 # keychain, so the owner's Clair data and keychain item stay untouched.
 #
-#   launch-clair.sh [--port <n>] [--flag <switch>]... [url]
+#   launch-clair.sh [--port <n>] [--flag <switch>]... [--keep-profile] [url]
 #
-# --port opens the DevTools protocol on that port. --flag passes a switch to
+# --keep-profile relaunches on the profile the last launch used, as a quit
+# and relaunch would, instead of a fresh one; the packaged app is reused when
+# the checkout's engine key hasn't changed. --port opens the DevTools protocol on that port. --flag passes a switch to
 # Chromium, such as --flag --extension-mime-request-handling=always-prompt-for-install. Launching again quits the
 # previous test copy first; the probe stops with it, so start it again.
 #
@@ -16,13 +18,14 @@ set -euo pipefail
 # shellcheck source=tests/probe/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-port="" url="" flags=()
+port="" url="" flags=() keep=""
 while (($# > 0)); do
   case "$1" in
     --port) port="${2-}"; shift 2 || die "--port needs a number" ;;
     --flag)
       [[ "${2-}" == --* ]] || die "--flag needs a switch starting with --"
       flags+=("$2"); shift 2 ;;
+    --keep-profile) keep=1; shift ;;
     -h | --help) sed -n '/^#   launch-clair.sh/p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2; exit 2 ;;
     *) url="$1"; shift ;;
   esac
@@ -47,7 +50,7 @@ echo "$app" >"$work/clair-app"
 unregister_other_clairs "$app"
 
 profile="$work/profile"
-rm -rf "$profile"
+[[ -n "$keep" ]] || rm -rf "$profile"
 args=(--user-data-dir="$profile" --use-mock-keychain --no-first-run --no-default-browser-check)
 [[ -n "$port" ]] && args+=(--remote-debugging-port="$port")
 ((${#flags[@]} > 0)) && args+=("${flags[@]}")
