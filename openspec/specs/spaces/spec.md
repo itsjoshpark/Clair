@@ -54,7 +54,7 @@ Switching Spaces SHALL slide the sidebar's content between the URL field and the
 - **THEN** the sidebar shows the new Space without a slide
 
 ### Requirement: Showing a Space that has no tab here
-A window SHALL always show a tab. When it switches to a Space that has no tab in this window, it SHALL open a new tab page in that Space, with the command bar open. A new window SHALL show the Space of the window it was opened from, or the Space last shown when no window is open, on a new tab page with the command bar open.
+A window SHALL always show a tab. When it switches to a Space, it SHALL show the tab last active in that Space in this window, unless another window shows it; otherwise the Space's most recently active tab that no window is showing, whichever window it was opened in; otherwise a new tab page in that Space, with the command bar open. A new window SHALL show the Space of the window it was opened from, or the Space last shown when no window is open, on a new tab page with the command bar open.
 
 #### Scenario: Empty Space
 - **WHEN** the user switches to a Space that has no tabs
@@ -63,6 +63,14 @@ A window SHALL always show a tab. When it switches to a Space that has no tab in
 #### Scenario: New window
 - **WHEN** the user presses Cmd+N in a window showing "Work"
 - **THEN** a new window shows "Work" with a new tab page and the command bar open
+
+#### Scenario: The Space's tabs are elsewhere
+- **WHEN** "Work" has two tabs, both opened in window A and neither showing there, and the user switches window B to "Work"
+- **THEN** B shows the more recently active of the two
+
+#### Scenario: Every tab is showing elsewhere
+- **WHEN** the only tab of "Work" is showing in window A, and the user switches window B to "Work"
+- **THEN** B shows a new tab page in "Work", and A is unchanged
 
 ### Requirement: Creating a Space
 Spaces › New Space… and the footer's plus menu SHALL replace the sidebar's content with a form, as in Arc: a name field with an icon button, "Create Space" and "Cancel". "Create Space" SHALL be disabled until a name is typed. Creating SHALL add the Space after the last one and show it in the window. Cancel or Esc SHALL return to the Space shown before, creating nothing.
@@ -196,7 +204,7 @@ With more than one Space, a tab row's context menu SHALL offer "Move to Space" w
 - **THEN** the tab's menu has no "Move to Space"
 
 ### Requirement: Tab chosen after a close
-When the user closes the active tab, the window SHALL show, in order: the tab the user selected it from, if that tab is still listed in the Space; otherwise the row above it; otherwise the row below it. When the Space has no other tab in the window, the window SHALL show a tab of another Space, switching to that Space, or close if it has no other tab.
+When the user closes the active tab, the window SHALL show, in order: the tab the user selected it from, if it's still listed in the Space; otherwise the row above it; otherwise the row below it, among every row the sidebar lists. A tab another window shows SHALL NOT be skipped: this window shows it, and the other window its still. When the Space has no other tab, the window SHALL show a tab of another Space that no window shows, switching to that Space, or close if there is none.
 
 #### Scenario: Back to where the user came from
 - **WHEN** the rows are E, D, C, B, A, and the user selects A, then C, then closes C
@@ -211,7 +219,7 @@ When the user closes the active tab, the window SHALL show, in order: the tab th
 - **THEN** the row below is active
 
 #### Scenario: The Space's last tab
-- **WHEN** the user closes the only tab of "Work" in a window that also has tabs in "Home"
+- **WHEN** the user closes the only tab of "Work" while "Home" has a tab that no window is showing
 - **THEN** the window shows "Home"
 
 #### Scenario: Staying on a page that asks
@@ -222,8 +230,16 @@ When the user closes the active tab, the window SHALL show, in order: the tab th
 - **WHEN** the rows are B, P, A, the user selects A, then P, closes P, and confirms leaving its page
 - **THEN** A is active, and the window shows the same Space
 
+#### Scenario: The row above lives in another window
+- **WHEN** the user closes the active tab, and the row above it was opened in another window and isn't showing there
+- **THEN** this window shows the row above
+
+#### Scenario: The next tab is showing in another window
+- **WHEN** the user closes the active tab, and the row above it is showing in another window
+- **THEN** this window shows the row above, and the other window shows its still
+
 ### Requirement: Tab commands follow the Space
-Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to Cmd+9 and Close Tabs Below SHALL act on the rows the sidebar lists, in its order, and never on a tab of another Space. Ctrl+Shift+PageDown and Ctrl+Shift+PageUp SHALL move the active row one row down or up in the list, stopping at its ends.
+Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to Cmd+9 and Close Tabs Below SHALL act on the rows the sidebar lists, in its order, whichever window holds them, and never on a tab of another Space. Ctrl+Shift+PageDown and Ctrl+Shift+PageUp SHALL move the active row one row down or up in the list, stopping at its ends.
 
 #### Scenario: Moving a row with the keyboard
 - **WHEN** a window shows "Work", whose rows are X, Y and Z, Z is active, and the user presses Ctrl+Shift+PageUp
@@ -237,6 +253,10 @@ Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to 
 - **WHEN** the last row of the Space is active and the user presses Opt+Cmd+Down
 - **THEN** the first row of the same Space is active
 
+#### Scenario: Cmd+number on a tab from another window
+- **WHEN** a window shows "Work", whose rows are X, Y and Z, Y was opened in another window, and the user presses Cmd+2
+- **THEN** this window shows Y
+
 ### Requirement: Spaces restored after a relaunch
 After Clair quits and relaunches, each restored tab SHALL return to its Space at its place in the Space's order, and the window SHALL show the Space that was last shown. A tab whose Space no longer exists SHALL join the Space its window shows.
 
@@ -247,3 +267,88 @@ After Clair quits and relaunches, each restored tab SHALL return to its Space at
 #### Scenario: Reopen Closed Tab
 - **WHEN** the user closes a tab of "Work", switches to "Home" and chooses Restore Last Closed Tab
 - **THEN** the tab comes back in "Work", and the window shows "Work"
+
+### Requirement: One tab list for every window
+Every window showing a Space SHALL list the same tabs for it, in the same order, whichever window they were opened in. A change made in one window, such as opening, closing or reordering a tab, SHALL show in the others at once.
+
+#### Scenario: Two windows on one Space
+- **WHEN** two windows show "Home" and the user opens a tab in the first
+- **THEN** the second window's sidebar lists the new tab at the top too
+
+#### Scenario: Reordering
+- **WHEN** the user drags a tab to the bottom of the list in one window
+- **THEN** it is at the bottom of the list in the other window
+
+#### Scenario: New window
+- **WHEN** the user presses Cmd+N in a window showing "Work", which has three tabs
+- **THEN** the new window shows a new tab page, and its sidebar lists that tab and the three others
+
+### Requirement: A tab shows in one window at a time
+Selecting a tab that another window shows SHALL show its live page in this window, without reloading it. The other window SHALL keep the tab's row highlighted and show a faded still of the page as it was at that moment, with an empty URL field and with back, forward and reload disabled. Focusing that window, by any click in it, SHALL bring the live page back to it and leave the still in the window it came from.
+
+#### Scenario: Taking a tab
+- **WHEN** window A shows the tab "Docs" and the user selects "Docs" in window B
+- **THEN** B shows the live page, and A shows a faded still of it with "Docs" still highlighted
+
+#### Scenario: Taking it back
+- **WHEN** the user then clicks anywhere in window A
+- **THEN** A shows the live page and B shows the faded still
+
+#### Scenario: The still doesn't update
+- **WHEN** the page changes while window A shows its still
+- **THEN** A's still stays as it was
+
+#### Scenario: A tab no window shows
+- **WHEN** the user selects a tab that was opened in another window and isn't showing there
+- **THEN** this window shows its page as it was, and the other window is unchanged
+
+### Requirement: A tab goes back to its still
+When the window that took a tab shows another tab, and no window shows the taken tab, the window showing a still of it SHALL show its live page again, without being focused, as in Arc.
+
+#### Scenario: Giving it back
+- **WHEN** window A shows a still of "Docs", which window B took, and the user selects another tab in B
+- **THEN** A shows the live page of "Docs" again, and B shows the other tab
+
+### Requirement: A window that loses its tab shows a new tab page
+When the tab a window shows a still of is closed, the window SHALL show a new tab page in the Space it shows, with the command bar open. A click in a window showing a still first takes its tab back, as for any click in it; the user then selects another tab or Space there as usual.
+
+#### Scenario: The still's tab closes
+- **WHEN** window A shows a still of "Docs" and the user closes "Docs" in window B
+- **THEN** A shows a new tab page with the command bar open
+
+#### Scenario: Moving on
+- **WHEN** window A shows a still of "Docs", the user clicks another tab's row in A, then clicks it again
+- **THEN** the first click shows "Docs" live in A and leaves B a still of it, as in Arc, and the second shows the other tab in A and "Docs" live in B again
+
+### Requirement: Closing a window keeps its tabs
+Closing a window while another window that isn't incognito or guest is open SHALL keep its tabs, which stay listed in their Spaces in the remaining windows. Closing the last such window SHALL close its tabs, each with its usual leave-page confirmation.
+
+#### Scenario: Another window is open
+- **WHEN** two windows are open and the user closes the one showing the tab "Docs"
+- **THEN** "Docs" is still listed in the other window, and selecting it shows the page without reloading it
+
+#### Scenario: The last window
+- **WHEN** one window is open and the user closes it
+- **THEN** its tabs close, and Reopen Closed Window brings them back
+
+### Requirement: A Peek moves with its tab
+When a tab with a Peek moves to another window, by being selected there or because its window closed, its Peek SHALL move with it and stay open, as in Arc, with its page as it was. A window showing a still of that tab SHALL show the tab's own page in the still, without the Peek, and SHALL NOT show the Peek's badge on the tab's row.
+
+#### Scenario: Tab with a Peek taken by another window
+- **WHEN** window A shows a tab with a Peek and the user selects that tab in window B
+- **THEN** B shows the tab with its Peek, without reloading either page
+
+#### Scenario: The still of a tab with a Peek
+- **WHEN** window A shows a tab with a Peek and the user selects that tab in window B
+- **THEN** A shows a faded still of the tab's page with no Peek over it, and the tab's row in A has no Peek badge
+
+#### Scenario: Peek's window closes
+- **WHEN** two windows are open and the user closes the one showing a tab with a Peek
+- **THEN** the tab's row in the other window still shows the Peek's badge, and selecting it shows the tab with its Peek
+
+### Requirement: Stills end with the session
+After a relaunch with session restore, no window SHALL show a still, and no tab SHALL be listed twice.
+
+#### Scenario: Relaunch with a still showing
+- **WHEN** the user quits while a window shows a still of a tab, and relaunches
+- **THEN** that window shows a new tab page, and the tab is listed once
