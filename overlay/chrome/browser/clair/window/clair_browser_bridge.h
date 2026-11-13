@@ -39,6 +39,10 @@ class WebContents;
 - (void)tabChanged:(content::WebContents*)contents;
 // The window shows another Space; `previousSpace` is the one it showed.
 - (void)shownSpaceChangedFrom:(const std::string&)previousSpace;
+// add-profiles D3: the window's group swaps it in from a member showing
+// `previousSpace`, which ClairUI hears as the Space shown before, whatever
+// this window showed.
+- (void)swappedInFrom:(const std::string&)previousSpace;
 - (void)activeTabChanged;
 // The window's still started, ended or got its image
 // (share-tabs-across-windows D2).

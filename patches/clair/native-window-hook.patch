@@ -464,13 +464,16 @@
      return;  // IN-TEST
 --- a/chrome/browser/ui/BUILD.gn
 +++ b/chrome/browser/ui/BUILD.gn
-@@ -3340,6 +3340,40 @@
+@@ -3340,6 +3340,44 @@
    }
  
    if (is_mac) {
-+    # Clair's native browser window (replace-browser-window design D1) and
-+    # its Spaces (add-spaces design D1, D2, D6).
++    # Clair's native browser window (replace-browser-window design D1), its
++    # Spaces (add-spaces design D1, D2, D6) and profiles (add-profiles design
++    # D1, D3).
 +    sources += [
++      "//chrome/browser/clair/clair_profiles.h",
++      "//chrome/browser/clair/clair_profiles.mm",
 +      "//chrome/browser/clair/clair_space_store.h",
 +      "//chrome/browser/clair/clair_space_store.mm",
 +      "//chrome/browser/clair/clair_space_tabs.h",
@@ -493,6 +496,8 @@
 +      "//chrome/browser/clair/window/clair_peeks.mm",
 +      "//chrome/browser/clair/window/clair_space_session.h",
 +      "//chrome/browser/clair/window/clair_space_session.mm",
++      "//chrome/browser/clair/window/clair_window_group.h",
++      "//chrome/browser/clair/window/clair_window_group.mm",
 +      "//chrome/browser/clair/window/clair_window_hooks.h",
 +      "//chrome/browser/clair/window/clair_window_hooks.mm",
 +    ]

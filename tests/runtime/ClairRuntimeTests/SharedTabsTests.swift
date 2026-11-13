@@ -387,12 +387,19 @@ final class SharedTabsTests: NativeWindowTestCase {
     let still = await windowA.waitForStill()
     XCTAssertTrue(still, "A shows no still of the row B took")
 
-    // A Space's last tab: B shows Home's most recently active tab no window
-    // shows.
+    // A Space's last page: B stays on the Space, on a new tab page, and no
+    // tab of Home is shown or moved (add-profiles D13).
     try await createSpace("Work", in: windowB)
+    let page = try await browser.open(counter("page"))
+    defer { page.close() }
+    windowB.tabRow("New Tab")?.click()
     browser.ui.typeKey("w", modifierFlags: .command)
-    let home = await Harness.wait(for: 15) { windowB.spaceName == "Home" }
-    XCTAssertTrue(home, "Closing Work's only tab didn't show Home")
+    _ = await windowB.waitForTabs { $0 == ["Counter page"] }
+    browser.ui.typeKey("w", modifierFlags: .command)
+    let stays = await windowB.waitForTabs { $0.count == 1 && $0 != ["Counter page"] }
+    XCTAssertTrue(stays, "Closing Work's only tab didn't leave a new tab page: \(windowB.tabTitles)")
+    XCTAssertEqual(windowB.spaceName, "Work", "Closing Work's only tab left Work")
+    XCTAssertFalse(windowA.showsStill, "A tab of Home was taken")
   }
 
   func testTabCommandsReachRowsFromAnotherWindow() async throws {
@@ -530,6 +537,8 @@ final class SharedTabsTests: NativeWindowTestCase {
     a.close()
     b.close()
     try await browser.quit()
+    // Both windows come back with the setting on (add-profiles D6).
+    try Harness.setRestoreWindows(true)
     try await browser.start()
     let windows = try await browser.waitForNativeWindows(2, seconds: 60)
     for window in windows {

@@ -29,7 +29,9 @@ extension Browser {
     spacesMenu.click()
     defer { ui.typeKey(.escape, modifierFlags: []) }
     let items = spacesMenu.menuItems.allElementsBoundByIndex
-    let commands: Set<String> = ["New Space…", "Rename Space", "Manage Spaces…", "Next Space", "Previous Space", ""]
+    let commands: Set<String> = [
+      "New Space…", "Rename Space", "Change Profile", "Manage Spaces…", "Next Space", "Previous Space", "",
+    ]
     return items.map(\.title).filter { !commands.contains($0) }
   }
 
@@ -163,19 +165,21 @@ final class SpacesTests: NativeWindowTestCase {
     let (browser, tab) = try await startWithPage("counter.html?a")
     defer { tab.close() }
     try await createSpace("Work", in: browser)
-    // Close Work's new tab page: Work has no tab, and the window shows Home.
+    // Work's only row is a page: closing it keeps the window on Work, on a
+    // new tab page with the command bar (add-profiles D13).
+    let x = try await browser.open(counter("x"))
+    defer { x.close() }
+    browser.tabRow("New Tab")?.click()
     browser.ui.typeKey("w", modifierFlags: .command)
-    var shown = await browser.waitForSpace("Home")
-    try require(shown, "Closing a Space's last tab didn't show another Space")
-
-    // Showing Work again opens a new tab page with the command bar.
-    browser.ui.typeKey("2", modifierFlags: .control)
-    shown = await browser.waitForSpace("Work")
-    try require(shown, "Ctrl+2 didn't show Work")
+    let one = await browser.waitForTabs { $0 == ["Counter x"] }
+    try require(one, "Work doesn't list x alone: \(browser.tabTitles)")
+    browser.ui.typeKey("w", modifierFlags: .command)
+    let emptied = await browser.waitForTabs { $0.count == 1 && $0 != ["Counter x"] }
+    XCTAssertTrue(emptied, "Closing Work's only tab didn't leave a new tab page: \(browser.tabTitles)")
+    XCTAssertEqual(browser.spaceName, "Work", "Closing Work's only tab left Work")
     XCTAssertTrue(
       browser.element("clair.commandBarField").waitForExistence(timeout: 10),
-      "An empty Space didn't open the command bar")
-    XCTAssertEqual(browser.tabRows.count, 1, "An empty Space didn't open one new tab page")
+      "An emptied Space didn't open the command bar")
     browser.ui.typeKey(.escape, modifierFlags: [])
 
     // Cmd+N opens a window on the same Space.
@@ -324,7 +328,8 @@ final class SpacesTests: NativeWindowTestCase {
     try require(shown, "Ctrl+1 didn't show Home")
     _ = try await moving.evaluate("window.counter = 5; 1")
 
-    // The active tab moves; the window stays on Home and shows another tab.
+    // The active tab moves, and the window follows it to Work, the tab
+    // still active (add-profiles D9).
     browser.tabRow("Counter moving")?.click()
     let selected = await browser.waitForActiveRow("Counter moving")
     try require(selected, "The tab to move isn't active")
@@ -335,11 +340,14 @@ final class SpacesTests: NativeWindowTestCase {
     let work = move.menuItems["Work"]
     try require(work.waitForExistence(timeout: 5), "Move to Space doesn't list Work")
     work.click()
+    shown = await browser.waitForSpace("Work")
+    XCTAssertTrue(shown, "Moving the active tab didn't show Work: \(browser.spaceName)")
+    let followed = await browser.waitForActiveRow("Counter moving")
+    XCTAssertTrue(followed, "The moved tab isn't active in Work: \(browser.activeRow ?? "none")")
+    browser.ui.typeKey("1", modifierFlags: .control)
+    shown = await browser.waitForSpace("Home")
     let gone = await browser.waitForTabs { !$0.contains("Counter moving") }
     XCTAssertTrue(gone, "The moved tab is still in Home")
-    XCTAssertEqual(browser.spaceName, "Home", "Moving the active tab left the Space")
-    let other = await browser.waitForActiveRow("Counter stay")
-    XCTAssertTrue(other, "The window doesn't show the tab a close would have shown")
 
     browser.ui.typeKey("2", modifierFlags: .control)
     shown = await browser.waitForSpace("Work")
@@ -409,11 +417,18 @@ final class SpacesTests: NativeWindowTestCase {
     await close(expecting: "Counter E", "Closing D didn't show the row above")
     await close(expecting: "Counter I", "Closing the top row didn't show the row below")
 
-    // Closing a Space's last tab shows another Space.
+    // Closing a Space's last page keeps the window on it, on a new tab page
+    // (add-profiles D13).
     try await createSpace("Work", in: browser)
+    let page = try await browser.open(counter("page"))
+    defer { page.close() }
+    browser.tabRow("New Tab")?.click()
     browser.ui.typeKey("w", modifierFlags: .command)
-    let home = await browser.waitForSpace("Home")
-    XCTAssertTrue(home, "Closing Work's only tab didn't show Home")
+    _ = await browser.waitForTabs { $0 == ["Counter page"] }
+    browser.ui.typeKey("w", modifierFlags: .command)
+    let stays = await browser.waitForTabs { $0.count == 1 && $0 != ["Counter page"] }
+    XCTAssertTrue(stays, "Closing Work's only tab didn't leave a new tab page: \(browser.tabTitles)")
+    XCTAssertEqual(browser.spaceName, "Work", "Closing Work's only tab left Work")
   }
 
   /// A page that asks before it closes: Chromium's confirmation makes its
@@ -481,10 +496,12 @@ final class SpacesTests: NativeWindowTestCase {
     browser.ui.typeKey("2", modifierFlags: .control)
     _ = await browser.waitForSpace("Work")
 
-    // Let session restore write the tabs, then quit with no setting changed.
+    // Let session restore write the tabs, then quit with windows restored
+    // (add-profiles D6).
     try await Task.sleep(for: .seconds(3))
     ([first, h2] + work).forEach { $0.close() }
     try await browser.quit()
+    try Harness.setRestoreWindows(true)
     try await browser.start()
     try require(browser.nativeWindow.waitForExistence(timeout: 60), "Clair didn't come back")
     let restored = await browser.waitForSpace("Work", seconds: 60)

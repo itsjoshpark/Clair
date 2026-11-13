@@ -70,9 +70,13 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
   static void SetRestoredTag(content::WebContents* contents,
                              const std::string& space,
                              std::optional<int> rank);
+  // add-profiles D6: the window group a restored tab's window belonged to.
+  static void SetRestoredWindowTag(content::WebContents* contents,
+                                   const std::string& group);
+  static std::string WindowTag(content::WebContents* contents);
   // The tags session restore and Reopen Closed Tab need to put `contents`
-  // back: its Space and its index in the Space's list. Empty for a tab with
-  // no Space, as an incognito one.
+  // back: its Space, its index in the Space's list and its window's group.
+  // Empty for a tab with no Space, as an incognito one.
   static std::map<std::string, std::string> SessionTags(
       content::WebContents* contents);
 
@@ -144,6 +148,9 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
 
   // What to push at the end of this run-loop turn.
   void ListChanged(const std::string& space);
+  // Every list, as when its tabs' window changed group: their session tags
+  // are written again.
+  void AllListsChanged();
   void TabChanged(content::WebContents* contents);
   // Pushes now.
   void Flush();
@@ -227,9 +234,19 @@ NSArray<id<ClairTab>>* TabsInSpace(const std::string& space);
 void NotifyTabsInSpace(const std::string& space);
 // Pushes one tab's snapshot to the observers.
 void NotifyTab(id<ClairTab> tab);
+// Pushes the profiles to the observers (add-profiles D1).
+void NotifyProfiles(NSArray<id<ClairProfile>>* profiles);
 // D7.
 void DeleteSpace(const std::string& space);
+// D7, add-profiles D9: within a profile the tab keeps its page; to a Space of
+// another profile it reopens there. Either way a window whose active tab it
+// was shows the Space.
 void MoveTabToSpace(tabs::TabInterface* tab, const std::string& space);
+// add-profiles D9: makes `space` use `profile` and reopens its tabs there.
+void SetSpaceProfile(const std::string& space, const std::string& profile);
+// add-profiles D8: when the last-used profile has no Space, the profile of
+// clair.last_space becomes the last-used one.
+void KeepLastUsedProfileOnASpace();
 
 }  // namespace clair
 

@@ -451,6 +451,11 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   [self postFlush];
 }
 
+- (void)swappedInFrom:(const std::string&)previousSpace {
+  _previousSpace = previousSpace;
+  [self postFlush];
+}
+
 - (void)activeTabChanged {
   [_historyMenu activeTabChanged];
   _activeTabChanged = YES;

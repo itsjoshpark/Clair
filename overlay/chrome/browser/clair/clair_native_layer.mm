@@ -22,17 +22,23 @@
 #include "base/time/time.h"
 #import "chrome/browser/app_controller_mac.h"
 #import "chrome/browser/clair/ClairHost.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/clair/clair_profiles.h"
 #include "chrome/browser/clair/clair_space_store.h"
 #import "chrome/browser/clair/clair_space_tabs.h"
 #include "chrome/browser/clair/ungoogled_version.h"
+#include "chrome/browser/clair/window/clair_window_group.h"
 #include "chrome/browser/clair/window/clair_window_hooks.h"
 #include "chrome/browser/download/download_core_service.h"
+#include "chrome/browser/download/download_prefs.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/mac/clair_update_relaunch.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/common/pref_names.h"
+#include "components/prefs/pref_service.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
@@ -170,10 +176,13 @@ void OpenURLInProfile(const GURL& url, Profile* profile) {
   }
 }
 
-- (ClairSpaceID)createSpaceNamed:(NSString*)name icon:(NSString*)icon {
+- (ClairSpaceID)createSpaceNamed:(NSString*)name
+                            icon:(NSString*)icon
+                         profile:(ClairProfileID)profileID {
   CHECK([NSThread isMainThread]);
   const std::string id = clair::ClairSpaceStore::Get()->Create(
-      base::SysNSStringToUTF8(name ?: @""), base::SysNSStringToUTF8(icon ?: @""));
+      base::SysNSStringToUTF8(name ?: @""), base::SysNSStringToUTF8(icon ?: @""),
+      base::SysNSStringToUTF8(profileID ?: @""));
   return id.empty() ? nil : base::SysUTF8ToNSString(id);
 }
 
@@ -208,6 +217,140 @@ void OpenURLInProfile(const GURL& url, Profile* profile) {
   }
   tabs::TabInterface* tab = tabs::TabHandle(static_cast<int32_t>(tabID)).Get();
   clair::MoveTabToSpace(tab, base::SysNSStringToUTF8(spaceID));
+}
+
+// --- Profiles (add-profiles design D1, D7, D9, D11) ---
+
+- (NSArray<id<ClairProfile>>*)profiles {
+  CHECK([NSThread isMainThread]);
+  return clair::ProfileSnapshots();
+}
+
+- (void)createProfileNamed:(NSString*)name
+                completion:(void (^)(ClairProfileID))completion {
+  CHECK([NSThread isMainThread]);
+  void (^done)(ClairProfileID) = [completion copy];
+  clair::ClairProfiles::Get()->Create(
+      base::SysNSStringToUTF8(name ?: @""),
+      base::BindOnce(
+          [](void (^done)(ClairProfileID), const std::string& id) {
+            if (done) {
+              done(id.empty() ? nil : base::SysUTF8ToNSString(id));
+            }
+          },
+          done));
+}
+
+- (void)renameProfile:(ClairProfileID)profileID to:(NSString*)name {
+  CHECK([NSThread isMainThread]);
+  clair::ClairProfiles::Get()->Rename(base::SysNSStringToUTF8(profileID ?: @""),
+                                      base::SysNSStringToUTF8(name ?: @""));
+}
+
+- (void)deleteProfile:(ClairProfileID)profileID {
+  CHECK([NSThread isMainThread]);
+  clair::ClairProfiles::Get()->Delete(base::SysNSStringToUTF8(profileID ?: @""));
+}
+
+- (void)setProfile:(ClairProfileID)profileID forSpace:(ClairSpaceID)spaceID {
+  CHECK([NSThread isMainThread]);
+  clair::SetSpaceProfile(base::SysNSStringToUTF8(spaceID ?: @""),
+                         base::SysNSStringToUTF8(profileID ?: @""));
+}
+
+- (void)downloadSettingsForProfile:(ClairProfileID)profileID
+                        completion:(void (^)(NSURL*, BOOL))completion {
+  CHECK([NSThread isMainThread]);
+  void (^done)(NSURL*, BOOL) = [completion copy];
+  clair::ClairProfiles::Get()->Load(
+      base::SysNSStringToUTF8(profileID ?: @""),
+      base::BindOnce(
+          [](void (^done)(NSURL*, BOOL), Profile* profile) {
+            DownloadPrefs* prefs =
+                profile ? DownloadPrefs::FromBrowserContext(profile) : nullptr;
+            if (!done) {
+              return;
+            }
+            if (!prefs) {
+              done(nil, NO);
+              return;
+            }
+            done(base::apple::FilePathToNSURL(prefs->DownloadPath()),
+                 prefs->PromptForDownload());
+          },
+          done));
+}
+
+- (void)setDownloadDirectory:(NSURL*)directory forProfile:(ClairProfileID)profileID {
+  CHECK([NSThread isMainThread]);
+  if (!directory.fileURL) {
+    return;
+  }
+  const base::FilePath path = base::apple::NSURLToFilePath(directory);
+  clair::ClairProfiles::Get()->Load(
+      base::SysNSStringToUTF8(profileID ?: @""),
+      base::BindOnce(
+          [](base::FilePath path, Profile* profile) {
+            if (!profile) {
+              return;
+            }
+            // download.default_directory and savefile.default_directory, and
+            // downloads stop asking where to save.
+            DownloadPrefs::FromBrowserContext(profile)->SetDownloadPath(path);
+            profile->GetPrefs()->SetBoolean(prefs::kPromptForDownload, false);
+          },
+          path));
+}
+
+- (void)setAsksWhereToSave:(BOOL)asks forProfile:(ClairProfileID)profileID {
+  CHECK([NSThread isMainThread]);
+  clair::ClairProfiles::Get()->Load(
+      base::SysNSStringToUTF8(profileID ?: @""),
+      base::BindOnce(
+          [](bool asks, Profile* profile) {
+            if (profile) {
+              profile->GetPrefs()->SetBoolean(prefs::kPromptForDownload, asks);
+            }
+          },
+          static_cast<bool>(asks)));
+}
+
+- (void)openURL:(NSURL*)url inProfile:(ClairProfileID)profileID {
+  CHECK([NSThread isMainThread]);
+  GURL gurl(base::SysNSStringToUTF8(url.absoluteString ?: @""));
+  if (!gurl.is_valid()) {
+    LOG(ERROR) << "ClairUI: not opening an invalid URL";
+    return;
+  }
+  // D7: the profile's Space shown most recently, or its first.
+  const std::string profile = base::SysNSStringToUTF8(profileID ?: @"");
+  std::string space = ClairWindowGroup::LastShownSpaceOf(profile);
+  if (space.empty()) {
+    for (const clair::Space& candidate : clair::ClairSpaceStore::Get()->spaces()) {
+      if (candidate.profile == profile) {
+        space = candidate.id;
+        break;
+      }
+    }
+  }
+  if (space.empty()) {
+    return;
+  }
+  ClairWindowGroup::OpenInSpace(space, gurl);
+}
+
+// --- App settings ---
+
+- (BOOL)warnsBeforeQuitting {
+  CHECK([NSThread isMainThread]);
+  return g_browser_process->local_state()->GetBoolean(
+      prefs::kConfirmToQuitEnabled);
+}
+
+- (void)setWarnsBeforeQuitting:(BOOL)warns {
+  CHECK([NSThread isMainThread]);
+  g_browser_process->local_state()->SetBoolean(prefs::kConfirmToQuitEnabled,
+                                               warns);
 }
 
 @end
@@ -304,6 +447,8 @@ void StartNativeLayer() {
 
   g_host = [[ClairChromiumHost alloc] init];
   g_entry_point = (Class<ClairUIEntryPoint>)principal;
+  // add-profiles D6: the restore setting, read once, before session restore.
+  ClairWindowGroup::Start();
   [g_entry_point startWithHost:g_host];
   clair::InstallNativeWindowMenus();
   LOG(INFO) << "ClairUI: started from " << path;

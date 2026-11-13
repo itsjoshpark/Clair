@@ -253,7 +253,9 @@ final class PageHostingTests: NativeWindowTestCase {
     try await Task.sleep(for: .seconds(3))
     try await browser.quit()
 
-    // With no switch: tabs come back at launch by default (add-spaces D11).
+    // With no switch: tabs come back at launch by default (add-spaces D11),
+    // and both windows with the restore setting on (add-profiles D6).
+    try Harness.setRestoreWindows(true)
     try await browser.start()
     for (search, size) in expected {
       var target: Browser.Target?

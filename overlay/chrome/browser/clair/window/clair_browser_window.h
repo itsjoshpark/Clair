@@ -43,6 +43,7 @@
 @class ClairNativeWindow;
 @class NSEvent;
 @class NSImage;
+@class NSWindow;
 @protocol ClairWindow;
 
 class Browser;
@@ -52,6 +53,7 @@ class SkBitmap;
 class ClairExtensions;
 class ClairPeeks;
 class ClairSpaceTabs;
+class GURL;
 
 namespace autofill {
 class AutofillBubbleHandler;
@@ -320,7 +322,11 @@ class ClairBrowserWindow : public BrowserWindow {
   // window shows, taking it from the window that holds it, or else opens a
   // new tab page in it with the command bar. Ignored for an unknown Space and
   // in incognito and guest windows.
-  void ShowSpace(const std::string& space);
+  // A Space of another profile is shown by the window's group, which swaps to
+  // its member for that profile (add-profiles D3). With `again`, a member
+  // the group swaps in shows the Space even if it showed it already, as its
+  // active tab may be its placeholder.
+  void ShowSpace(const std::string& space, bool again = false);
   // The tabs of the shown Space, in its order, whichever window of the
   // profile holds them: with Peeks, or only the rows the sidebar lists. An
   // incognito or guest window's are its own.
@@ -360,6 +366,54 @@ class ClairBrowserWindow : public BrowserWindow {
                    ClairTakeOptions options = ClairTakeOptions());
   // Opens a new tab page in the shown Space, optionally with the command bar.
   void OpenNewTabPage(bool show_command_bar);
+  // Opens `url` in a new foreground tab of the shown Space, or a new tab page
+  // with the command bar when it's empty.
+  void OpenInShownSpace(const GURL& url);
+
+  // --- Window groups (add-profiles D3 to D6, D8, D13) ---
+  // Whether the window is a member its group has ordered out.
+  bool IsHiddenMember() const;
+  // The group is about to swap this member in from a window showing
+  // `previous_space`: ClairUI hears that Space as the one shown before.
+  void BeginSwapIn(const std::string& previous_space);
+  // Orders the window in above `above` (or front), makes it key when
+  // `make_key`, and shows its pages.
+  void Reveal(NSWindow* above, bool make_key);
+  // Hides its pages and, with `order_out`, orders the window out. A still it
+  // showed ends, its placeholder staying active without one, and a take it
+  // waits for is dropped (D5).
+  void Conceal(bool order_out);
+  // D4: the window covers its group's full-screen window: no corners or
+  // window controls.
+  void SetCovering(bool covering);
+  // The window's NSWindow, or its group's full-screen one while it covers it,
+  // which full-screen requests go to (D4).
+  NSWindow* FullscreenNSWindow() const;
+  // D5: moves every tab, the placeholder and `except` left out, to `target`,
+  // a window of the same profile. Returns whether it moved any.
+  bool HandTabsTo(ClairBrowserWindow* target, tabs::TabInterface* except);
+  // Closes `tab` at once, without picking a next tab.
+  void CloseTabWithoutChoosing(tabs::TabInterface* tab);
+  // Whether a tab's page would ask before the window closes.
+  bool NeedsBeforeUnload() const;
+  // Whether the window holds a tab other than its placeholder.
+  bool HasRealTabs() const;
+  // The URLs of its pages, new tab pages and the placeholder left out.
+  std::vector<GURL> PageURLs() const;
+  // D6: the group named by the first of its tabs restored with a group tag,
+  // or empty.
+  std::string RestoredGroupTag() const;
+  // D6: shows `space` after session restore, on the restored selected tab
+  // when it's in the Space, or else as ShowSpace() picks.
+  void ShowRestoredSpace(const std::string& space);
+  // D6, D7: shows `space`, a Space of the window's profile, on a new tab of
+  // `url`, or a new tab page with the command bar when it's empty.
+  void ShowSpaceOnNewTab(const std::string& space, const GURL& url);
+  // add-profiles D9: the active tab moved to another Space of the profile;
+  // the window shows that Space, the tab staying active.
+  void FollowActiveTab();
+  // add-profiles D9: drops a take waiting for `tab`'s page copy.
+  void DropPendingTakeOf(const tabs::TabInterface* tab);
   // D5: runs a tab command over the rows of the shown Space. Returns whether
   // it ran; otherwise Chromium runs it.
   bool ExecuteTabCommand(int command);
@@ -553,11 +607,11 @@ class ClairBrowserWindow : public BrowserWindow {
   // tab, which sets no came-from.
   // With `then`, as ShowNextRow().
   void ChooseRow(tabs::TabInterface* row, base::OnceClosure* then);
-  // D3: before the active row `row`, the last of its Space, closes: shows the
-  // most recently active row of another Space that no window shows. Returns
-  // false, changing nothing, when there's none.
-  bool ShowTabOfAnotherSpace(tabs::TabInterface* row,
-                             base::OnceClosure* then = nullptr);
+  // add-profiles D13: the active row `row` closes with no other row to show:
+  // a new tab page with the command bar takes its place in the Space, or,
+  // when `row` is itself a new tab page and the Space's only row, the window
+  // closes as the user's close does. Returns whether the window closes.
+  bool KeepEmptiedSpace(tabs::TabInterface* row);
   // Closes `handle`'s tab, with its leave-page confirmation.
   void CloseTabNow(tabs::TabHandle handle);
   // D1: whether `tab` is one this window can take: another regular window's
@@ -588,9 +642,6 @@ class ClairBrowserWindow : public BrowserWindow {
   void BeginStill(tabs::TabInterface* row, const SkBitmap& copy);
   // D2: ends the still, closing the placeholder unless it became a tab.
   void EndStill();
-  // D4: moves the window's tabs to the most recently active other regular
-  // window of the profile. Returns whether it did.
-  bool HandTabsToAnotherWindow();
   tabs::TabInterface* placeholder() const;
   // The pages the card shows while `active` is the active tab: it and its
   // Peek or parent (add-peek D4).
@@ -640,6 +691,11 @@ class ClairBrowserWindow : public BrowserWindow {
   // Owned by the browser's FindBarController once created.
   raw_ptr<ClairFindBar> find_bar_ = nullptr;
   base::CallbackListSubscription zoom_subscription_;
+  // The real Show(), once session restore has finished and the window is its
+  // group's shown member.
+  void ShowNow();
+  // add-profiles D8: the regular window opened in a profile no Space uses.
+  bool hands_over_ = false;
   // The show state session restore asked for, applied when first shown.
   ui::mojom::WindowShowState initial_show_state_ =
       ui::mojom::WindowShowState::kDefault;
