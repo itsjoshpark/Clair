@@ -59,7 +59,7 @@ With more than one Space, a tab row's context menu SHALL offer "Move to Space" w
 - **THEN** the tab's menu has no "Move to Space"
 
 ### Requirement: Tab chosen after a close
-When the user closes the active tab, the window SHALL show, in order: the tab the user selected it from, if it's still listed in the Space; otherwise the row above it; otherwise the row below it, among every row the sidebar lists. A tab another window shows SHALL NOT be skipped: this window shows it, and the other window its still. When the Space has no other tab, the window SHALL stay on the Space, as Arc keeps an empty Space, and show a new tab page in it with the command bar open, using one the Space already lists if the user never navigated it. It SHALL never show a tab of another Space instead. Closing a new tab page that is the Space's only tab SHALL close the window.
+When the user closes the active tab, the window SHALL show, in order: the tab the user selected it from, if it's still listed in the Space; otherwise the row above it; otherwise the row below it, among every row the sidebar lists. A tab another window shows SHALL NOT be skipped: this window shows it, and the other window its still. When the Space has no other tab, the window SHALL stay on the Space, as Arc keeps an empty Space, and show a new tab page in it with the command bar open. It SHALL never show a tab of another Space instead. Closing a new tab page that is the Space's only tab SHALL close the window.
 
 #### Scenario: Back to where the user came from
 - **WHEN** the rows are E, D, C, B, A, and the user selects A, then C, then closes C

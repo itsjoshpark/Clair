@@ -97,10 +97,13 @@ For the window the user sees, nothing changes from `share-tabs-across-windows`: 
 Each tab's session extra data gains `clair_window`, its group's UUID, beside `clair_space` and `clair_order`. Chromium's session restore still reopens every browser it saved, in every profile. What the overlay makes of them follows "When opening Clair, restore windows from previous session", the user default `ClairRestoreWindows` (off when unset), read once at launch:
 
 - **On:** a restored browser joins the group named by its first tagged tab, when that tab is inserted, which is before session restore shows the window. The group shows the member whose profile matches its Space in `clair.windows`, on the tab Chromium restored as that member's selected one; the others stay hidden.
-- **Off, as Arc by default:** every restored browser joins one group, at the frame of the window that was last active. A second browser of a profile hands its tabs to the first, as a closing window does (`share-tabs` D4), and closes. The group shows `clair.last_space` on a new tab page with the command bar open, as a new window does, reusing a blank one (D13). No member shows before session restore has finished.
+- **Off, as Arc by default:** every restored browser joins one group, at the frame of the window that was last active. A second browser of a profile hands its tabs to the first, as a closing window does (`share-tabs` D4), and closes. The group shows `clair.last_space` on a new tab page with the command bar open, as a new window does. No member shows before session restore has finished.
 
 Today every window comes back (`add-spaces` D11), so "off" as the default is a change of behaviour for existing sessions, to Arc's.
 
+**New tab pages aren't restored.** Where `peek-session.patch` already calls `DropPeeks` on the windows session restore is about to restore, the overlay also drops every tab whose current entry is the new tab page, and a window left without tabs. So the new tab page a launch opens is the only one, and those left by Cmd+N or an emptied Space (D13) don't pile up across launches. With the setting on, a group whose restored member has no selected tab of its Space left opens a new tab page there.
+
+- **Why drop them at restore, and not reuse a blank one:** it is one filter beside an existing one, where reuse needs to know whether a page was ever navigated and whether a window shows it, in every place a new tab page is opened.
 - **Why a tab tag for the group:** it needs no hook where Chromium creates the restored browser, and no second rebuild hook.
 - **Why merge after Chromium's restore, and not restore fewer windows:** the tabs of every window must come back in their Spaces either way, and Chromium restores tabs only with their windows.
 - **Why a user default:** the setting is the app's, not a profile's, and `ClairUI`'s other toggles are user defaults.
@@ -154,7 +157,6 @@ Moving one tab to a Space of another profile is this step for one tab, with `add
 
 This replaces `share-tabs` D3's "The Space's last tab". When a close Clair starts would leave the shown Space with no row, the overlay first opens a new tab page in the Space, with the command bar, and then closes the tab. A window therefore never changes Space, or profile, because a tab closed. `ShowTabOfAnotherSpace` goes.
 
-- **A blank new tab page is reused.** Where this decision or D6 would open a new tab page in a Space, the overlay first looks for one the Space lists that never navigated and that no window shows, and activates it instead. So neither a launch nor an emptied Space adds a second one.
 - **Closing that new tab page** while it is the Space's only row closes the window, as the user's close does (D5), and the page closes with it instead of being handed on. Arc closes a window with no tab selected. Otherwise Cmd+W would only ever replace it.
 - **A close Clair doesn't start** (`window.close()`, an extension) on a member's only tab still closes that browser, as accepted in `share-tabs`. A shown member that closes this way closes its group, as the user's close does.
 
@@ -162,7 +164,7 @@ This replaces `share-tabs` D3's "The Space's last tab". When a close Clair start
 
 ## Risks / Trade-offs
 
-- **[A launch shows a new tab page where Arc shows no tab]** → Accepted: Clair's windows always show a tab. A blank one is reused, so they don't pile up (D13).
+- **[A launch shows a new tab page where Arc shows no tab]** → Accepted: Clair's windows always show a tab. New tab pages aren't restored, so they don't pile up (D6).
 - **[Restored windows flash before they merge]** with restoring windows off. → No member shows until session restore has finished (D6).
 - **[Hidden members during session restore]** Chromium may show a restored window before its first tagged tab arrives. → Test it early; the fallback hides non-shown members when session restore finishes.
 - **[The cover in full screen]** Unproven with Chromium's windows, a page's own full screen, and the menu bar's reveal. → Prove it on a test build before the rest; D4 names the fallback.

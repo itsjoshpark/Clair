@@ -17,12 +17,20 @@ With "When opening Clair, restore windows from previous session" (`settings-wind
 - **WHEN** a user who never changed the setting quits with three windows open and relaunches
 - **THEN** one window opens
 
-### Requirement: A launch adds no second new tab page
-When a launch shows a new tab page, Clair SHALL use one the Space already lists, if the user never navigated it, before opening another.
+### Requirement: New tab pages aren't restored
+A tab showing the new tab page when Clair quits SHALL NOT come back at the next launch, so the new tab page a launch opens is the only one it adds. A restored window that showed one SHALL show a new tab page in its Space, and a window that held nothing else SHALL NOT come back.
 
 #### Scenario: Two launches
 - **WHEN** restoring windows is off, and the user launches Clair, quits without using the new tab page it opened, and launches again
-- **THEN** the window shows that same new tab page, and the Space lists one new tab page, not two
+- **THEN** the Space lists one new tab page, not two
+
+#### Scenario: New tab pages left around
+- **WHEN** the user quits with the tabs "Docs" and "Maps" and two new tab pages in "Work", and relaunches
+- **THEN** "Work" lists "Docs" and "Maps", and no new tab page from before
+
+#### Scenario: A restored window on a new tab page
+- **WHEN** restoring windows is on, and the user quits with a window showing a new tab page in "Work", which also lists "Docs", and relaunches
+- **THEN** the window comes back showing "Work" on a new tab page, and "Work" lists that page and "Docs"
 
 ## MODIFIED Requirements
 
