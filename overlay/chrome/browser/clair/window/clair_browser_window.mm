@@ -1592,7 +1592,7 @@ void ClairBrowserWindow::BeginStill(tabs::TabInterface* row,
   // as visible behind the still. It's a new tab page, marked before it joins
   // the strip, so it's in no Space and the window keeps the one it shows.
   std::unique_ptr<content::WebContents> contents = content::WebContents::Create(
-      content::WebContents::CreateParams(browser_->profile()));
+      content::WebContents::CreateParams(browser_->GetProfile()));
   ClairSpaceTabs::MarkPlaceholder(contents.get());
   contents->GetController().LoadURL(GURL(chrome::kChromeUINewTabURL),
                                     content::Referrer(),
