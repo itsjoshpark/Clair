@@ -4,18 +4,21 @@
 
 Arc users keep their work and personal logins apart with Profiles, and give each Space one. They are on the MVP list in `ship-plain-ungoogled-build`'s roadmap ("Spaces many-to-one with profiles"). Today Clair's only profile UI is Chromium's Profiles menu, which opens Chromium-style profile windows that don't fit Clair, and after `add-spaces` every Space still shares one profile. Arc stops working on 2026-12-22.
 
-This is the third of three changes, after `add-spaces` and `share-tabs-across-windows`.
+This is the last of the changes proposed together in #130. `add-clair-dialogs`, `add-spaces` (#138) and `share-tabs-across-windows` (#140, #142) have landed, and this change builds on them as built.
 
 ## What Changes
 
 - **Each Space uses a profile.** A profile is a Chromium profile: its own cookies, history, logins, extensions, permissions and downloads. Several Spaces can use one profile.
 - **Switching profile in the same window.** Switching to a Space of another profile looks like any other switch: same window, same frame, same slide, including in full screen.
-- **Choosing and changing a Space's profile.** The New Space form and Manage Spaces gain a profile popup with "New Profile…", and the Space's menu and the Spaces menu gain Set Profile. Changing the profile of a Space with tabs asks first, then reloads its tabs in the new profile.
+- **Choosing and changing a Space's profile.** The New Space form and Manage Spaces gain a profile popup with "New Profile…", and the Space header's menu gains Set Profile and the Spaces menu Change Profile, as in Arc. Changing the profile of a Space with tabs asks first, then reloads its tabs in the new profile.
 - **Move to Space across profiles** opens the tab's URL in the other profile.
 - **No Profiles menu.** Chromium's Profiles menu leaves the menu bar, and Chromium's profile picker never shows at launch.
 - **A Profiles page in Settings,** between General and Links, laid out as Arc's: the help text, then "Your Profiles" on the left with Add, Remove and Rename at the bottom, and the selected profile's settings on the right: Download location (a folder, or asking every time), then Search Engine, Privacy and Security, Notifications and Clear Browsing Data, which each open Chromium's page for that profile.
 - **Removing a profile follows Arc:** only a profile that no Space uses can be removed, after typing its name.
-- **BREAKING (`ClairHost.h`):** the host gains profiles, their observer and their calls, and a Space gains its profile.
+- **An empty Space stays, as in Arc.** Closing a Space's last tab leaves the window on that Space with a new tab page, where today it shows a tab of another Space. A window never leaves its Space, or its profile, because a tab closed.
+- **Restoring windows becomes a setting, as in Arc:** the toggle "When opening Clair, restore windows from previous session" on Settings › Advanced, off by default. Off, Clair opens one window on the Space last shown; on, each window comes back on its Space and tab. Tabs come back in their Spaces either way. Today every window comes back.
+- **"Warn before quitting" moves to Settings › Advanced,** as a toggle, and Chromium's menu item for it goes.
+- **BREAKING (`ClairHost.h`):** the host gains profiles, their observer and their calls, a Space gains its profile, and the host gains the warn-before-quitting setting.
 
 **Out of scope:**
 - Arc's per-profile search suggestions, "Archive tabs after" and "New documents" settings.
@@ -30,13 +33,15 @@ This is the third of three changes, after `add-spaces` and `share-tabs-across-wi
 
 ### Modified Capabilities
 
-- `settings-window`: "Settings pages" adds Profiles between General and Links.
+- `spaces`: the header's menu, the New Space form and Manage Spaces gain the profile; "Moving a tab to another Space" keeps the page only within a profile; "Tab chosen after a close" keeps the window on an emptied Space; "Spaces restored after a relaunch" no longer depends on which windows come back.
+- `browser-window`: adds "Windows restored at launch", and "Window size and placement restored" follows it.
+- `settings-window`: "Settings pages" adds Profiles between General and Links, and the Advanced page gains the restore-windows and "Warn before quitting" toggles.
 - `chromium-engine`: "Browser behavior as in ungoogled-chromium outside Clair's interface" excepts profile management.
 
 ## Impact
 
-- **Depends on `add-spaces` and `share-tabs-across-windows`,** and on `add-clair-dialogs` for its dialogs. Its design and tasks are finished once those have landed; `design.md` holds the decisions made so far, including a prototype of the full-screen switch.
+- **Builds on `add-spaces`, `share-tabs-across-windows` and `add-clair-dialogs`,** all merged. `design.md` is revised against them as built and includes a prototype of the full-screen switch.
 - **`native/ClairHost.h`** changes, so the engine key changes and the engine is rebuilt once.
 - **Overlay:** new files for profiles and window groups; changes to the Space store, the tab lists, the browser window, session tags and the menu set-up.
-- **`ClairUI`:** the Profiles page and profile dialogs; the profile popup in the form and Manage Spaces; Set Profile in the menus.
+- **`ClairUI`:** the Profiles page and profile dialogs; the profile popup in the form and Manage Spaces; Set Profile and Change Profile in the menus; the two Advanced toggles.
 - **Chromium behaviour:** a window holds one hidden browser window per extra profile, which extensions see as a window through `chrome.windows`.
