@@ -42,10 +42,22 @@ struct NativeWindow {
   }
 
   var activeRow: String? { tabRows.first(where: \.isSelected)?.label }
-  var spaceName: String { element("clair.spaceName").value as? String ?? "" }
-  /// The dimmed still of a tab another window took (share-tabs-across-windows
+  var spaceName: String {
+    let name = element("clair.spaceName")
+    return name.exists ? name.value as? String ?? "" : ""
+  }
+  /// The faded still of a tab another window took (share-tabs-across-windows
   /// D2).
   var still: XCUIElement { element("clair.still") }
+
+  /// Whether the window shows a still: one of the app's stills lies in the
+  /// window's frame. Found app-wide, since a window found by index can turn
+  /// into another once the other comes to the front.
+  var showsStill: Bool {
+    browser.ui.descendants(matching: .any).matching(identifier: "clair.still").allElementsBoundByIndex.contains {
+      frame.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY))
+    }
+  }
   var urlField: XCUIElement { element("clair.urlField") }
   var peekBadge: XCUIElement { element("clair.peekBadge") }
 
@@ -58,7 +70,7 @@ struct NativeWindow {
   }
 
   func waitForStill(_ shown: Bool = true, seconds: TimeInterval = 15) async -> Bool {
-    await Harness.wait(for: seconds) { self.still.exists == shown }
+    await Harness.wait(for: seconds) { self.showsStill == shown }
   }
 
   /// Makes the window key with a click on its sidebar's empty space below
@@ -231,7 +243,7 @@ final class SharedTabsTests: NativeWindowTestCase {
     let shown = await windowB.waitForActiveRow("Counter x")
     XCTAssertTrue(shown, "B didn't show Counter x")
     try await Task.sleep(for: .seconds(1))
-    XCTAssertFalse(windowA.still.exists, "A shows a still of a tab it didn't show")
+    XCTAssertFalse(windowA.showsStill, "A shows a still of a tab it didn't show")
     XCTAssertEqual(windowA.activeRow, "Counter a", "A changed")
   }
 
@@ -321,7 +333,7 @@ final class SharedTabsTests: NativeWindowTestCase {
     browser.ui.typeKey("2", modifierFlags: .control)
     let shown = await windowB.waitForActiveRow("Counter w2")
     XCTAssertTrue(shown, "B didn't show Work's more recent tab: \(windowB.activeRow ?? "none")")
-    XCTAssertFalse(windowA.still.exists, "A shows a still of a tab it didn't show")
+    XCTAssertFalse(windowA.showsStill, "A shows a still of a tab it didn't show")
 
     // B creates Travel, whose only tab B shows: A gets a new tab page there,
     // and B keeps its own.
@@ -334,7 +346,7 @@ final class SharedTabsTests: NativeWindowTestCase {
     let two = await windowA.waitForTabs { $0.count == 2 }
     XCTAssertTrue(two, "A didn't open a new tab page in Travel: \(windowA.tabTitles)")
     browser.ui.typeKey(.escape, modifierFlags: [])
-    XCTAssertFalse(windowB.still.exists, "A took the tab B showed")
+    XCTAssertFalse(windowB.showsStill, "A took the tab B showed")
     XCTAssertEqual(windowB.activeRow, travelTab, "B's tab changed")
   }
 
@@ -366,7 +378,7 @@ final class SharedTabsTests: NativeWindowTestCase {
     browser.ui.typeKey("w", modifierFlags: .command)
     var shown = await windowB.waitForActiveRow("Counter x")
     XCTAssertTrue(shown, "B didn't show the row above, held by A: \(windowB.activeRow ?? "none")")
-    XCTAssertFalse(windowA.still.exists, "A shows a still of a tab it didn't show")
+    XCTAssertFalse(windowA.showsStill, "A shows a still of a tab it didn't show")
 
     // The row above, w, shows in A: B shows it, A keeps a still.
     browser.ui.typeKey("w", modifierFlags: .command)
@@ -523,7 +535,7 @@ final class SharedTabsTests: NativeWindowTestCase {
     for window in windows {
       let once = await window.waitForTabs(30) { $0.filter { $0 == "Counter a" }.count == 1 }
       XCTAssertTrue(once, "Counter a isn't listed once: \(window.tabTitles)")
-      XCTAssertFalse(window.still.exists, "A window shows a still after a relaunch")
+      XCTAssertFalse(window.showsStill, "A window shows a still after a relaunch")
     }
     let newTabPages = windows.filter { $0.activeRow != "Counter a" && $0.activeRow != "Counter b" }
     XCTAssertEqual(newTabPages.count, 1, "The window that showed a still doesn't show a new tab page")
