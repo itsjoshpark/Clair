@@ -439,7 +439,11 @@ void ClairWindowGroup::Cover(ClairBrowserWindow* member) {
   NSWindow* owner_window = owner->ns_window();
   NSWindow* window = member->ns_window();
   ClairBrowserWindow* previous_cover = cover_;
-  window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenAuxiliary;
+  // Auxiliary only: a full-screen primary window ordered onto the owner's
+  // full-screen Space would go full screen itself, on a Space of its own.
+  window.collectionBehavior =
+      (window.collectionBehavior & ~NSWindowCollectionBehaviorFullScreenPrimary) |
+      NSWindowCollectionBehaviorFullScreenAuxiliary;
   [window setFrame:owner_window.frame display:NO];
   shown_ = member;
   cover_ = member;
@@ -452,8 +456,9 @@ void ClairWindowGroup::Cover(ClairBrowserWindow* member) {
   if (previous_cover && previous_cover != member) {
     [owner_window removeChildWindow:previous_cover->ns_window()];
     previous_cover->SetCovering(false);
-    previous_cover->ns_window().collectionBehavior &=
-        ~NSWindowCollectionBehaviorFullScreenAuxiliary;
+    previous_cover->ns_window().collectionBehavior =
+        (previous_cover->ns_window().collectionBehavior & ~NSWindowCollectionBehaviorFullScreenAuxiliary) |
+        NSWindowCollectionBehaviorFullScreenPrimary;
     previous_cover->Conceal(/*order_out=*/true);
   } else if (!previous_cover) {
     // The owner stays in place under the cover; its pages are hidden.
@@ -469,8 +474,9 @@ void ClairWindowGroup::Uncover() {
   cover_ = nullptr;
   [fullscreen_owner_->ns_window() removeChildWindow:cover->ns_window()];
   cover->SetCovering(false);
-  cover->ns_window().collectionBehavior &=
-      ~NSWindowCollectionBehaviorFullScreenAuxiliary;
+  cover->ns_window().collectionBehavior =
+      (cover->ns_window().collectionBehavior & ~NSWindowCollectionBehaviorFullScreenAuxiliary) |
+      NSWindowCollectionBehaviorFullScreenPrimary;
   cover->Conceal(/*order_out=*/true);
 }
 
@@ -499,7 +505,9 @@ void ClairWindowGroup::FullscreenChanged(ClairBrowserWindow* member,
   NSWindow* window = cover->ns_window();
   [owner_window removeChildWindow:window];
   cover->SetCovering(false);
-  window.collectionBehavior &= ~NSWindowCollectionBehaviorFullScreenAuxiliary;
+  window.collectionBehavior =
+      (window.collectionBehavior & ~NSWindowCollectionBehaviorFullScreenAuxiliary) |
+      NSWindowCollectionBehaviorFullScreenPrimary;
   [window setFrame:owner_window.frame display:YES];
   shown_ = cover;
   cover->Reveal(owner_window, /*make_key=*/true);
