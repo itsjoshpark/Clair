@@ -6,8 +6,8 @@ Revised on 2026-11-13 against `add-spaces` (#138) and `share-tabs-across-windows
 
 See proposal.md, "Why", and `openspec/changes/archive/2026-11-12-add-spaces/arc-reference.md`, "Profile sheets", "Settings › Profiles" and "Space header menu". What shapes the approach:
 
-- **One Chromium `Browser` has one profile, one window and one tab strip.** Each has one `ClairBrowserWindow`, one `ClairNativeWindow` (the `NSWindow`) and one `ClairWindow` in `ClairUI`. Chromium finds a browser from its `NSWindow` (`chrome::FindBrowserWithWindow`), and `AppController`'s `windowDidBecomeMain:` switches the last-used profile and the History menu from it.
-- **A tab can't change profile.**
+- **One Chromium `Browser` has one profile, one window and one tab strip.** This is a limit of Chromium, not what the user sees: the user sees one window that shows Spaces of any profile, which D3 builds from one `Browser` per profile. Each `Browser` has one `ClairBrowserWindow`, one `ClairNativeWindow` (the `NSWindow`) and one `ClairWindow` in `ClairUI`. Chromium finds a browser from its `NSWindow` (`chrome::FindBrowserWithWindow`), and `AppController`'s `windowDidBecomeMain:` switches the last-used profile and the History menu from it.
+- **A tab can't change profile in Chromium:** its `WebContents` belongs to one profile for life. The user can still move a tab, or a whole Space, to another profile: Clair reopens it there at its URL (D9), so the page reloads and its state is lost.
 - **The earlier changes leave this in place:**
   - the Space store in Local State, and `ClairSpaceTabs` per profile with one ordered tab list per Space across that profile's browsers;
   - the shown-Space invariant (`add-spaces` D3) and the came-from rule (`add-spaces` D4);
