@@ -9,7 +9,7 @@ This is the second of three changes; `add-spaces` comes before it and `add-profi
 ## What Changes
 
 - **One tab list for every window.** Every window lists the tabs of the Space it shows, whichever window they were opened in, and a change in one window shows in the others at once.
-- **A tab shows in one window at a time.** Selecting a tab that another window shows brings its live page here, without reloading it. The other window keeps a dimmed still of the page, as Arc does, until it is focused again, when it takes the page back.
+- **A tab shows in one window at a time.** Selecting a tab that another window shows brings its live page here, without reloading it. The other window keeps a faded still of the page, as Arc does, until it is focused again, when it takes the page back, or until the window that took it moves on to another tab, when it gets the page back.
 - **Closing a window keeps its tabs** while another window is open. Closing the last window closes them, as today.
 - **The next tab after a close** is chosen from the whole list, and a tab showing in another window isn't skipped.
 - **BREAKING (`ClairHost.h`):** `ClairBrowser` gains the still of a tab it gave away, and `ClairWindow` learns when it changes.

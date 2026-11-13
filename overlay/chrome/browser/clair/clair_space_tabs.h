@@ -76,6 +76,12 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
   static std::map<std::string, std::string> SessionTags(
       content::WebContents* contents);
 
+  // share-tabs-across-windows D2: a window's placeholder, the hidden new tab
+  // page it shows under a still. It's in no Space and has no row or session
+  // tags. MarkPlaceholder() runs before the tab joins a strip.
+  static void MarkPlaceholder(content::WebContents* contents);
+  static bool IsPlaceholder(content::WebContents* contents);
+
   explicit ClairSpaceTabs(Profile* profile);
   ClairSpaceTabs(const ClairSpaceTabs&) = delete;
   ClairSpaceTabs& operator=(const ClairSpaceTabs&) = delete;
@@ -128,6 +134,14 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
   // confirmation is up, joins `fallback`.
   void SpaceRemoved(const std::string& space, const std::string& fallback);
 
+  // share-tabs-across-windows D1: between these, `tab` moves from one
+  // window's strip to another's and keeps its Space and its place in it.
+  void BeginMove(tabs::TabInterface* tab);
+  void EndMove(tabs::TabInterface* tab);
+  // D2: the placeholder `tab`, in `model`, becomes an ordinary tab at the top
+  // of the Space its window shows.
+  void ListPlaceholder(TabStripModel* model, tabs::TabInterface* tab);
+
   // What to push at the end of this run-loop turn.
   void ListChanged(const std::string& space);
   void TabChanged(content::WebContents* contents);
@@ -177,6 +191,8 @@ class ClairSpaceTabs : public base::SupportsUserData::Data,
   std::string private_space_;
   std::map<std::string, std::vector<tabs::TabHandle>> lists_;
   std::vector<raw_ptr<ClairBrowserWindow>> windows_;
+  // Tabs moving between windows (BeginMove).
+  std::set<tabs::TabHandle> moving_;
   std::set<std::string> changed_spaces_;
   std::set<int32_t> changed_tabs_;
   bool flush_posted_ = false;

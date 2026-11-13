@@ -8,7 +8,12 @@ import XCTest
 
 extension Browser {
   /// The Space header's name, which SwiftUI exposes as the text's value.
-  var spaceName: String { element("clair.spaceName").value as? String ?? "" }
+  /// While the name is a field, as during Rename Space…, there's no name to
+  /// read: reading a missing element fails the test, which then hangs.
+  var spaceName: String {
+    let name = element("clair.spaceName")
+    return name.exists ? name.value as? String ?? "" : ""
+  }
 
   /// The footer switcher's items, in order.
   var switcherItems: [XCUIElement] {

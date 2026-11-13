@@ -268,11 +268,21 @@ final class PeekTests: NativeWindowTestCase {
     let parentOpen = try await browser.target(endingWith: "peek.html") != nil
     XCTAssertTrue(parentOpen, "Moving the parent closed it")
 
-    // Reopen Closed Window brings the parent back without its Peek (D9).
+    // With another window open, closing the parent's window keeps the parent
+    // and its Peek in the other (share-tabs-across-windows D4).
     try await openPeek("plain", in: links, browser: browser, suffix: "?plain")
     browser.ui.typeKey("w", modifierFlags: [.command, .shift])
+    let oneWindow = await Harness.wait(for: 15) { try await browser.windowCount() == 1 }
+    try require(oneWindow, "Cmd+Shift+W didn't close the parent's window")
+    let parentKept = try await browser.target(endingWith: "peek.html") != nil
+    let peekKept = try await browser.target(endingWith: "?plain") != nil
+    XCTAssertTrue(parentKept && peekKept, "Closing the parent's window closed the parent or its Peek")
+
+    // Closing the last window closes them; Reopen Closed Window brings the
+    // parent back without its Peek (D9).
+    browser.ui.typeKey("w", modifierFlags: [.command, .shift])
     let closedWindow = await browser.waitForTarget("peek.html", open: false)
-    try require(closedWindow, "Cmd+Shift+W didn't close the parent's window")
+    try require(closedWindow, "Cmd+Shift+W didn't close the last window")
     browser.ui.typeKey("t", modifierFlags: [.command, .shift])
     let reopened = await browser.waitForTarget("peek.html", seconds: 30)
     XCTAssertTrue(reopened, "Reopen Closed Window didn't bring the parent back")

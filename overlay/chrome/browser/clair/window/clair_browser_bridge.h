@@ -40,6 +40,9 @@ class WebContents;
 // The window shows another Space; `previousSpace` is the one it showed.
 - (void)shownSpaceChangedFrom:(const std::string&)previousSpace;
 - (void)activeTabChanged;
+// The window's still started, ended or got its image
+// (share-tabs-across-windows D2).
+- (void)stillChanged;
 // Tells ClairUI now, without waiting for the end of the turn.
 - (void)flush;
 

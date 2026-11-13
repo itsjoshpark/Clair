@@ -53,6 +53,10 @@ namespace {
 
 const void* const kSpaceTagKey = &kSpaceTagKey;
 const void* const kSpaceTabsKey = &kSpaceTabsKey;
+const void* const kPlaceholderKey = &kPlaceholderKey;
+
+// share-tabs-across-windows D2: marks a window's placeholder tab.
+struct PlaceholderMark : public base::SupportsUserData::Data {};
 
 // A tab's Space, kept on its WebContents so it follows the tab between
 // windows and comes back with it from a session.
@@ -383,6 +387,18 @@ std::map<std::string, std::string> ClairSpaceTabs::SessionTags(
   return tags;
 }
 
+// static
+void ClairSpaceTabs::MarkPlaceholder(content::WebContents* contents) {
+  if (contents && !IsPlaceholder(contents)) {
+    contents->SetUserData(kPlaceholderKey, std::make_unique<PlaceholderMark>());
+  }
+}
+
+// static
+bool ClairSpaceTabs::IsPlaceholder(content::WebContents* contents) {
+  return contents && contents->GetUserData(kPlaceholderKey);
+}
+
 ClairSpaceTabs::ClairSpaceTabs(Profile* profile) : profile_(profile) {
   if (profile->IsOffTheRecord()) {
     static int next_private_space = 1;
@@ -551,6 +567,15 @@ void ClairSpaceTabs::Insert(TabStripModel* model,
   }
   content::WebContents* contents = tab->GetContents();
   Remove(tab);
+  ClairBrowserWindow* window = WindowFor(model);
+  // share-tabs-across-windows D2: a placeholder is in no Space. Its window
+  // marks it while inserting it; Chromium may tell the lists first.
+  if (window && window->inserting_placeholder()) {
+    MarkPlaceholder(contents);
+  }
+  if (IsPlaceholder(contents)) {
+    return;
+  }
   clair::ClairSpaceStore* store = clair::ClairSpaceStore::Get();
   SpaceTag* tag = GetTag(contents);
   std::string space;
@@ -564,7 +589,6 @@ void ClairSpaceTabs::Insert(TabStripModel* model,
   } else {
     // A new tab joins the Space its window shows (D3). A Peek joins its
     // parent's once it's linked (PeekLinked).
-    ClairBrowserWindow* window = WindowFor(model);
     space = window && store->Contains(window->shown_space())
                 ? window->shown_space()
                 : store->last_space();
@@ -741,6 +765,37 @@ void ClairSpaceTabs::SpaceRemoved(const std::string& space,
   ListChanged(fallback);
 }
 
+// --- Moving between windows (share-tabs-across-windows D1, D2) ---
+
+void ClairSpaceTabs::BeginMove(tabs::TabInterface* tab) {
+  if (tab) {
+    moving_.insert(tab->GetHandle());
+  }
+}
+
+void ClairSpaceTabs::EndMove(tabs::TabInterface* tab) {
+  if (!tab) {
+    return;
+  }
+  moving_.erase(tab->GetHandle());
+  // Its `browserID` changed, and the session holds it under another window.
+  if (SpaceTag* tag = GetTag(tab->GetContents())) {
+    tag->written_space.clear();
+    tag->written_rank = -1;
+  }
+  ListChanged(SpaceOf(tab));
+}
+
+void ClairSpaceTabs::ListPlaceholder(TabStripModel* model,
+                                     tabs::TabInterface* tab) {
+  if (!tab) {
+    return;
+  }
+  tab->GetContents()->RemoveUserData(kPlaceholderKey);
+  // Index 0 puts it at the top of the shown Space's list.
+  Insert(model, tab, 0);
+}
+
 // --- Pushes (D9) ---
 
 void ClairSpaceTabs::ListChanged(const std::string& space) {
@@ -843,14 +898,32 @@ void ClairSpaceTabs::OnTabStripModelChanged(
     case TabStripModelChange::kInserted:
       for (const auto& inserted : change.GetInsert()->contents) {
         Watch(inserted.contents);
+        // share-tabs-across-windows D1: a tab Clair moves keeps its place.
+        if (inserted.tab && moving_.contains(inserted.tab->GetHandle())) {
+          continue;
+        }
         Insert(model, inserted.tab, inserted.index);
       }
       break;
     case TabStripModelChange::kRemoved:
       // A tab moving to another window comes back with its tag (D2).
       for (const auto& removed : change.GetRemove()->contents) {
+        if (removed.tab && moving_.contains(removed.tab->GetHandle())) {
+          continue;
+        }
         Unwatch(removed.contents);
         Remove(removed.tab);
+        // share-tabs-across-windows D2: a window showing a still of the tab
+        // shows its placeholder as a new tab page.
+        if (removed.remove_reason == TabRemovedReason::kDeleted &&
+            removed.tab) {
+          const tabs::TabHandle handle = removed.tab->GetHandle();
+          for (ClairBrowserWindow* window : windows_) {
+            if (window->still_tab() == handle) {
+              window->StillTabClosed();
+            }
+          }
+        }
       }
       break;
     case TabStripModelChange::kReplaced: {

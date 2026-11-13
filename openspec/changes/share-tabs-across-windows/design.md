@@ -45,17 +45,25 @@ In `ClairUI`, a `BrowserWindowController` copies its shown Space's whole list, n
 
 When a browser's active tab is taken:
 
-1. The overlay asks for the page's copy with `CopyFromSurface`, with a 250 ms timeout, before the tab leaves. For a tab with a Peek it copies the parent's page, never the Peek's, as Arc's still shows the page without its Peek. The parent stays visible under its Peek (`add-peek` D3), so the copy can be taken.
+1. The overlay asks for the page's copy with `CopyFromSurface`, with a 250 ms timeout, and waits for it before the tab leaves. For a tab with a Peek it copies the parent's page, never the Peek's, as Arc's still shows the page without its Peek. The parent stays visible under its Peek (`add-peek` D3), so the copy can be taken.
 2. It inserts a **placeholder**: a new tab page tab, marked as a placeholder in its `WebContents` user data, and activates it. A placeholder is in no Space list and has no row. It is the one exception to two `add-spaces` rules: `ClairSpaceTabs` doesn't put it in the Space its browser shows (D2 there), and while it is active the browser keeps its shown Space (D3 there).
-3. The browser records the taken tab's ID. `ClairUI` shows the still dimmed over the card, highlights the taken tab's row without its Peek badge, as Arc does, empties the URL field and disables back, forward and reload. If the copy fails, it dims the card's background alone.
+3. The browser records the taken tab's ID. `ClairUI` shows the still faded over the card, as Arc does (the page at 60% opacity over the window's background), highlights the taken tab's row without its Peek badge, empties the URL field and disables back, forward and reload. If the copy fails, it shows the window's background alone.
 
 The still ends when:
 
-- **the window becomes key:** it takes the tab back (D1), and the placeholder closes;
-- **the user selects another row or switches Space:** the placeholder closes once the other tab is active;
+- **the window becomes key:** it takes the tab back (D1), and the placeholder closes. Any click in the window makes it key first, a click on another row included, as in Arc, whose first click in an inactive window only takes the tab back;
+- **the window that took the tab shows another tab** and no window shows the taken one: the most recently active window with a still of it takes it back without becoming key, as Arc does (its Space must be the one that window shows);
+- **another tab becomes active there,** as when the user selects another row or switches Space once the window is key, or Chromium activates a tab: the placeholder closes once the other tab is active;
 - **the taken tab closes:** the placeholder becomes an ordinary tab of the shown Space, at the top of its list, and the command bar opens.
 
 A placeholder carries no session tags, so it needs no session work: restored, it is an ordinary new tab page, which joins the Space its window shows as any untagged tab does (`add-spaces` D2).
+
+Found while implementing:
+
+- **The copy is waited for.** Moving the tab first, and recording the image when it arrived, lost the copy in most takes when compared by hand: viz serves a copy only for a surface it still draws. A take the user starts waits for the copy, or for 250 ms, and then moves the tab. When Clair picks the next tab before a close, the close waits for that take too, so a window whose only tab is closing isn't left empty meanwhile. Where Chromium acts at once, after a page agreed to close and before Move to Space, the tab moves at once and the still's image follows if the copy comes.
+- **Taking back doesn't wait for the click.** The click that makes a window key doesn't reach the sidebar's rows, as in Arc, so the window takes its tab back as soon as it is key. Waiting for the click's mouse-up hung on a click in the sidebar's empty space, which drags the window and never delivers one.
+- **While a still shows, the still's row stands for the active row**: Cmd+W closes it in the window that holds it, and the tab commands count from it, as the sidebar highlights it.
+- **Duplicate of a row another window holds** opens the copy in this window, right below the row, as `WebContents::Clone` and an insert, since Chromium's `DuplicateTabAt` works only within one strip.
 
 - **Why a placeholder:** Chromium needs an active tab, and activating any real tab would run its page as visible behind the still.
 
@@ -81,7 +89,7 @@ When the user closes a window and another regular window is open, its tabs (not 
 
 ## Risks / Trade-offs
 
-- **[A page copy can fail or come late]** → The still is optional: the card dims without it.
+- **[A page copy can fail or come late]** → The still is optional: the card shows the window's background without it.
 - **[Two windows on one tab move it on every focus change]** → Accepted; Arc does the same.
 - **[Extensions see tabs move between windows]** → Accepted; these are ordinary Chromium events.
 - **[Reopen Closed Window brings back an empty window]** when its tabs moved to another window. → Accepted.

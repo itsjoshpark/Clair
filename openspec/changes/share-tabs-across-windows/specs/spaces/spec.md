@@ -18,15 +18,15 @@ Every window showing a Space SHALL list the same tabs for it, in the same order,
 - **THEN** the new window shows a new tab page, and its sidebar lists that tab and the three others
 
 ### Requirement: A tab shows in one window at a time
-Selecting a tab that another window shows SHALL show its live page in this window, without reloading it. The other window SHALL keep the tab's row highlighted and show a dimmed still of the page as it was at that moment, with an empty URL field and with back, forward and reload disabled. Focusing that window SHALL bring the live page back to it and leave the still in the window it came from.
+Selecting a tab that another window shows SHALL show its live page in this window, without reloading it. The other window SHALL keep the tab's row highlighted and show a faded still of the page as it was at that moment, with an empty URL field and with back, forward and reload disabled. Focusing that window, by any click in it, SHALL bring the live page back to it and leave the still in the window it came from.
 
 #### Scenario: Taking a tab
 - **WHEN** window A shows the tab "Docs" and the user selects "Docs" in window B
-- **THEN** B shows the live page, and A shows a dimmed still of it with "Docs" still highlighted
+- **THEN** B shows the live page, and A shows a faded still of it with "Docs" still highlighted
 
 #### Scenario: Taking it back
 - **WHEN** the user then clicks anywhere in window A
-- **THEN** A shows the live page and B shows the dimmed still
+- **THEN** A shows the live page and B shows the faded still
 
 #### Scenario: The still doesn't update
 - **WHEN** the page changes while window A shows its still
@@ -36,16 +36,23 @@ Selecting a tab that another window shows SHALL show its live page in this windo
 - **WHEN** the user selects a tab that was opened in another window and isn't showing there
 - **THEN** this window shows its page as it was, and the other window is unchanged
 
+### Requirement: A tab goes back to its still
+When the window that took a tab shows another tab, and no window shows the taken tab, the window showing a still of it SHALL show its live page again, without being focused, as in Arc.
+
+#### Scenario: Giving it back
+- **WHEN** window A shows a still of "Docs", which window B took, and the user selects another tab in B
+- **THEN** A shows the live page of "Docs" again, and B shows the other tab
+
 ### Requirement: A window that loses its tab shows a new tab page
-When the tab a window shows a still of is closed, the window SHALL show a new tab page in the Space it shows, with the command bar open. When the user selects another tab or Space in a window showing a still, the still SHALL go.
+When the tab a window shows a still of is closed, the window SHALL show a new tab page in the Space it shows, with the command bar open. A click in a window showing a still first takes its tab back, as for any click in it; the user then selects another tab or Space there as usual.
 
 #### Scenario: The still's tab closes
 - **WHEN** window A shows a still of "Docs" and the user closes "Docs" in window B
 - **THEN** A shows a new tab page with the command bar open
 
 #### Scenario: Moving on
-- **WHEN** window A shows a still of "Docs" and the user selects another tab in A
-- **THEN** A shows that tab's page, and "Docs" stays live in window B
+- **WHEN** window A shows a still of "Docs", the user clicks another tab's row in A, then clicks it again
+- **THEN** the first click shows "Docs" live in A and leaves B a still of it, as in Arc, and the second shows the other tab in A and "Docs" live in B again
 
 ### Requirement: Closing a window keeps its tabs
 Closing a window while another window that isn't incognito or guest is open SHALL keep its tabs, which stay listed in their Spaces in the remaining windows. Closing the last such window SHALL close its tabs, each with its usual leave-page confirmation.
@@ -67,7 +74,7 @@ When a tab with a Peek moves to another window, by being selected there or becau
 
 #### Scenario: The still of a tab with a Peek
 - **WHEN** window A shows a tab with a Peek and the user selects that tab in window B
-- **THEN** A shows a dimmed still of the tab's page with no Peek over it, and the tab's row in A has no Peek badge
+- **THEN** A shows a faded still of the tab's page with no Peek over it, and the tab's row in A has no Peek badge
 
 #### Scenario: Peek's window closes
 - **WHEN** two windows are open and the user closes the one showing a tab with a Peek

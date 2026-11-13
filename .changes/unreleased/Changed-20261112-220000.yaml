@@ -1,0 +1,3 @@
+kind: Changed
+body: 'A Space''s tabs are now the same in every window, as in Arc: each window lists every tab of the Space it shows, and opening, closing or reordering a tab in one shows in the others at once. Selecting a tab another window shows brings its page here without reloading it, Peek included, and leaves that window a dimmed still of it until you click in it again. Closing a window keeps its tabs in your other window; closing the last one closes them, as before'
+time: 2026-11-12T22:00:00.000000-05:00

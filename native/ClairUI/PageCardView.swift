@@ -26,6 +26,9 @@ final class PageCardView: NSView {
   private(set) weak var parentPageView: NSView?
   /// Moves the window from the top of the page (drag-window-from-page-top).
   let dragStrip = PageTopDragStrip()
+  /// The faded still of a page another window took, over the hidden
+  /// placeholder tab (share-tabs-across-windows D2).
+  let stillView = StillView()
   private(set) weak var devToolsView: NSView?
 
   /// Holds the page, and the parent page while a Peek shows: the page stays
@@ -121,6 +124,7 @@ final class PageCardView: NSView {
     pageHolder.wantsLayer = true
     container.addSubview(pageHolder)
     container.addSubview(dragStrip)
+    stillView.isHidden = true
     container.addSubview(wash)
     container.addSubview(peekClickCatcher)
     cardScaler.wantsLayer = true
@@ -290,6 +294,22 @@ final class PageCardView: NSView {
     }
   }
 
+  /// Shows the faded still, with `image` or as the window's background
+  /// alone, or hides it.
+  func showStill(_ shows: Bool, image: NSImage?) {
+    stillView.image = shows ? image : nil
+    stillView.isHidden = !shows
+    stillView.setAccessibilityElement(shows)
+    // Only in the card while it shows: a hidden view can stay in the
+    // accessibility tree. Over the page, under the Peek's wash.
+    if shows, stillView.superview == nil {
+      container.addSubview(stillView, positioned: .below, relativeTo: wash)
+    } else if !shows {
+      stillView.removeFromSuperview()
+    }
+    needsLayout = true
+  }
+
   /// Shows the active tab's docked DevTools, or none.
   func show(devTools view: NSView?, layout: DevToolsLayout) {
     if view !== devToolsView {
@@ -314,6 +334,7 @@ final class PageCardView: NSView {
     container.frame = cardScaler.bounds
     layer?.shadowPath = isBare ? nil : cardShadowPath(peeking: isPeeking)
     pageHolder.frame = container.bounds
+    stillView.frame = container.bounds
     if isPeeking {
       parentPageView?.frame = pageHolder.bounds
       if let scalerLayer = cardScaler.layer {
@@ -565,6 +586,79 @@ enum PeekWash {
 
 /// An NSView whose origin is at the top left, as Chromium's and DevTools'
 /// coordinates are.
+/// A still of a page, faded, as Arc shows a tab another window took: the
+/// image fills the card from its top, partly see-through over the window's
+/// background colour.
+final class StillView: NSView {
+  /// The image's opacity. Arc's still takes the page's #2B6FD6 to about
+  /// #80A4E2 over its light background, which is 60% (measured with
+  /// tests/probe/).
+  static let imageOpacity: Float = 0.6
+
+  private let imageLayer = CALayer()
+
+  var image: NSImage? {
+    didSet {
+      imageLayer.contents = image
+      imageLayer.isHidden = image == nil
+    }
+  }
+
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    wantsLayer = true
+    imageLayer.contentsGravity = .resizeAspectFill
+    imageLayer.masksToBounds = true
+    imageLayer.isHidden = true
+    imageLayer.opacity = Self.imageOpacity
+    layer?.addSublayer(imageLayer)
+    // An accessibility element only while it shows (PageCardView.showStill).
+    setAccessibilityElement(false)
+    setAccessibilityRole(.image)
+    setAccessibilityLabel("Open in another window")
+    setAccessibilityIdentifier("clair.still")
+    updateBackground()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not used")
+  }
+
+  override var isFlipped: Bool { true }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    updateBackground()
+  }
+
+  private func updateBackground() {
+    effectiveAppearance.performAsCurrentDrawingAppearance {
+      layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+    }
+  }
+
+  override func layout() {
+    super.layout()
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    // The page's top stays at the card's top when the window's size changed
+    // since the copy.
+    if let image, image.size.width > 0, bounds.width > 0 {
+      let height = bounds.width * image.size.height / image.size.width
+      imageLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: max(height, bounds.height))
+    } else {
+      imageLayer.frame = bounds
+    }
+    CATransaction.commit()
+  }
+
+  // The still stands for the page: a click goes nowhere else.
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    isHidden ? nil : super.hitTest(point)
+  }
+}
+
 final class FlippedView: NSView {
   override var isFlipped: Bool { true }
 }
