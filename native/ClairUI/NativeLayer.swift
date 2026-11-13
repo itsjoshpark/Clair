@@ -51,7 +51,7 @@ final class NativeLayer {
     let about = AboutWindowController(host: host, info: AboutInfo(bundle: .main, host: host))
     about.install(in: NSApp.mainMenu)
     self.about = about
-    let settings = SettingsWindowController(host: host)
+    let settings = SettingsWindowController(host: host, spaces: spaces)
     settings.install(in: NSApp.mainMenu)
     self.settings = settings
     MainMenuTitles.apply(to: NSApp.mainMenu)

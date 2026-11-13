@@ -108,7 +108,8 @@ struct SpacesLogicTests {
 
   @Test func headerMenuOffersArcsItems() {
     let titles = SpacesLogic.headerMenu(spaceCount: 2).map { $0?.title }
-    #expect(titles == ["Change Space Icon…", "Rename Space…", nil, "Manage Spaces…", nil, "Delete Space"])
+    #expect(
+      titles == ["Change Space Icon…", "Rename Space…", "Set Profile", nil, "Manage Spaces…", nil, "Delete Space"])
   }
 
   @Test func deleteSpaceIsOffForTheOnlySpace() {
@@ -224,8 +225,8 @@ struct SpacesModelTests {
   @Test func creatingCleansTheName() {
     let host = FakeHost()
     let model = SpacesModel(host: host)
-    #expect(model.createSpace(named: "   ", icon: nil) == nil)
-    let work = model.createSpace(named: " Work ", icon: "💼")
+    #expect(model.createSpace(named: "   ", icon: nil, profile: FakeHost.defaultProfileID) == nil)
+    let work = model.createSpace(named: " Work ", icon: "💼", profile: FakeHost.defaultProfileID)
     #expect(work == host.spaces[1].spaceID)
     #expect(host.spaces[1].name == "Work")
   }
@@ -234,7 +235,7 @@ struct SpacesModelTests {
     let (host, browser, controller) = spacesWindow()
     let model = controller.model.spaces
     #expect(model.deletion(of: FakeHost.homeID) == nil)
-    let work = try #require(model.createSpace(named: "Work", icon: nil))
+    let work = try #require(model.createSpace(named: "Work", icon: nil, profile: FakeHost.defaultProfileID))
     #expect(model.deletion(of: "gone") == nil)
     #expect(try #require(model.deletion(of: work)).needsConfirmation == false)
     browser.showSpace(work)
@@ -310,7 +311,7 @@ struct SpaceActionsTests {
     let (host, browser, controller) = spacesWindow()
     controller.beginNewSpace()
     #expect(controller.model.newSpaceForm != nil)
-    controller.createSpace(named: " Work ", icon: "💼")
+    controller.createSpace(named: " Work ", icon: "💼", profile: nil)
     #expect(controller.model.newSpaceForm == nil)
     #expect(host.spaces.map(\.name) == ["Home", "Work"])
     #expect(host.spaces.last?.icon == "💼")
@@ -369,15 +370,31 @@ struct SpaceActionsTests {
     #expect(host.spaces.count == 1)
   }
 
-  @Test func movingTheActiveTabKeepsTheWindowOnItsSpace() {
+  /// add-profiles D9: the window follows its active tab, with no notice.
+  @Test func movingTheActiveTabShowsItsNewSpace() {
     let (host, browser, controller) = spacesWindow(["Work"], tabs: 3)
     let work = host.spaces[1].spaceID
     let active = browser.activeTabID
     controller.moveTab(active, toSpace: work)
-    #expect(browser.shownSpaceID == FakeHost.homeID)
-    #expect(browser.activeTabID != active)
+    #expect(browser.shownSpaceID == work)
+    #expect(controller.model.shownSpaceID == work)
+    #expect(browser.activeTabID == active)
     #expect(host.list(work).first?.tabID == active)
-    #expect(!controller.model.tabs.contains { $0.tabID == active })
+    #expect(controller.model.tabs.first?.tabID == active)
+    #expect(controller.model.notice.notice == nil)
+  }
+
+  /// Moving any other tab leaves the window, and says where the tab went.
+  @Test func movingAnotherTabShowsANotice() {
+    let (host, browser, controller) = spacesWindow(["Work"], tabs: 3)
+    let work = host.spaces[1].spaceID
+    let active = browser.activeTabID
+    let other = try! #require(controller.model.tabs.first { $0.tabID != active }).tabID
+    controller.moveTab(other, toSpace: work)
+    #expect(browser.shownSpaceID == FakeHost.homeID)
+    #expect(browser.activeTabID == active)
+    #expect(host.list(work).first?.tabID == other)
+    #expect(controller.model.notice.notice?.text == "Tab was moved to Work")
   }
 
   /// In an incognito window, which lists its own tabs only.

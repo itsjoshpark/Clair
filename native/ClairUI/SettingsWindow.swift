@@ -7,18 +7,18 @@ import ClairHost
 import SwiftUI
 
 /// The Settings window's pages, in toolbar order (design D2). A later feature
-/// adds its page here.
+/// adds its page here. The window opens on General each time (add-profiles
+/// design D12).
 enum SettingsPage: String, CaseIterable {
   case general
+  case profiles
   case links
   case advanced
-
-  /// The user default holding the page last shown (design D3).
-  static let key = "ClairSettingsPage"
 
   var label: String {
     switch self {
     case .general: "General"
+    case .profiles: "Profiles"
     case .links: "Links"
     case .advanced: "Advanced"
     }
@@ -27,14 +27,45 @@ enum SettingsPage: String, CaseIterable {
   var symbol: String {
     switch self {
     case .general: "gearshape"
+    case .profiles: "person.2"
     case .links: "link"
     case .advanced: "slider.horizontal.3"
     }
   }
+}
 
-  /// The page the window opens on: the one last shown, or General.
-  static func stored(in defaults: UserDefaults) -> SettingsPage {
-    defaults.string(forKey: key).flatMap(SettingsPage.init(rawValue:)) ?? .general
+/// Whether Clair reopens the previous session's windows at launch
+/// (add-profiles design D6): off unless the user turns it on. The engine reads
+/// it once at launch.
+enum RestoreWindowsPreference {
+  static let key = "ClairRestoreWindows"
+
+  static func isEnabled(in defaults: UserDefaults) -> Bool {
+    defaults.bool(forKey: key)
+  }
+}
+
+/// Chromium's warn-before-quitting setting, through the host (add-profiles
+/// design D11).
+@MainActor
+@Observable
+final class WarnBeforeQuitting {
+  @ObservationIgnored private let host: (any ClairHost)?
+  private(set) var isOn: Bool
+
+  init(host: (any ClairHost)?) {
+    self.host = host
+    isOn = host?.warnsBeforeQuitting ?? true
+  }
+
+  func set(_ on: Bool) {
+    host?.warnsBeforeQuitting = on
+    isOn = host?.warnsBeforeQuitting ?? on
+  }
+
+  /// Re-reads it, as Chromium's own menu item may have changed it.
+  func refresh() {
+    isOn = host?.warnsBeforeQuitting ?? isOn
   }
 }
 
@@ -112,15 +143,24 @@ struct LinksSettingsView: View {
 }
 
 struct AdvancedSettingsView: View {
+  let warnBeforeQuitting: WarnBeforeQuitting
   /// Opens chrome://settings in a browser tab (design D6).
   let openMoreSettings: () -> Void
 
   @AppStorage(WindowDragPreference.key) private var dragFromPageTop = true
+  @AppStorage(RestoreWindowsPreference.key) private var restoreWindows = false
 
   var body: some View {
     Form {
       Section {
         Toggle("Allow window dragging from the top of webpages", isOn: $dragFromPageTop)
+        Toggle(
+          "Warn before quitting",
+          isOn: Binding(get: { warnBeforeQuitting.isOn }, set: { warnBeforeQuitting.set($0) })
+        )
+        .accessibilityIdentifier("clair.warnBeforeQuittingToggle")
+        Toggle("When opening Clair, restore windows from previous session", isOn: $restoreWindows)
+          .accessibilityIdentifier("clair.restoreWindowsToggle")
       }
       Section {
         LabeledContent("Search, privacy and more") {
@@ -135,18 +175,9 @@ struct AdvancedSettingsView: View {
   }
 }
 
-/// The toolbar of pages. It stores the page shown, and the window takes the
-/// page's name as its title from the selected child.
-final class SettingsTabViewController: NSTabViewController {
-  var defaults: UserDefaults = .standard
-
-  override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
-    super.tabView(tabView, didSelect: tabViewItem)
-    if let page = (tabViewItem?.identifier as? String).flatMap(SettingsPage.init(rawValue:)) {
-      defaults.set(page.rawValue, forKey: SettingsPage.key)
-    }
-  }
-}
+/// The toolbar of pages. The window takes the page's name as its title from
+/// the selected child.
+final class SettingsTabViewController: NSTabViewController {}
 
 /// The Settings window, which Settings… in the application menu opens instead
 /// of Chromium's chrome://settings tab (design D1, D7).
@@ -161,14 +192,22 @@ final class SettingsWindowController: NSObject {
   private let host: any ClairHost
   private let defaults: UserDefaults
   private let defaultBrowser = DefaultBrowser()
+  let profiles: ProfilesPageState
+  private let warnBeforeQuitting: WarnBeforeQuitting
+  /// The window's dialogs: the profile dialogs.
+  private(set) var dialogs: ClairDialogPresenter?
 
   /// The one Settings window, once it has been opened. Closing only hides it.
   private(set) var window: NSWindow?
   private var becameKey: NSObjectProtocol?
 
-  init(host: any ClairHost, defaults: UserDefaults = .standard) {
+  /// `spaces` is the app's model of Spaces and profiles, a new one over
+  /// `host` when nil.
+  init(host: any ClairHost, spaces: SpacesModel? = nil, defaults: UserDefaults = .standard) {
     self.host = host
     self.defaults = defaults
+    profiles = ProfilesPageState(spaces: spaces ?? SpacesModel(host: host), host: host)
+    warnBeforeQuitting = WarnBeforeQuitting(host: host)
   }
 
   /// Points Chromium's Settings item in the application menu at this window
@@ -189,7 +228,12 @@ final class SettingsWindowController: NSObject {
   /// Brings the Settings window to the front, opening it the first time.
   func show() {
     let window = self.window ?? makeWindow()
+    // It opens on General each time (add-profiles D12).
+    if !window.isVisible, let tabs = window.contentViewController as? NSTabViewController {
+      tabs.selectedTabViewItemIndex = 0
+    }
     defaultBrowser.refresh()
+    warnBeforeQuitting.refresh()
     NSApplication.shared.activate()
     window.makeKeyAndOrderFront(nil)
   }
@@ -209,8 +253,11 @@ final class SettingsWindowController: NSObject {
     let view: AnyView =
       switch page {
       case .general: AnyView(GeneralSettingsView(defaultBrowser: defaultBrowser))
+      case .profiles: AnyView(ProfilesSettingsView(state: profiles, actions: self))
       case .links: AnyView(LinksSettingsView())
-      case .advanced: AnyView(AdvancedSettingsView { [weak self] in self?.openMoreSettings() })
+      case .advanced:
+        AnyView(
+          AdvancedSettingsView(warnBeforeQuitting: warnBeforeQuitting) { [weak self] in self?.openMoreSettings() })
       }
     let controller = NSHostingController(rootView: view.defaultAppStorage(defaults))
     controller.sizingOptions = .preferredContentSize
@@ -220,7 +267,6 @@ final class SettingsWindowController: NSObject {
 
   private func makeWindow() -> NSWindow {
     let tabs = SettingsTabViewController()
-    tabs.defaults = defaults
     tabs.tabStyle = .toolbar
     for page in SettingsPage.allCases {
       let item = NSTabViewItem(viewController: self.page(page))
@@ -229,7 +275,7 @@ final class SettingsWindowController: NSObject {
       item.image = NSImage(systemSymbolName: page.symbol, accessibilityDescription: page.label)
       tabs.addTabViewItem(item)
     }
-    tabs.selectedTabViewItemIndex = SettingsPage.allCases.firstIndex(of: .stored(in: defaults)) ?? 0
+    tabs.selectedTabViewItemIndex = 0
 
     let window = NSWindow(contentViewController: tabs)
     window.styleMask = [.titled, .closable]
@@ -242,6 +288,60 @@ final class SettingsWindowController: NSObject {
       MainActor.assumeIsolated { self?.defaultBrowser.refresh() }
     }
     self.window = window
+    dialogs = ClairDialogPresenter(window: window)
     return window
+  }
+}
+
+// MARK: The Profiles page's actions (add-profiles design D12)
+
+extension SettingsWindowController: ProfilesPageActions {
+  func addProfile() {
+    guard let dialogs else { return }
+    ProfileDialogs.showNewProfile(on: dialogs, spaces: profiles.spaces) { [weak self] profileID in
+      if let profileID {
+        self?.profiles.select(profileID)
+      }
+    }
+  }
+
+  func removeProfile(_ profile: any ClairProfile) {
+    guard let dialogs, profiles.spaces.canDeleteProfile(profile.profileID) else { return }
+    let index = profiles.spaces.profiles.firstIndex { $0.profileID == profile.profileID } ?? 0
+    let profileID = profile.profileID
+    ProfileDialogs.showDelete(of: profile, on: dialogs, spaces: profiles.spaces) { [weak self] deleted in
+      if deleted {
+        self?.profiles.removed(profileID, at: index)
+      }
+    }
+  }
+
+  func renameProfile(_ profile: any ClairProfile) {
+    guard let dialogs else { return }
+    ProfileDialogs.showRename(of: profile, on: dialogs, spaces: profiles.spaces)
+  }
+
+  /// "Other…": macOS's folder picker, as a sheet on the Settings window.
+  func chooseDownloadFolder() {
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.allowsMultipleSelection = false
+    panel.canCreateDirectories = true
+    panel.prompt = "Select"
+    panel.directoryURL = profiles.downloadDirectory
+    let done: (NSApplication.ModalResponse) -> Void = { [weak self, weak panel] response in
+      guard response == .OK, let url = panel?.url else { return }
+      self?.profiles.useFolder(url)
+    }
+    if let window {
+      panel.beginSheetModal(for: window, completionHandler: done)
+    } else {
+      done(panel.runModal())
+    }
+  }
+
+  func didOpenLink() {
+    window?.close()
   }
 }

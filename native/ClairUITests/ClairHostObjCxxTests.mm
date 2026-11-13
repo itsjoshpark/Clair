@@ -40,8 +40,8 @@
 }
 - (void)addObserver:(id<ClairSpacesObserver>)observer {
 }
-- (ClairSpaceID)createSpaceNamed:(NSString*)name icon:(NSString*)icon {
-  return name.length ? [NSUUID UUID].UUIDString : nil;
+- (ClairSpaceID)createSpaceNamed:(NSString*)name icon:(NSString*)icon profile:(ClairProfileID)profileID {
+  return name.length && profileID.length ? [NSUUID UUID].UUIDString : nil;
 }
 - (void)renameSpace:(ClairSpaceID)spaceID to:(NSString*)name {
 }
@@ -53,6 +53,29 @@
 }
 - (void)moveTab:(ClairTabID)tabID toSpace:(ClairSpaceID)spaceID {
 }
+- (NSArray<id<ClairProfile>>*)profiles {
+  return @[];
+}
+- (void)createProfileNamed:(NSString*)name completion:(void (^)(ClairProfileID))completion {
+  completion(name.length ? @"Profile 1" : nil);
+}
+- (void)renameProfile:(ClairProfileID)profileID to:(NSString*)name {
+}
+- (void)deleteProfile:(ClairProfileID)profileID {
+}
+- (void)setProfile:(ClairProfileID)profileID forSpace:(ClairSpaceID)spaceID {
+}
+- (void)downloadSettingsForProfile:(ClairProfileID)profileID
+                        completion:(void (^)(NSURL*, BOOL))completion {
+  completion([NSURL fileURLWithPath:@(std::string("/Users/test/Downloads").c_str())], NO);
+}
+- (void)setDownloadDirectory:(NSURL*)directory forProfile:(ClairProfileID)profileID {
+}
+- (void)setAsksWhereToSave:(BOOL)asks forProfile:(ClairProfileID)profileID {
+}
+- (void)openURL:(NSURL*)url inProfile:(ClairProfileID)profileID {
+}
+@synthesize warnsBeforeQuitting = _warnsBeforeQuitting;
 @end
 
 @interface ClairHostObjCxxTests : XCTestCase
@@ -67,9 +90,27 @@
   XCTAssertEqual(host.silentRelaunchBlockers & ClairRelaunchBlockersIncognitoWindow,
                  ClairRelaunchBlockersIncognitoWindow);
   // The Space calls (add-spaces design D9), as the overlay calls them.
-  ClairSpaceID space = [host createSpaceNamed:@(std::string("Work").c_str()) icon:nil];
+  ClairSpaceID space = [host createSpaceNamed:@(std::string("Work").c_str())
+                                         icon:nil
+                                      profile:@"Default"];
   XCTAssertNotNil(space);
-  XCTAssertNil([host createSpaceNamed:@"" icon:@"💼"]);
+  XCTAssertNil([host createSpaceNamed:@"" icon:@"💼" profile:@"Default"]);
+  // The profile calls (add-profiles design D11).
+  __block ClairProfileID created = nil;
+  [host createProfileNamed:@"Work"
+                completion:^(ClairProfileID profileID) {
+                  created = profileID;
+                }];
+  XCTAssertEqualObjects(created, @"Profile 1");
+  __block std::string folder;
+  [host downloadSettingsForProfile:@"Default"
+                        completion:^(NSURL* directory, BOOL asks) {
+                          folder = directory.fileSystemRepresentation;
+                          XCTAssertFalse(asks);
+                        }];
+  XCTAssertEqual(folder, "/Users/test/Downloads");
+  host.warnsBeforeQuitting = YES;
+  XCTAssertTrue(host.warnsBeforeQuitting);
   XCTAssertEqual([host tabsInSpace:space].count, 0u);
   ClairBrowserID browser = 7;
   XCTAssertEqual(browser, 7);
@@ -96,7 +137,7 @@
          @protocol(ClairSuggestion), @protocol(ClairDownload),
          @protocol(ClairExtensionAction), @protocol(ClairExtensionPrompt), @protocol(ClairInfobar),
          @protocol(ClairHistoryMenu), @protocol(ClairHistoryMenuDelegate), @protocol(ClairHistoryItem),
-         @protocol(ClairSpace), @protocol(ClairSpacesObserver)
+         @protocol(ClairSpace), @protocol(ClairSpacesObserver), @protocol(ClairProfile)
        ]) {
     XCTAssertTrue(protocol_conformsToProtocol(protocol, @protocol(NSObject)));
   }

@@ -13,7 +13,16 @@ protocol SpaceActions: AnyObject {
   /// The New Space form, in place of the header and the list.
   func beginNewSpace()
   func cancelNewSpace()
-  func createSpace(named name: String, icon: String?)
+  /// `profile` nil uses the profile of the Space the window shows.
+  func createSpace(named name: String, icon: String?, profile: ProfileID?)
+  /// "New Profile…" in the form's profile popup: the new profile is chosen.
+  func newProfileForNewSpace()
+  /// Asks first when the Space has tabs (profiles spec, "Changing a Space's
+  /// profile").
+  func setProfile(_ profileID: ProfileID, forSpace spaceID: SpaceID)
+  /// "New Profile…" in Set Profile: creates a profile and gives it to the
+  /// Space.
+  func newProfile(forSpace spaceID: SpaceID)
   /// Inline renaming and the icon field in the header.
   func beginRenamingSpace()
   func beginChangingSpaceIcon()
@@ -138,13 +147,34 @@ struct SpaceHeaderView: View {
     return SpacesLogic.headerMenu(spaceCount: model.spaces.spaces.count).map { item in
       guard let item else { return .separator }
       guard item.isEnabled else { return .disabled(item.title) }
+      if item.command == .setProfile {
+        return .submenu(item.title, Self.profileItems(for: space, in: model.spaces, actions: actions))
+      }
       return .action(item.title) { [weak actions] in
         switch item.command {
         case .changeIcon: actions?.beginChangingSpaceIcon()
         case .rename: actions?.beginRenamingSpace()
+        case .setProfile: break
         case .manage: actions?.manageSpaces()
         case .delete: actions?.deleteSpace(space.spaceID)
         }
+      }
+    }
+  }
+
+  /// Set Profile's items for `space` (add-profiles D10).
+  static func profileItems(for space: any ClairSpace, in spaces: SpacesModel, actions: (any SpaceActions)?)
+    -> [RowClickCatcher.Item]
+  {
+    let spaceID = space.spaceID
+    return SpacesLogic.profileMenu(spaces.profiles, checked: space.profileID).map { item in
+      guard let item else { return .separator }
+      switch item.command {
+      case .profile(let profileID):
+        let choose: () -> Void = { [weak actions] in actions?.setProfile(profileID, forSpace: spaceID) }
+        return item.isChecked ? .checked(item.title, {}) : .action(item.title, choose)
+      case .newProfile:
+        return .action(item.title) { [weak actions] in actions?.newProfile(forSpace: spaceID) }
       }
     }
   }

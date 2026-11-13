@@ -30,7 +30,7 @@ struct SpacesMenuTests {
     let titles = menu.menu.items.map { $0.isSeparatorItem ? "-" : $0.title }
     #expect(
       titles == [
-        "New Space…", "Rename Space", "Manage Spaces…", "-", "Next Space", "Previous Space", "-", "Home", "Work",
+        "New Space…", "Rename Space", "Change Profile", "Manage Spaces…", "-", "Next Space", "Previous Space", "-", "Home", "Work",
         "Travel",
       ])
   }

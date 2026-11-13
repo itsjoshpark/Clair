@@ -80,7 +80,8 @@ enum SpacesLogic {
   /// An item of the Space header's menu (spaces spec, "Space header").
   struct MenuItem: Equatable {
     enum Command: Equatable {
-      case changeIcon, rename, manage, delete
+      /// Set Profile is a submenu of `profileMenu(_:checked:)`.
+      case changeIcon, rename, setProfile, manage, delete
     }
 
     let title: String
@@ -94,11 +95,64 @@ enum SpacesLogic {
     [
       MenuItem(title: "Change Space Icon…", command: .changeIcon, isEnabled: true),
       MenuItem(title: "Rename Space…", command: .rename, isEnabled: true),
+      MenuItem(title: "Set Profile", command: .setProfile, isEnabled: true),
       nil,
       MenuItem(title: "Manage Spaces…", command: .manage, isEnabled: true),
       nil,
       MenuItem(title: "Delete Space", command: .delete, isEnabled: spaceCount > 1),
     ]
+  }
+
+  /// An item of a profile menu: Set Profile, Change Profile and the profile
+  /// popups (profiles spec, "Changing a Space's profile").
+  struct ProfileMenuItem: Equatable {
+    enum Command: Equatable {
+      case profile(ProfileID)
+      case newProfile
+    }
+
+    let title: String
+    let command: Command
+    let isChecked: Bool
+  }
+
+  static let newProfileTitle = "New Profile…"
+
+  /// Every profile, in order, with a checkmark on `checked`, then a nil for
+  /// the separator and "New Profile…", as Arc's menu.
+  static func profileMenu(_ profiles: [any ClairProfile], checked: ProfileID?) -> [ProfileMenuItem?] {
+    profiles.map { profile in
+      ProfileMenuItem(title: profile.name, command: .profile(profile.profileID), isChecked: profile.profileID == checked)
+    } + [nil, ProfileMenuItem(title: newProfileTitle, command: .newProfile, isChecked: false)]
+  }
+
+  /// "1 Space" or "2 Spaces", or nil for a profile no Space uses, as Arc's
+  /// Profiles list shows it.
+  static func spaceCountLabel(_ count: Int) -> String? {
+    switch count {
+    case 0: nil
+    case 1: "1 Space"
+    default: "\(count) Spaces"
+    }
+  }
+
+  /// Text for the confirmation of a Space's new profile, after Arc's.
+  static func profileChangeTitle(_ profileName: String) -> String {
+    "Switch to your “\(profileName)” Profile?"
+  }
+
+  static func profileChangeMessage(_ spaceName: String) -> String {
+    "Each Profile has different browser data, so your “\(spaceName)” Space might look a little different! "
+      + "For example, you might get logged out of some websites or need to re-install an extension. "
+      + "Its tabs will reload. This action cannot be undone."
+  }
+
+  static let profileChangeButton = "Switch it up"
+
+  /// The notice after Move to Space moves a tab the window doesn't show
+  /// (spaces spec, "Moving a tab to another Space").
+  static func movedNotice(_ spaceName: String) -> String {
+    "Tab was moved to \(spaceName)"
   }
 
   /// The Spaces a tab of `spaceID` can move to, in order: every other one.
@@ -176,6 +230,9 @@ enum SpaceIcon {
 struct NewSpaceFormState: Equatable {
   var name = ""
   var icon: String?
+  /// The profile chosen in its popup: at first, that of the Space shown
+  /// before (profiles spec, "Choosing a profile for a new Space").
+  var profileID: ProfileID?
 
   /// "Create Space" is off until a name is typed.
   var canCreate: Bool { !SpacesLogic.cleanName(name).isEmpty }
