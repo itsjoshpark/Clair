@@ -125,7 +125,6 @@ final class PageCardView: NSView {
     container.addSubview(pageHolder)
     container.addSubview(dragStrip)
     stillView.isHidden = true
-    container.addSubview(stillView)
     container.addSubview(wash)
     container.addSubview(peekClickCatcher)
     cardScaler.wantsLayer = true
@@ -300,8 +299,14 @@ final class PageCardView: NSView {
   func showStill(_ shows: Bool, image: NSImage?) {
     stillView.image = shows ? image : nil
     stillView.isHidden = !shows
-    // A hidden view can stay in the accessibility tree; the still leaves it.
     stillView.setAccessibilityElement(shows)
+    // Only in the card while it shows: a hidden view can stay in the
+    // accessibility tree. Over the page, under the Peek's wash.
+    if shows, stillView.superview == nil {
+      container.addSubview(stillView, positioned: .below, relativeTo: wash)
+    } else if !shows {
+      stillView.removeFromSuperview()
+    }
     needsLayout = true
   }
 
