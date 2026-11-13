@@ -9,7 +9,7 @@ Read `design.md` in full before starting. Verify every Chromium call it names ag
 ## 1. Contract and fakes
 
 - [ ] 1.1 Change `native/ClairHost.h` as D11 lists: add the `ClairProfile` snapshot, `ClairSpace.profileID`, `profiles` and the observer's profiles-changed call, the create, rename and delete calls, `setProfile:forSpace:`, the profile argument of `createSpaceNamed:icon:`, the three download-setting calls, `openURL:inProfile:` and `warnsBeforeQuitting`. Document each as the header documents the rest. Verify that the header compiles in `ClairHostObjCxxTests.mm` in CI.
-- [ ] 1.2 Update `FakeHost` and `FakeBrowser` to profiles: a Space has a profile; creating, renaming and deleting a profile; `setProfile:forSpace:` and a move to a Space of another profile reopen tabs at their URLs, in order, closing Peeks (D9); a close of a Space's last row opens a new tab page there, reusing a blank one, and a close of that page closes the browser (D13). Verify with new cases in `FakeBrowserTests` and `FakeHostTests` in CI for each, and that the case for a Space's last tab showing another Space is replaced, not deleted without a successor.
+- [ ] 1.2 Update `FakeHost` and `FakeBrowser` to profiles: a Space has a profile; creating, renaming and deleting a profile; `setProfile:forSpace:` and a move to a Space of another profile reopen tabs at their URLs, in order, closing Peeks (D9); a close of a Space's last row opens a new tab page there, reusing a blank one, and a close of that page closes the browser (D13). Verify with new cases in `FakeBrowserTests`, and in `native/ClairUITests/SpacesTests.swift` for the host's calls, in CI for each, and that the case for a Space's last tab showing another Space is replaced, not deleted without a successor.
 
 ## 2. Engine
 
