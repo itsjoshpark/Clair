@@ -244,18 +244,22 @@ void ClairPeeks::Link(tabs::TabInterface* parent, tabs::TabInterface* peek) {
     ActivateTab(peek);
     return;
   }
+  // It joins its parent's Space, right after it (add-spaces D2).
+  if (ClairSpaceTabs* lists = window_->space_tabs()) {
+    lists->PeekLinked(parent, peek);
+  }
+  AddPair(parent, peek);
+  ActivateTab(peek);
+}
+
+void ClairPeeks::AddPair(tabs::TabInterface* parent, tabs::TabInterface* peek) {
   pairs_.emplace_back(parent->GetHandle(), peek->GetHandle());
   pairs_.back().escape_watcher =
       std::make_unique<EscapeWatcher>(this, peek->GetContents());
   // D9: session restore and Reopen Closed Window leave it out.
   clair::TagPeekInSession(window_->browser(), peek->GetContents(), true);
-  // It joins its parent's Space, right after it (add-spaces D2).
-  if (ClairSpaceTabs* lists = window_->space_tabs()) {
-    lists->PeekLinked(parent, peek);
-  }
   Changed();
   ScheduleRepair();
-  ActivateTab(peek);
 }
 
 void ClairPeeks::Unlink(std::vector<Pair>::iterator pair) {
@@ -496,13 +500,9 @@ void ClairPeeks::Adopt(tabs::TabInterface* parent, tabs::TabInterface* peek) {
       FindByParent(parent) != pairs_.end() || FindByPeek(peek) != pairs_.end()) {
     return;
   }
-  pairs_.emplace_back(parent->GetHandle(), peek->GetHandle());
-  pairs_.back().escape_watcher =
-      std::make_unique<EscapeWatcher>(this, peek->GetContents());
-  // D9: the session leaves it out under its new window too.
-  clair::TagPeekInSession(window_->browser(), peek->GetContents(), true);
-  Changed();
-  ScheduleRepair();
+  // The lists kept its place; the session leaves it out under its new
+  // window too (D9).
+  AddPair(parent, peek);
 }
 
 // --- Tab commands (D7, D8) ---

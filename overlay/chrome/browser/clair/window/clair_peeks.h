@@ -155,6 +155,8 @@ class ClairPeeks : public TabStripModelObserver {
 
   // Links `peek`, which sits right after `parent`, as its Peek and shows it.
   void Link(tabs::TabInterface* parent, tabs::TabInterface* peek);
+  // Adds the pair to the table, with its Esc watcher and session tag.
+  void AddPair(tabs::TabInterface* parent, tabs::TabInterface* peek);
   // Forgets the pair; the Peek, if still there, becomes a normal tab.
   void Unlink(std::vector<Pair>::iterator pair);
   // Marks the Peek as closing before its parent becomes active.

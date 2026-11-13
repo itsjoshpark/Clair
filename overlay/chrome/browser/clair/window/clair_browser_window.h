@@ -376,8 +376,6 @@ class ClairBrowserWindow : public BrowserWindow {
   // D2: the tab the window shows a still of, or a null handle.
   tabs::TabHandle still_tab() const { return still_tab_; }
   NSImage* still_image() const { return still_image_; }
-  // While the window inserts its placeholder (D2).
-  bool inserting_placeholder() const { return inserting_placeholder_; }
   // D2: the still's tab closed: the placeholder becomes a new tab page of the
   // shown Space, with the command bar.
   void StillTabClosed();
@@ -567,9 +565,14 @@ class ClairBrowserWindow : public BrowserWindow {
   bool CanTake(const tabs::TabInterface* tab) const;
   // D1, D2: moves the tab named by `handle` here once its page's copy has
   // come (empty without one), leaving a still in the window that showed it.
+  // `generation` tells a take from one cancelled since.
   void FinishTake(tabs::TabHandle handle,
+                  int generation,
                   ClairTakeOptions options,
                   const SkBitmap& copy);
+  // D1: drops the take waiting for its page's copy, if any, and runs what
+  // was to run after it.
+  void CancelPendingTake();
   // D2: the copy of the still's page came after the tab left.
   void SetStillImage(tabs::TabHandle handle, const SkBitmap& copy);
   NSImage* StillImageFrom(const SkBitmap& copy) const;
@@ -622,9 +625,16 @@ class ClairBrowserWindow : public BrowserWindow {
   tabs::TabHandle still_tab_;
   NSImage* __strong still_image_ = nil;
   tabs::TabHandle placeholder_;
-  // D1: the tab waiting for its page's copy before it moves here.
+  // D1: the tab waiting for its page's copy before it moves here, what joined
+  // that take, and a count that tells a take from one cancelled since.
   tabs::TabHandle taking_;
-  bool inserting_placeholder_ = false;
+  std::vector<base::OnceClosure> pending_take_thens_;
+  int take_generation_ = 0;
+  // D3: while a close another window started chooses the next tab, which
+  // takes none another window shows; and the same for a close waiting on its
+  // page's answer.
+  bool closing_for_another_window_ = false;
+  bool pending_close_for_another_window_ = false;
   // D4: the active row Clair is closing, while its page is asked; or null.
   tabs::TabHandle pending_close_;
   // Owned by the browser's FindBarController once created.

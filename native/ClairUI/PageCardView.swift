@@ -584,8 +584,6 @@ enum PeekWash {
   }
 }
 
-/// An NSView whose origin is at the top left, as Chromium's and DevTools'
-/// coordinates are.
 /// A still of a page, faded, as Arc shows a tab another window took: the
 /// image fills the card from its top, partly see-through over the window's
 /// background colour.
@@ -659,6 +657,8 @@ final class StillView: NSView {
   }
 }
 
+/// An NSView whose origin is at the top left, as Chromium's and DevTools'
+/// coordinates are.
 final class FlippedView: NSView {
   override var isFlipped: Bool { true }
 }

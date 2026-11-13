@@ -238,6 +238,13 @@ When the user closes the active tab, the window SHALL show, in order: the tab th
 - **WHEN** the user closes the active tab, and the row above it is showing in another window
 - **THEN** this window shows the row above, and the other window shows its still
 
+### Requirement: Closing another window's tab
+When the user closes a tab that another window shows, that window SHALL show its next tab as for a close of its own, among the tabs no other window shows, so it never takes the tab the user is looking at.
+
+#### Scenario: Closing the other window's tab
+- **WHEN** window A shows "Notes", window B shows "Docs", the row below "Notes", and "Other" below it, and the user closes "Docs" from A
+- **THEN** B shows "Other", and A keeps showing "Notes"
+
 ### Requirement: Tab commands follow the Space
 Tabs › Next Tab (Opt+Cmd+Down), Previous Tab (Opt+Cmd+Up), Ctrl+Tab, Cmd+1 to Cmd+9 and Close Tabs Below SHALL act on the rows the sidebar lists, in its order, whichever window holds them, and never on a tab of another Space. Ctrl+Shift+PageDown and Ctrl+Shift+PageUp SHALL move the active row one row down or up in the list, stopping at its ends.
 

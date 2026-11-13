@@ -68,6 +68,7 @@
 #include "chrome/browser/ui/views/download/download_in_progress_dialog_view.h"
 #include "chrome/browser/ui/window_metadata/window_metadata_controller.h"
 #include "chrome/browser/ui/zoom/browser_window_zoom_observer.h"
+#include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/find_in_page/find_notification_details.h"
 #include "components/find_in_page/find_tab_helper.h"
@@ -78,6 +79,8 @@
 #include "components/web_modal/modal_dialog_host.h"
 #include "components/zoom/zoom_controller.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
+#include "content/public/browser/navigation_controller.h"
+#include "content/public/common/referrer.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents.h"
@@ -85,6 +88,7 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/mojom/window_show_state.mojom.h"
+#include "ui/base/page_transition_types.h"
 #include "ui/color/color_provider_manager.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/mac/coordinate_conversion.h"
@@ -1053,16 +1057,29 @@ bool ClairBrowserWindow::ShowNextRow(tabs::TabInterface* row,
     return false;
   }
   // share-tabs-across-windows D3: from every row, a row another window shows
-  // included; it's taken from there.
+  // included; it's taken from there. A close another window started takes
+  // none: the user is looking at that window, maybe at the very row.
+  const bool avoid_shown = closing_for_another_window_;
+  auto usable = [&](tabs::TabInterface* candidate) {
+    return candidate != row && (!avoid_shown || !IsShownElsewhere(candidate));
+  };
   tabs::TabInterface* next = nullptr;
   tabs::TabInterface* came_from = came_from_.Get();
-  if (came_from && came_from != row &&
-      std::ranges::find(rows, came_from) != rows.end()) {
+  if (came_from && std::ranges::find(rows, came_from) != rows.end() &&
+      usable(came_from)) {
     next = came_from;
-  } else if (it != rows.begin()) {
-    next = *(it - 1);
-  } else if (it + 1 != rows.end()) {
-    next = *(it + 1);
+  } else {
+    for (auto above = it; !next && above != rows.begin();) {
+      --above;
+      if (usable(*above)) {
+        next = *above;
+      }
+    }
+    for (auto below = it + 1; !next && below != rows.end(); ++below) {
+      if (usable(*below)) {
+        next = *below;
+      }
+    }
   }
   if (!next) {
     return false;
@@ -1106,6 +1123,7 @@ void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
   // share-tabs-across-windows D3: in whichever window holds it, which picks
   // its own next tab.
   if (ClairBrowserWindow* holder = HolderOf(tab); holder && holder != this) {
+    base::AutoReset<bool> elsewhere(&holder->closing_for_another_window_, true);
     holder->CloseTab(tab);
     return;
   }
@@ -1117,6 +1135,7 @@ void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
       // confirmation makes the tab active again. The choice waits for the
       // page's answer, in BeforeUnloadFired().
       pending_close_ = tab->GetHandle();
+      pending_close_for_another_window_ = closing_for_another_window_;
     } else {
       // The tab closes once the next one shows, which may wait for a page's
       // copy in another window (share-tabs-across-windows D2): closing first
@@ -1154,6 +1173,8 @@ void ClairBrowserWindow::BeforeUnloadFired(content::WebContents* contents,
     return;
   }
   pending_close_ = tabs::TabHandle::Null();
+  base::AutoReset<bool> elsewhere(&closing_for_another_window_,
+                                  pending_close_for_another_window_);
   // Staying on the page leaves everything as it was, the came-from row too.
   if (proceed && IsActiveRow(tab) && !ShowNextRow(tab) && RowOf(tab) == tab) {
     ShowTabOfAnotherSpace(tab);
@@ -1298,6 +1319,11 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
       }
       return true;
     }
+    case IDC_CLOSE_WINDOW:
+      // The user closes the window: its tabs may move to another
+      // (share-tabs-across-windows D4).
+      WindowCloseRequested();
+      return true;
     case IDC_CLOSE_TAB:
       // A Peek's Cmd+W is ClairPeeks'; it runs first. While the window shows
       // a still, the still's row is the one closed.
@@ -1348,17 +1374,19 @@ void ClairBrowserWindow::Take(tabs::TabInterface* tab,
   if (holder->IsActiveRow(row)) {
     if (options.wait_for_copy) {
       // The tab waits for its page's copy, taken while the holder still
-      // draws it.
+      // draws it. The same take again joins it: what it runs then, as a
+      // second close, waits too.
       if (taking_ == handle) {
         if (options.then) {
-          std::move(options.then).Run();
+          pending_take_thens_.push_back(std::move(options.then));
         }
         return;
       }
+      CancelPendingTake();
       taking_ = handle;
       CopyPage(row, base::BindOnce(&ClairBrowserWindow::FinishTake,
                                    weak_factory_.GetWeakPtr(), handle,
-                                   std::move(options)));
+                                   ++take_generation_, std::move(options)));
       return;
     }
     // At once: the still's image follows if the copy comes.
@@ -1367,14 +1395,64 @@ void ClairBrowserWindow::Take(tabs::TabInterface* tab,
                                     holder->weak_factory_.GetWeakPtr(),
                                     row->GetHandle()));
   }
-  FinishTake(handle, std::move(options), SkBitmap());
+  CancelPendingTake();
+  FinishTake(handle, take_generation_, std::move(options), SkBitmap());
+}
+
+void ClairBrowserWindow::CancelPendingTake() {
+  if (taking_ == tabs::TabHandle::Null()) {
+    return;
+  }
+  // Its FinishTake() comes with an old generation and moves nothing; what
+  // joined it, as a second close, runs once the current task is done, which
+  // may be a strip's notification.
+  taking_ = tabs::TabHandle::Null();
+  ++take_generation_;
+  std::vector<base::OnceClosure> thens = std::move(pending_take_thens_);
+  pending_take_thens_.clear();
+  if (thens.empty()) {
+    return;
+  }
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(
+                     [](std::vector<base::OnceClosure> thens) {
+                       for (base::OnceClosure& then : thens) {
+                         std::move(then).Run();
+                       }
+                     },
+                     std::move(thens)));
 }
 
 void ClairBrowserWindow::FinishTake(tabs::TabHandle handle,
+                                    int generation,
                                     ClairTakeOptions options,
                                     const SkBitmap& copy) {
+  if (generation != take_generation_) {
+    // Cancelled: another tab became active here meanwhile.
+    if (options.then) {
+      std::move(options.then).Run();
+    }
+    return;
+  }
+  std::vector<base::OnceClosure> thens;
   if (taking_ == handle) {
     taking_ = tabs::TabHandle::Null();
+    thens = std::move(pending_take_thens_);
+    pending_take_thens_.clear();
+  }
+  // What joined the take runs after it.
+  if (!thens.empty()) {
+    base::OnceClosure first = std::move(options.then);
+    options.then = base::BindOnce(
+        [](base::OnceClosure first, std::vector<base::OnceClosure> rest) {
+          if (first) {
+            std::move(first).Run();
+          }
+          for (base::OnceClosure& then : rest) {
+            std::move(then).Run();
+          }
+        },
+        std::move(first), std::move(thens));
   }
   tabs::TabInterface* tab = handle.Get();
   if (!CanTake(tab)) {
@@ -1507,23 +1585,26 @@ void ClairBrowserWindow::BeginStill(tabs::TabInterface* row,
   }
   still_tab_ = row->GetHandle();
   still_image_ = StillImageFrom(copy);
-  // The placeholder: Chromium needs an active tab, and any real tab would run
-  // as visible behind the still. It's in no Space, so the window keeps the
-  // one it shows.
-  {
-    base::AutoReset<bool> inserting(&inserting_placeholder_, true);
-    content::WebContents* contents = chrome::AddAndReturnTabAt(
-        browser_, GURL(), browser_->tab_strip_model()->count(),
-        /*foreground=*/true);
-    if (contents) {
-      ClairSpaceTabs::MarkPlaceholder(contents);
-      if (tabs::TabInterface* tab =
-              tabs::TabInterface::MaybeGetFromContents(contents)) {
-        placeholder_ = tab->GetHandle();
-      }
-    }
-  }
+  // ClairUI hears of the still before the placeholder under it becomes
+  // active, so the card never shows the placeholder's page.
   [bridge_ stillChanged];
+  // The placeholder: Chromium needs an active tab, and any real tab would run
+  // as visible behind the still. It's a new tab page, marked before it joins
+  // the strip, so it's in no Space and the window keeps the one it shows.
+  std::unique_ptr<content::WebContents> contents = content::WebContents::Create(
+      content::WebContents::CreateParams(browser_->profile()));
+  ClairSpaceTabs::MarkPlaceholder(contents.get());
+  contents->GetController().LoadURL(GURL(chrome::kChromeUINewTabURL),
+                                    content::Referrer(),
+                                    ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
+                                    std::string());
+  content::WebContents* raw = contents.get();
+  TabStripModel* strip = browser_->tab_strip_model();
+  strip->InsertWebContentsAt(strip->count(), std::move(contents),
+                             AddTabTypes::ADD_ACTIVE);
+  if (tabs::TabInterface* tab = tabs::TabInterface::MaybeGetFromContents(raw)) {
+    placeholder_ = tab->GetHandle();
+  }
 }
 
 void ClairBrowserWindow::EndStill() {
@@ -1621,6 +1702,10 @@ bool ClairBrowserWindow::HandTabsToAnotherWindow() {
     if (tabs::TabInterface* row = handle.Get()) {
       target->MoveFamilyHere(this, row);
     }
+    // D2: a third window with a still of it takes it back, as no window
+    // shows it now.
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&GiveBackToStill, handle));
   }
   // Emptied, the browser closes once Chromium is done with its strip; the
   // window goes now, so it can't become key meanwhile.
@@ -1696,6 +1781,15 @@ void ClairBrowserWindow::WindowFullscreenChanged(bool entered) {
 }
 
 void ClairBrowserWindow::WindowCloseRequested() {
+  // share-tabs-across-windows D4: when the user closes the window, by its
+  // close button or File > Close Window, and another regular window of the
+  // profile is open, the window's tabs move there and none closes. Moving
+  // the last one empties the strip, and TabStripEmpty() closes the browser.
+  // Every other close, as by an extension or of a profile, is Chromium's.
+  if (!browser_->IsDeleteScheduled() && HandTabsToAnotherWindow() &&
+      (browser_->tab_strip_model()->empty() || browser_->IsDeleteScheduled())) {
+    return;
+  }
   Close();
 }
 
@@ -1809,13 +1903,6 @@ void ClairBrowserWindow::ShowInactive() {
 }
 
 void ClairBrowserWindow::Close() {
-  // share-tabs-across-windows D4: while another regular window of the
-  // profile is open, the window's tabs move there and none closes. Moving
-  // the last one empties the strip, and TabStripEmpty() closes the browser.
-  if (!browser_->IsDeleteScheduled() && HandTabsToAnotherWindow() &&
-      (browser_->tab_strip_model()->empty() || browser_->IsDeleteScheduled())) {
-    return;
-  }
   // add-peek D9: Peeks close with the window's other tabs; session restore
   // and Reopen Closed Window leave them out by their tag.
   // Chromium's close flow: beforeunload may veto it; then the tabs close, and
@@ -1965,12 +2052,6 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
       tabs::TabInterface::MaybeGetFromContents(new_contents);
   // share-tabs-across-windows D2: the placeholder under a still is in no
   // Space, and leaves the shown Space and the came-from row alone.
-  if (inserting_placeholder_) {
-    ClairSpaceTabs::MarkPlaceholder(new_contents);
-    if (new_tab) {
-      placeholder_ = new_tab->GetHandle();
-    }
-  }
   const bool new_is_placeholder = ClairSpaceTabs::IsPlaceholder(new_contents);
   const bool old_is_placeholder =
       old_contents && ClairSpaceTabs::IsPlaceholder(old_contents);
@@ -2008,6 +2089,12 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
     if (!same_family) {
       came_from_ = row->GetHandle();
     }
+  }
+  // D1: another tab became active here than the one a take waits for, as
+  // when the user selected another row meanwhile: the take is dropped.
+  if (!new_is_placeholder && taking_ != tabs::TabHandle::Null() &&
+      (!new_tab || new_tab->GetHandle() != taking_)) {
+    CancelPendingTake();
   }
   // D2: another tab became active, which ends the still: the still's tab came
   // back, or the user selected another row or Space.
