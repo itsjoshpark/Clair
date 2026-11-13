@@ -215,9 +215,11 @@ final class UpdateMenuTests: RuntimeTestCase {
   }
 
   /// Restart and Update goes through ClairHost's relaunch: the same windows and
-  /// tabs come back, in the new version.
+  /// tabs come back, in the new version, with windows restored
+  /// (add-profiles D6).
   func testRelaunchRestoresWindowsAndTabs() async throws {
     try skipAutomaticCheck()
+    try Harness.setRestoreWindows(true)
     let browser = try await startBrowser(feed: updateFeed)
     let first = try await browser.open("\(page)?first")
     let second = try await browser.open("\(page)?second")

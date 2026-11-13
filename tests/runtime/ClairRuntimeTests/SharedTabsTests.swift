@@ -537,16 +537,18 @@ final class SharedTabsTests: NativeWindowTestCase {
     a.close()
     b.close()
     try await browser.quit()
-    // Both windows come back with the setting on (add-profiles D6).
+    // With windows restored, A, which held only the placeholder under its
+    // still, doesn't come back: a window holding nothing but a new tab page
+    // doesn't (add-profiles D6).
     try Harness.setRestoreWindows(true)
     try await browser.start()
-    let windows = try await browser.waitForNativeWindows(2, seconds: 60)
+    let windows = try await browser.waitForNativeWindows(1, seconds: 60)
     for window in windows {
       let once = await window.waitForTabs(30) { $0.filter { $0 == "Counter a" }.count == 1 }
       XCTAssertTrue(once, "Counter a isn't listed once: \(window.tabTitles)")
       XCTAssertFalse(window.showsStill, "A window shows a still after a relaunch")
     }
-    let newTabPages = windows.filter { $0.activeRow != "Counter a" && $0.activeRow != "Counter b" }
-    XCTAssertEqual(newTabPages.count, 1, "The window that showed a still doesn't show a new tab page")
+    try await Task.sleep(for: .seconds(3))
+    XCTAssertEqual(browser.nativeWindows.count, 1, "The window that showed only a still came back")
   }
 }

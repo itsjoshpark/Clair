@@ -34,6 +34,19 @@ extension Browser {
     dialog.descendants(matching: .any).matching(identifier: identifier).firstMatch
   }
 
+  /// The menu item titled `title` in the menu that's open, not one of the
+  /// same title in a closed menu, such as Spaces › Change Profile's.
+  func openMenuItem(_ title: String) async throws -> XCUIElement {
+    var found: XCUIElement?
+    let shown = await Harness.wait(for: 5) {
+      found = self.ui.menuItems.matching(NSPredicate(format: "title == %@", title)).allElementsBoundByIndex
+        .first(where: \.isHittable)
+      return found != nil
+    }
+    try require(shown, "No open menu has \(title)")
+    return found!
+  }
+
   /// Types `name` into the open dialog's field and presses its default
   /// button.
   func answerDialog(field: String, with name: String) throws {
@@ -68,9 +81,7 @@ extension Browser {
       let popup = element("clair.profilePopup")
       try require(popup.waitForExistence(timeout: 5), "The form has no profile popup")
       popup.click()
-      let item = ui.menuItems[profile]
-      try require(item.waitForExistence(timeout: 5), "The profile popup doesn't list \(profile)")
-      item.click()
+      try await openMenuItem(profile).click()
     }
     element("clair.createSpace").click()
     let shown = await waitForSpace(name, seconds: 30)
@@ -79,14 +90,11 @@ extension Browser {
   }
 
   /// Chooses `profile` in the Space header's Set Profile menu.
-  func setProfileFromHeader(_ profile: String) throws {
+  func setProfileFromHeader(_ profile: String) async throws {
     element("clair.spaceHeader").rightClick()
-    let menu = ui.menuItems["Set Profile"]
-    try require(menu.waitForExistence(timeout: 5), "The header's menu has no Set Profile")
+    let menu = try await openMenuItem("Set Profile")
     menu.hover()
-    let item = menu.menuItems[profile]
-    try require(item.waitForExistence(timeout: 5), "Set Profile doesn't list \(profile)")
-    item.click()
+    try await openMenuItem(profile).click()
   }
 
   /// Whether `tab`'s page sees the cookie the cookie page sets.
@@ -106,6 +114,9 @@ extension Browser {
 /// profile a page uses.
 @MainActor
 final class ProfilesTests: NativeWindowTestCase {
+  /// Chromium's name for the first profile.
+  static let defaultProfile = "Your Clair"
+
   func counter(_ name: String) -> String { url("counter.html?\(name)") }
   func cookie(_ name: String) -> String { url("cookie.html?\(name)") }
 
@@ -219,7 +230,7 @@ final class ProfilesTests: NativeWindowTestCase {
     XCTAssertFalse(leaked, "A Space of another profile sees the cookie")
 
     // A third Space on the default profile sees it.
-    try await browser.createSpace("Errands", profile: "Default")
+    try await browser.createSpace("Errands", profile: Self.defaultProfile)
     let same = try await browser.open(cookie("errands"))
     defer { same.close() }
     let seen = await Harness.wait(for: 15) { try await browser.hasCookie(same) }
@@ -231,7 +242,7 @@ final class ProfilesTests: NativeWindowTestCase {
     let (browser, home) = try await startWithWorkProfile()
     defer { home.close() }
     // Work shows a new tab page, so it asks; Cancel changes nothing.
-    try browser.setProfileFromHeader("Default")
+    try await browser.setProfileFromHeader(Self.defaultProfile)
     try require(browser.dialog.waitForExistence(timeout: 10), "A Space with a tab didn't ask")
     browser.dialogElement("clair.dialogCancel").click()
     XCTAssertEqual(browser.tabTitles.count, 1, "Cancel changed Work's tabs")
@@ -248,7 +259,7 @@ final class ProfilesTests: NativeWindowTestCase {
     let before = browser.tabTitles
     asks.close()
     checker.close()
-    try browser.setProfileFromHeader("Work")
+    try await browser.setProfileFromHeader("Work")
     try require(browser.dialog.waitForExistence(timeout: 10), "A Space with tabs didn't ask")
     browser.dialogElement("clair.dialogDefault").click()
     let reopened = await browser.waitForTabs(30) { $0 == before }
@@ -272,7 +283,7 @@ final class ProfilesTests: NativeWindowTestCase {
     try require(browser.dialog.waitForExistence(timeout: 10), "Manage Spaces didn't open")
     let popup = browser.dialogElement("clair.profilePopup")
     popup.click()
-    browser.ui.menuItems["Work"].click()
+    try await browser.openMenuItem("Work").click()
     try require(
       browser.dialogElement("clair.dialogDefault").waitForExistence(timeout: 10), "Changing Home's profile didn't ask")
     browser.dialogElement("clair.dialogDefault").click()
@@ -286,7 +297,7 @@ final class ProfilesTests: NativeWindowTestCase {
     }
     try require(added, "Add didn't add a Space")
     browser.dialogElement("clair.profilePopup").click()
-    browser.ui.menuItems["Default"].click()
+    try await browser.openMenuItem(Self.defaultProfile).click()
     let asked = browser.dialogElement("clair.manageSpacesList").waitForExistence(timeout: 3)
     XCTAssertTrue(asked, "Changing an empty Space's profile asked")
     browser.ui.typeKey(.escape, modifierFlags: [])
@@ -308,7 +319,7 @@ final class ProfilesTests: NativeWindowTestCase {
     // Another tab: the window stays, and a notice says where it went.
     browser.tabRow("Counter staying")?.click()
     _ = await browser.waitForActiveRow("Counter staying")
-    try moveRow("Counter home", to: "Work", in: browser)
+    try await moveRow("Counter home", to: "Work", in: browser)
     let notice = browser.ui.staticTexts["Tab was moved to Work"].waitForExistence(timeout: 10)
     XCTAssertTrue(notice, "Moving another tab showed no notice")
     XCTAssertEqual(browser.spaceName, "Home", "Moving another tab left Home")
@@ -316,7 +327,7 @@ final class ProfilesTests: NativeWindowTestCase {
     // The active tab: the window follows it, reopened at the top of Work.
     browser.tabRow("Counter moving")?.click()
     _ = await browser.waitForActiveRow("Counter moving")
-    try moveRow("Counter moving", to: "Work", in: browser)
+    try await moveRow("Counter moving", to: "Work", in: browser)
     let followed = await browser.waitForSpace("Work", seconds: 30)
     XCTAssertTrue(followed, "Moving the active tab didn't show Work")
     let active = await browser.waitForActiveRow("Counter moving")
@@ -330,14 +341,11 @@ final class ProfilesTests: NativeWindowTestCase {
     XCTAssertEqual(count, 0, "The tab kept its page across profiles")
   }
 
-  func moveRow(_ title: String, to space: String, in browser: Browser) throws {
+  func moveRow(_ title: String, to space: String, in browser: Browser) async throws {
     browser.tabRow(title)?.rightClick()
-    let move = browser.ui.menuItems["Move to Space"]
-    try require(move.waitForExistence(timeout: 5), "\(title) has no Move to Space")
+    let move = try await browser.openMenuItem("Move to Space")
     move.hover()
-    let item = move.menuItems[space]
-    try require(item.waitForExistence(timeout: 5), "Move to Space doesn't list \(space)")
-    item.click()
+    try await browser.openMenuItem(space).click()
   }
 
   func testTheEmptiedSpace() async throws {
@@ -416,7 +424,7 @@ final class ProfilesTests: NativeWindowTestCase {
     let popup = browser.settingsElement("clair.downloadLocation")
     try require(popup.waitForExistence(timeout: 10), "The page has no Download location")
     popup.click()
-    browser.ui.menuItems["Ask every time"].click()
+    try await browser.openMenuItem("Ask every time").click()
     try await Task.sleep(for: .seconds(1))
 
     // Search Engine opens Chromium's page in a Space of Work.

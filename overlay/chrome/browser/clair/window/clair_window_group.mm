@@ -29,6 +29,7 @@
 #include "chrome/browser/sessions/session_restore.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/unload_controller.h"
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "url/gurl.h"
 
@@ -138,7 +139,11 @@ void ClairWindowGroup::Leave(ClairBrowserWindow* window) {
     return;
   }
   base::WeakPtr<ClairWindowGroup> weak = group->weak_factory_.GetWeakPtr();
+  if (group->handing_over_) {
+    return;
+  }
   if (group->closing_) {
+    group->close_next_posted_ = true;
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&ClairWindowGroup::CloseNext, weak));
   } else if (was_shown) {
@@ -224,7 +229,7 @@ std::string ClairWindowGroup::shown_space() const {
 std::vector<ClairWindowGroup*> ClairWindowGroup::RegularByActivation() {
   std::vector<ClairWindowGroup*> groups;
   for (ClairWindowGroup* group : Groups()) {
-    if (group->is_regular() && !group->closing_) {
+    if (group->is_regular() && !group->handing_over_ && !group->IsClosing()) {
       groups.push_back(group);
     }
   }
@@ -497,8 +502,28 @@ void ClairWindowGroup::FullscreenChanged(ClairBrowserWindow* member,
 
 // --- Closing (D5, D13) ---
 
+bool ClairWindowGroup::IsClosing() const {
+  if (!closing_) {
+    return false;
+  }
+  if (close_next_posted_) {
+    return true;
+  }
+  for (ClairBrowserWindow* member : members_) {
+    Browser* browser = member->browser();
+    UnloadController* unload = UnloadController::From(browser);
+    if (browser->IsDeleteScheduled() ||
+        (unload && unload->is_attempting_to_close_browser())) {
+      return true;
+    }
+  }
+  // The close was cancelled, as by staying on a page that asked.
+  closing_ = false;
+  return false;
+}
+
 void ClairWindowGroup::CloseByUser(tabs::TabInterface* closing) {
-  if (closing_) {
+  if (IsClosing() || handing_over_) {
     return;
   }
   closing_ = true;
@@ -545,6 +570,7 @@ void ClairWindowGroup::CloseByUser(tabs::TabInterface* closing) {
 }
 
 void ClairWindowGroup::CloseNext() {
+  close_next_posted_ = false;
   ClairBrowserWindow* next = nullptr;
   for (ClairBrowserWindow* member : members_) {
     if (member != shown_ && !member->browser()->IsDeleteScheduled()) {
@@ -566,7 +592,7 @@ void ClairWindowGroup::CloseNext() {
 }
 
 void ClairWindowGroup::MaybeCloseEmptyHiddenMember(ClairBrowserWindow* member) {
-  if (!member || closing_ || !IsHidden(member) || IsRestored(member) ||
+  if (!member || IsClosing() || !IsHidden(member) || IsRestored(member) ||
       member->HasRealTabs() || member->browser()->IsDeleteScheduled()) {
     return;
   }
@@ -645,11 +671,11 @@ void ClairWindowGroup::OpenInSpace(const std::string& space, const GURL& url) {
 // static
 void ClairWindowGroup::HandOverToLastSpace(ClairBrowserWindow* window) {
   ClairWindowGroup* group = Of(window);
-  if (!group || group->closing_ || window->browser()->IsDeleteScheduled()) {
+  if (!group || group->handing_over_ || window->browser()->IsDeleteScheduled()) {
     return;
   }
   // Its group takes no part from now on.
-  group->closing_ = true;
+  group->handing_over_ = true;
   const std::string space = clair::ClairSpaceStore::Get()->last_space();
   std::vector<GURL> urls = window->PageURLs();
   if (urls.empty()) {

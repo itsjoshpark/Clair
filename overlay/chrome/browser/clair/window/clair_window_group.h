@@ -140,6 +140,9 @@ class ClairWindowGroup {
   // Closes the next member through Chromium's close flow, hidden ones
   // first.
   void CloseNext();
+  // Whether the group is closing: a close it started hasn't been cancelled,
+  // as by staying on a page that asked. A cancelled one is forgotten.
+  bool IsClosing() const;
 
   // D6.
   static void SessionRestored(Profile* profile, int tab_count);
@@ -152,7 +155,10 @@ class ClairWindowGroup {
   raw_ptr<ClairBrowserWindow> cover_ = nullptr;
   raw_ptr<ClairBrowserWindow> fullscreen_owner_ = nullptr;
   // Closing through Chromium's close flow, one member after another.
-  bool closing_ = false;
+  mutable bool closing_ = false;
+  bool close_next_posted_ = false;
+  // D8: handing its pages over; it takes no part any more.
+  bool handing_over_ = false;
   base::WeakPtrFactory<ClairWindowGroup> weak_factory_{this};
 };
 

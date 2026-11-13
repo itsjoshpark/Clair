@@ -24,11 +24,12 @@ extension Browser {
 
   var spacesMenu: XCUIElement { ui.menuBars.menuBarItems["Spaces"] }
 
-  /// The Spaces menu's Space items, in order: those after its last separator.
+  /// The Spaces menu's Space items, in order: its own items after the
+  /// commands, without a submenu's such as Change Profile's.
   var spacesMenuSpaces: [String] {
     spacesMenu.click()
     defer { ui.typeKey(.escape, modifierFlags: []) }
-    let items = spacesMenu.menuItems.allElementsBoundByIndex
+    let items = spacesMenu.menus.firstMatch.children(matching: .menuItem).allElementsBoundByIndex
     let commands: Set<String> = [
       "New Space…", "Rename Space", "Change Profile", "Manage Spaces…", "Next Space", "Previous Space", "",
     ]
@@ -492,7 +493,8 @@ final class SpacesTests: NativeWindowTestCase {
     let workRows = browser.tabTitles
     browser.ui.typeKey("1", modifierFlags: .control)
     _ = await browser.waitForSpace("Home")
-    let homeRows = browser.tabTitles
+    // A new tab page left open at quit doesn't come back (add-profiles D6).
+    let homeRows = browser.tabTitles.filter { $0 != "New Tab" }
     browser.ui.typeKey("2", modifierFlags: .control)
     _ = await browser.waitForSpace("Work")
 
