@@ -118,6 +118,7 @@ struct StillTests {
     #expect(!model.canGoForward)
     #expect(!model.canReload)
     #expect(!w.controllerA.rootView.card.stillView.isHidden)
+    #expect(w.controllerA.rootView.card.stillView.isAccessibilityElement())
     #expect(w.controllerA.rootView.card.stillView.image != nil)
     // B shows the tab with its Peek and its badge.
     let modelB = w.controllerB.model
@@ -132,6 +133,7 @@ struct StillTests {
     #expect(model.canGoBack)
     #expect(model.canReload)
     #expect(w.controllerA.rootView.card.stillView.isHidden)
+    #expect(!w.controllerA.rootView.card.stillView.isAccessibilityElement())
     #expect(w.controllerB.model.isShowingStill)
   }
 

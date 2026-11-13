@@ -1622,6 +1622,11 @@ bool ClairBrowserWindow::HandTabsToAnotherWindow() {
       target->MoveFamilyHere(this, row);
     }
   }
+  // Emptied, the browser closes once Chromium is done with its strip; the
+  // window goes now, so it can't become key meanwhile.
+  if (browser_->tab_strip_model()->empty()) {
+    [ns_window_ orderOut:nil];
+  }
   // The other window showed a still of one of them: it shows the tab now.
   if (tabs::TabInterface* still = target->still_tab_.Get();
       still && HolderOf(still) == target) {
@@ -1637,6 +1642,14 @@ void ClairBrowserWindow::ForgetFindBar() {
 // --- Events from the NSWindow ---
 
 void ClairBrowserWindow::WindowDidBecomeKey() {
+  // A browser that's closing has left Chromium's list of browsers, which
+  // CHECKs that an active one is in it. Its window can still become key, as
+  // when it handed its tabs to another window (share-tabs-across-windows D4)
+  // and AppKit orders a child window such as a tooltip.
+  if (detached_ || browser_->IsDeleteScheduled() ||
+      browser_->tab_strip_model()->empty()) {
+    return;
+  }
   BrowserActiveStateManager::From(browser_)->DidBecomeActive();
   // add-spaces D1: the Space a new window shows.
   if (space_tabs_ && space_tabs_->is_regular()) {

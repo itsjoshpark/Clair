@@ -300,6 +300,8 @@ final class PageCardView: NSView {
   func showStill(_ shows: Bool, image: NSImage?) {
     stillView.image = shows ? image : nil
     stillView.isHidden = !shows
+    // A hidden view can stay in the accessibility tree; the still leaves it.
+    stillView.setAccessibilityElement(shows)
     needsLayout = true
   }
 
@@ -605,7 +607,8 @@ final class StillView: NSView {
     imageLayer.isHidden = true
     imageLayer.opacity = Self.imageOpacity
     layer?.addSublayer(imageLayer)
-    setAccessibilityElement(true)
+    // An accessibility element only while it shows (PageCardView.showStill).
+    setAccessibilityElement(false)
     setAccessibilityRole(.image)
     setAccessibilityLabel("Open in another window")
     setAccessibilityIdentifier("clair.still")
