@@ -391,9 +391,17 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // Nor from a Space that's gone: there's no header to slide out, and no
     // place in the order to tell the side from.
     // A window of another profile that the group swaps in (add-profiles
-    // D12) didn't show the earlier Space: it draws it from the model.
+    // D12) didn't show the earlier Space: it draws it from the model, and
+    // takes the outgoing window's sidebar (D3). The engine tells it before
+    // it orders the window in.
     let swappedIn = previousSpaceID != nil && previousSpaceID != model.shownSpaceID
-    if let previousSpaceID, previousSpaceID != spaceID, model.showsSpaces, window.isVisible,
+    let outgoing = swappedIn ? previousSpaceID.flatMap(swapSource(showing:)) : nil
+    if let outgoing {
+      model.sidebar.width = outgoing.model.sidebar.width
+      model.sidebar.isHidden = outgoing.model.sidebar.isHidden
+      model.sidebar.isRevealed = false
+    }
+    if let previousSpaceID, previousSpaceID != spaceID, model.showsSpaces, window.isVisible || swappedIn,
       let previousSpace = model.spaces.space(previousSpaceID),
       !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     {
@@ -407,21 +415,26 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.newSpaceForm = nil
     model.setShownSpace(spaceID)
     tabsChanged()
-    if swappedIn, let previousSpaceID {
-      takeManageSpaces(showing: previousSpaceID)
+    if let outgoing {
+      takeManageSpaces(from: outgoing)
     }
   }
 
-  /// D12: a dialog follows a swap. When the group swaps from a window showing
-  /// `spaceID` with Manage Spaces open, as when the shown Space's profile
-  /// changes there, this window presents it again with the same selection.
-  private func takeManageSpaces(showing spaceID: SpaceID) {
-    guard dialogs.showing == nil,
-      let other = Self.all.allObjects.first(where: {
-        $0 !== self && $0.browser != nil && !$0.window.isVisible && $0.model.shownSpaceID == spaceID
-          && $0.openManageSpaces != nil
-      }), let state = other.openManageSpaces
-    else { return }
+  /// The window of the group this one is swapped in for, which shows
+  /// `spaceID`: the key one, as the user switched there, or else one already
+  /// ordered out.
+  private func swapSource(showing spaceID: SpaceID) -> BrowserWindowController? {
+    let candidates = Self.all.allObjects.filter {
+      $0 !== self && $0.browser != nil && $0.model.spaces === model.spaces && $0.model.shownSpaceID == spaceID
+    }
+    return candidates.first { $0.window.isKeyWindow } ?? candidates.first { !$0.window.isVisible }
+  }
+
+  /// D12: a dialog follows a swap. When the group swaps from a window with
+  /// Manage Spaces open, as when the shown Space's profile changes there,
+  /// this window presents it again with the same selection.
+  private func takeManageSpaces(from other: BrowserWindowController) {
+    guard dialogs.showing == nil, let state = other.openManageSpaces else { return }
     other.closeManageSpaces()
     ManageSpacesDialog.show(for: self, state: state)
   }

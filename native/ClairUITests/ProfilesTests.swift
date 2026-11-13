@@ -583,8 +583,8 @@ struct SwapTests {
       browser: member, spaces: member.spaces,
       preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function + ".member")!))
     member.clairWindow = incoming
-    incoming.window.orderFront(nil)
-    defer { incoming.window.orderOut(nil) }
+    controller.model.sidebar.width = 300
+    controller.model.sidebar.isHidden = true
     let homeRows = host.list(FakeHost.homeID).map(\.tabID)
     // The group swapped from the window showing Home to this one.
     incoming.shownSpaceDidChange(work, from: FakeHost.homeID)
@@ -594,7 +594,10 @@ struct SwapTests {
       #expect(slide.fromTabs.map(\.tabID) == homeRows)
     }
     #expect(incoming.model.shownSpaceID == work)
-    _ = (browser, controller)
+    // The outgoing window, ordered out, lends its sidebar.
+    #expect(incoming.model.sidebar.width == 300)
+    #expect(incoming.model.sidebar.isHidden)
+    _ = browser
   }
 
   @Test func manageSpacesFollowsTheSwap() throws {
