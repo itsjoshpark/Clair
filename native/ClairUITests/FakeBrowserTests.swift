@@ -351,6 +351,35 @@ struct FakeBrowserTests {
     #expect(w.host.list(FakeHost.homeID).allSatisfy { $0.browserID == w.a.browserID })
   }
 
+  @Test func closingAnotherWindowsActiveRowTakesNothingShown() {
+    let host = FakeHost()
+    let a = FakeBrowser(host: host), b = FakeBrowser(host: host)
+    let other = b.addTab(title: "Other")
+    let docs = b.addTab(title: "Docs")
+    let notes = a.addTab(title: "Notes")
+    #expect(host.list(FakeHost.homeID).map(\.title) == ["Notes", "Docs", "Other"])
+    // A closes B's Docs: B shows Other, not A's Notes above it.
+    a.close(tab: docs.tabID)
+    #expect(b.activeTabID == other.tabID)
+    #expect(a.activeTabID == notes.tabID)
+    #expect(a.stillTabID == ClairTabIDNone)
+  }
+
+  @Test func closingAWindowGivesAThirdWindowsStillItsTab() {
+    let host = FakeHost()
+    let c = FakeBrowser(host: host), a = FakeBrowser(host: host), b = FakeBrowser(host: host)
+    let tab = c.addTab(title: "T")
+    b.addTab(title: "B tab")
+    a.activate(tab: tab.tabID)
+    #expect(c.stillTabID == tab.tabID)
+    // A closes; T goes to B, the most recently active, which doesn't show it,
+    // so C, with its still, takes it back.
+    a.requestClose()
+    #expect(c.stillTabID == ClairTabIDNone)
+    #expect(c.activeTabID == tab.tabID)
+    #expect(host.tab(tab.tabID)?.browserID == c.browserID)
+  }
+
   @Test func suggestionsReachTheDelegate() {
     final class Delegate: NSObject, ClairAutocompleteDelegate {
       var received: [[String]] = []

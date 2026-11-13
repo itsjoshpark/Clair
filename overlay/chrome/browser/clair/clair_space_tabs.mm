@@ -568,11 +568,8 @@ void ClairSpaceTabs::Insert(TabStripModel* model,
   content::WebContents* contents = tab->GetContents();
   Remove(tab);
   ClairBrowserWindow* window = WindowFor(model);
-  // share-tabs-across-windows D2: a placeholder is in no Space. Its window
-  // marks it while inserting it; Chromium may tell the lists first.
-  if (window && window->inserting_placeholder()) {
-    MarkPlaceholder(contents);
-  }
+  // share-tabs-across-windows D2: a placeholder, marked before it joined the
+  // strip, is in no Space.
   if (IsPlaceholder(contents)) {
     return;
   }

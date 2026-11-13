@@ -666,7 +666,14 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   // share-tabs-across-windows D1: a copy of another window's tab opens here,
   // as Chromium's Duplicate does, right below it in the Space.
   tabs::TabInterface* source = [self rowTabWithID:tabID];
-  if (!source) {
+  ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(source);
+  // Chromium's own guard, asked of the window that holds it. Its
+  // DuplicateTabAt() would put the copy in that window, in whichever Space
+  // it shows.
+  if (!source || !holder ||
+      !chrome::CanDuplicateTabAt(
+          holder->browser(),
+          holder->browser()->tab_strip_model()->GetIndexOfTab(source))) {
     return;
   }
   std::unique_ptr<content::WebContents> copy = source->GetContents()->Clone();

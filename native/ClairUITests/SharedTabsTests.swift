@@ -200,12 +200,14 @@ struct OtherWindowRowTests {
     #expect(w.b.activeTabID == w.bTab.tabID)
   }
 
-  @Test func closingAnotherWindowsActiveTopRowShowsTheRowBelowThere() {
+  @Test func closingAnotherWindowsActiveTopRowLeavesThisWindowsTab() {
     let w = SharedWindows()
-    // B's top row closes; the row below, Docs, shows in B, taken from A.
+    // A closes B's top row. Below it, Docs shows in A, where the user is, so
+    // B shows Notes, below that, and A keeps Docs.
     w.controllerA.close(tab: w.bTab.tabID)
-    #expect(w.b.activeTabID == w.docs.tabID)
-    #expect(w.controllerA.model.stillTabID == w.docs.tabID)
+    #expect(w.b.activeTabID == w.notes.tabID)
+    #expect(w.a.activeTabID == w.docs.tabID)
+    #expect(!w.controllerA.model.isShowingStill)
   }
 
   @Test func closingAnotherWindowsActiveRowLeavesItOnItsNextTab() {

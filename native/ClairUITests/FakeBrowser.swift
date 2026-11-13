@@ -604,17 +604,18 @@ final class FakeBrowser: NSObject, ClairBrowser {
   }
 
   /// D4: the row to show before the active row `rowID` leaves the Space: the
-  /// row the user came from, if it's still listed, or the row above, or the
-  /// row below, from every window's rows.
-  func nextRow(leaving rowID: TabID) -> TabID? {
+  /// row the user came from, if it's still listed, or the nearest row above,
+  /// or below, from every window's rows. With `avoidingShown`, for a close
+  /// another window started, none another window shows.
+  func nextRow(leaving rowID: TabID, avoidingShown: Bool = false) -> TabID? {
     let rows = TabListLogic.rows(tabs).map(\.tabID)
     guard let index = rows.firstIndex(of: rowID) else { return nil }
-    if cameFromID != ClairTabIDNone, cameFromID != rowID, rows.contains(cameFromID) {
+    let usable = { (row: TabID) in row != rowID && (!avoidingShown || !self.host.isShown(row, except: self)) }
+    if cameFromID != ClairTabIDNone, rows.contains(cameFromID), usable(cameFromID) {
       return cameFromID
     }
-    if index > 0 { return rows[index - 1] }
-    if index + 1 < rows.count { return rows[index + 1] }
-    return nil
+    if let above = rows[..<index].last(where: usable) { return above }
+    return rows[(index + 1)...].first(where: usable)
   }
 
   /// D3: the most recently active row of another Space than `rowID`'s that
@@ -669,10 +670,10 @@ final class FakeBrowser: NSObject, ClairBrowser {
 
   /// Closes a tab this window holds as Clair does, first showing the next
   /// tab if it's the active row (D4, share-tabs-across-windows D3).
-  fileprivate func closeAsClair(_ tabID: TabID) {
+  fileprivate func closeAsClair(_ tabID: TabID, forAnotherWindow: Bool = false) {
     guard let tab = tab(tabID) else { return }
     if isActiveRow(tabID) {
-      if let next = nextRow(leaving: tabID) {
+      if let next = nextRow(leaving: tabID, avoidingShown: forAnotherWindow) {
         choose(next)
       } else if tab.peekParentID == ClairTabIDNone, let other = rowOfAnotherSpace(than: tabID) {
         choose(other)
@@ -768,6 +769,8 @@ final class FakeBrowser: NSObject, ClairBrowser {
     let rows = allTabs.filter { $0.peekParentID == ClairTabIDNone }.map(\.tabID)
     for row in rows {
       target.moveFamilyHere(row)
+      // A third window with a still of it takes it back.
+      host.giveBack(row)
     }
     if target.stillTabID != ClairTabIDNone, target.tab(target.stillTabID) != nil {
       target.activateRow(target.stillTabID)
@@ -922,7 +925,7 @@ final class FakeBrowser: NSObject, ClairBrowser {
       // D4: Clair picks the next tab before it closes the active row, in the
       // window that holds it.
       guard let tab = rowTab(tabID) else { return }
-      holder(of: tab)?.closeAsClair(tabID)
+      holder(of: tab)?.closeAsClair(tabID, forAnotherWindow: tab.browserID != browserID)
     }
   }
 
@@ -937,7 +940,7 @@ final class FakeBrowser: NSObject, ClairBrowser {
       guard let index = list.firstIndex(where: { $0.tabID == last }) else { return }
       for below in list[(index + 1)...] {
         if let current = host.tab(below.tabID) {
-          holder(of: current)?.closeAsClair(below.tabID)
+          holder(of: current)?.closeAsClair(below.tabID, forAnotherWindow: current.browserID != browserID)
         }
       }
     }
