@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -46,8 +47,8 @@
 
 class Browser;
 class ClairBrowserWindow;
-class SkBitmap;
 class ClairDownloads;
+class SkBitmap;
 class ClairExtensions;
 class ClairPeeks;
 class ClairSpaceTabs;
@@ -532,15 +533,24 @@ class ClairBrowserWindow : public BrowserWindow {
   // most recently active row of another Space that no window shows. Returns
   // false, changing nothing, when there's none.
   bool ShowTabOfAnotherSpace(tabs::TabInterface* row);
+  // D1: whether `tab` is one this window can take: another regular window's
+  // of the same profile, and not a placeholder.
+  bool CanTake(const tabs::TabInterface* tab) const;
+  // D1, D2: moves the tab named by `handle` here once its page's copy has
+  // come (empty without one), leaving a still in the window that showed it.
+  void FinishTake(tabs::TabHandle handle, const SkBitmap& copy);
+  // D2: copies `row`'s page, waiting at most 250 ms, and hands `done` the
+  // copy, or an empty bitmap.
+  void CopyPage(tabs::TabInterface* row,
+                base::OnceCallback<void(const SkBitmap&)> done);
   // D1: moves `row` and its Peek from `from` to this window's strip, keeping
   // their place in the Space's list. Activates nothing.
   void MoveFamilyHere(ClairBrowserWindow* from, tabs::TabInterface* row);
-  // D2: starts a still of `row`, which another window is taking: copies its
-  // page and activates a placeholder.
-  void BeginStill(tabs::TabInterface* row);
+  // D2: starts a still of `row`, which another window is taking, with its
+  // page's copy (empty without one), and activates a placeholder.
+  void BeginStill(tabs::TabInterface* row, const SkBitmap& copy);
   // D2: ends the still, closing the placeholder unless it became a tab.
   void EndStill();
-  void StillCopied(int generation, const SkBitmap& bitmap);
   // D4: moves the window's tabs to the most recently active other regular
   // window of the profile. Returns whether it did.
   bool HandTabsToAnotherWindow();
@@ -574,12 +584,12 @@ class ClairBrowserWindow : public BrowserWindow {
   // came-from.
   bool choosing_next_ = false;
   // share-tabs-across-windows D2: the tab the window shows a still of, its
-  // page's copy, the placeholder under it, and a count that tells a late copy
-  // from the current still's.
+  // page's copy and the placeholder under it.
   tabs::TabHandle still_tab_;
   NSImage* __strong still_image_ = nil;
   tabs::TabHandle placeholder_;
-  int still_generation_ = 0;
+  // D1: the tab waiting for its page's copy before it moves here.
+  tabs::TabHandle taking_;
   bool inserting_placeholder_ = false;
   // D4: the active row Clair is closing, while its page is asked; or null.
   tabs::TabHandle pending_close_;

@@ -138,6 +138,43 @@ final class FakeHost: NSObject, ClairHost {
     }
   }
 
+  /// What runs once the current operation is done, as the engine posts it.
+  private var posted: [() -> Void] = []
+  private var depth = 0
+
+  /// Runs `body` as one operation: what it posts runs once it's done.
+  func operation(_ body: () -> Void) {
+    depth += 1
+    body()
+    depth -= 1
+    guard depth == 0 else { return }
+    while !posted.isEmpty {
+      let task = posted.removeFirst()
+      depth += 1
+      task()
+      depth -= 1
+    }
+  }
+
+  /// D2: `row` stopped showing in its window. Once the current operation is
+  /// done, if no window shows it, the most recently active window with a
+  /// still of it takes it back, in the Space it shows.
+  func giveBack(_ row: TabID) {
+    posted.append { [weak self] in self?.giveBackNow(row) }
+    if depth == 0 {
+      operation {}
+    }
+  }
+
+  private func giveBackNow(_ row: TabID) {
+    guard let tab = tab(row), let holder = browser(tab.browserID), !holder.isActiveRow(row),
+      let target = activationOrder.lazy.compactMap({ self.browser($0) }).first(where: {
+        $0 !== holder && $0.stillTabID == row
+      }), target.shownSpaceID == tab.spaceID
+    else { return }
+    target.takeBack(row)
+  }
+
   /// A tab closed: a window showing a still of it shows a new tab page.
   func tabClosed(_ tabID: TabID) {
     for browser in allBrowsers where browser.stillTabID == tabID {

@@ -23,6 +23,7 @@
 #include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/ref_counted.h"
 #include "base/no_destructor.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -903,6 +904,33 @@ tabs::TabInterface* RowOf(tabs::TabInterface* tab) {
   return parent ? parent : tab;
 }
 
+// share-tabs-across-windows D2: `row` stopped showing in its window. If no
+// window shows it now, the most recently active window with a still of it
+// takes it back, without becoming key, as Arc does.
+void GiveBackToStill(tabs::TabHandle handle) {
+  tabs::TabInterface* row = handle.Get();
+  ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(row);
+  if (!row || !holder || holder->IsActiveRow(row)) {
+    return;
+  }
+  ClairBrowserWindow* target = nullptr;
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [&target, handle](BrowserWindowInterface* candidate) {
+        ClairBrowserWindow* window = ClairBrowserWindow::FromBrowser(candidate);
+        if (window && window->still_tab() == handle) {
+          target = window;
+          return false;
+        }
+        return true;
+      });
+  // Only into the Space the window shows, which the still belongs to.
+  if (!target || target == holder || !target->space_tabs() ||
+      target->space_tabs()->SpaceOf(row) != target->shown_space()) {
+    return;
+  }
+  target->ActivateRow(row);
+}
+
 // When the user last looked at `row`, or at its Peek.
 base::Time LastActive(tabs::TabInterface* row) {
   base::Time time = row->GetLastActiveTime();
@@ -1255,19 +1283,51 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
 
 // --- Tabs shared across windows (share-tabs-across-windows D1, D2, D4) ---
 
-void ClairBrowserWindow::Take(tabs::TabInterface* tab) {
+bool ClairBrowserWindow::CanTake(const tabs::TabInterface* tab) const {
   ClairBrowserWindow* holder = HolderOf(tab);
-  if (!tab || !holder || holder == this || !space_tabs_ ||
-      !space_tabs_->is_regular() || holder->space_tabs() != space_tabs_ ||
-      detached_ || browser_->IsDeleteScheduled() ||
-      ClairSpaceTabs::IsPlaceholder(tab->GetContents())) {
+  return tab && holder && holder != this && space_tabs_ &&
+         space_tabs_->is_regular() && holder->space_tabs() == space_tabs_ &&
+         !detached_ && !browser_->IsDeleteScheduled() &&
+         !ClairSpaceTabs::IsPlaceholder(tab->GetContents());
+}
+
+void ClairBrowserWindow::Take(tabs::TabInterface* tab) {
+  if (!CanTake(tab)) {
     return;
   }
   tabs::TabInterface* row = RowOf(tab);
   const tabs::TabHandle handle = tab->GetHandle();
-  // D2: the holder keeps a still of what it showed.
+  // D2: the holder keeps a still of what it shows, so the tab waits for its
+  // page's copy, taken while the holder still draws it.
+  if (HolderOf(tab)->IsActiveRow(row)) {
+    if (taking_ == handle) {
+      return;
+    }
+    taking_ = handle;
+    CopyPage(row, base::BindOnce(&ClairBrowserWindow::FinishTake,
+                                 weak_factory_.GetWeakPtr(), handle));
+    return;
+  }
+  FinishTake(handle, SkBitmap());
+}
+
+void ClairBrowserWindow::FinishTake(tabs::TabHandle handle,
+                                    const SkBitmap& copy) {
+  if (taking_ == handle) {
+    taking_ = tabs::TabHandle::Null();
+  }
+  tabs::TabInterface* tab = handle.Get();
+  if (!CanTake(tab)) {
+    // Here already, as by another way meanwhile: it only becomes active.
+    if (tab && HolderOf(tab) == this) {
+      ActivateTab(tab);
+    }
+    return;
+  }
+  tabs::TabInterface* row = RowOf(tab);
+  ClairBrowserWindow* holder = HolderOf(tab);
   if (holder->IsActiveRow(row)) {
-    holder->BeginStill(row);
+    holder->BeginStill(row, copy);
   }
   MoveFamilyHere(holder, row);
   TabStripModel* strip = browser_->tab_strip_model();
@@ -1279,6 +1339,44 @@ void ClairBrowserWindow::Take(tabs::TabInterface* tab) {
                          TabStripUserGestureDetails(
                              TabStripUserGestureDetails::GestureType::kOther));
   }
+}
+
+void ClairBrowserWindow::CopyPage(
+    tabs::TabInterface* row,
+    base::OnceCallback<void(const SkBitmap&)> done) {
+  using Pending = base::RefCountedData<base::OnceCallback<void(const SkBitmap&)>>;
+  auto pending = base::MakeRefCounted<Pending>(std::move(done));
+  // The tab's own page, never its Peek's, which shows over it.
+  content::RenderWidgetHostView* view =
+      row ? row->GetContents()->GetRenderWidgetHostView() : nullptr;
+  if (!view) {
+    std::move(pending->data).Run(SkBitmap());
+    return;
+  }
+  // On the UI thread, as Chromium's tab thumbnails take theirs.
+  view->CopyFromSurface(
+      gfx::Rect(), gfx::Size(), base::Milliseconds(250),
+      base::BindOnce(
+          [](scoped_refptr<Pending> pending,
+             const content::CopyFromSurfaceResult& result) {
+            if (pending->data.is_null()) {
+              return;
+            }
+            std::move(pending->data)
+                .Run(result.has_value() ? result->bitmap : SkBitmap());
+          },
+          pending));
+  // Should the copy never answer, the take goes ahead without a still image.
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](scoped_refptr<Pending> pending) {
+            if (!pending->data.is_null()) {
+              std::move(pending->data).Run(SkBitmap());
+            }
+          },
+          pending),
+      base::Milliseconds(400));
 }
 
 void ClairBrowserWindow::MoveFamilyHere(ClairBrowserWindow* from,
@@ -1327,28 +1425,20 @@ tabs::TabInterface* ClairBrowserWindow::placeholder() const {
              : nullptr;
 }
 
-void ClairBrowserWindow::BeginStill(tabs::TabInterface* row) {
+void ClairBrowserWindow::BeginStill(tabs::TabInterface* row,
+                                    const SkBitmap& copy) {
   if (!row || detached_ || browser_->IsDeleteScheduled()) {
     return;
   }
-  const int generation = ++still_generation_;
   still_tab_ = row->GetHandle();
   still_image_ = nil;
-  // The tab's own page, never its Peek's, which stays visible under the Peek
-  // until the tab leaves. The copy may arrive once the tab has moved.
-  if (content::RenderWidgetHostView* view =
-          row->GetContents()->GetRenderWidgetHostView()) {
-    // On the UI thread, as Chromium's tab thumbnails take theirs.
-    view->CopyFromSurface(
-        gfx::Rect(), gfx::Size(), base::Milliseconds(250),
-        base::BindOnce(
-            [](base::WeakPtr<ClairBrowserWindow> window, int generation,
-               const content::CopyFromSurfaceResult& result) {
-              if (window && result.has_value()) {
-                window->StillCopied(generation, result->bitmap);
-              }
-            },
-            weak_factory_.GetWeakPtr(), generation));
+  if (!copy.drawsNothing()) {
+    // In points, as the card lays it out.
+    const CGFloat scale =
+        ns_window_.backingScaleFactor > 0 ? ns_window_.backingScaleFactor : 1;
+    still_image_ = skia::SkBitmapToNSImage(copy);
+    still_image_.size =
+        NSMakeSize(copy.width() / scale, copy.height() / scale);
   }
   // The placeholder: Chromium needs an active tab, and any real tab would run
   // as visible behind the still. It's in no Space, so the window keeps the
@@ -1369,26 +1459,10 @@ void ClairBrowserWindow::BeginStill(tabs::TabInterface* row) {
   [bridge_ stillChanged];
 }
 
-void ClairBrowserWindow::StillCopied(int generation, const SkBitmap& bitmap) {
-  if (generation != still_generation_ || !still_tab_.Get() ||
-      bitmap.drawsNothing()) {
-    return;
-  }
-  NSImage* image = skia::SkBitmapToNSImage(bitmap);
-  // In points, as the card lays it out.
-  const CGFloat scale = ns_window_.backingScaleFactor > 0
-                            ? ns_window_.backingScaleFactor
-                            : 1;
-  image.size = NSMakeSize(bitmap.width() / scale, bitmap.height() / scale);
-  still_image_ = image;
-  [bridge_ stillChanged];
-}
-
 void ClairBrowserWindow::EndStill() {
   const bool had_still = still_tab_ != tabs::TabHandle::Null();
   still_tab_ = tabs::TabHandle::Null();
   still_image_ = nil;
-  ++still_generation_;
   tabs::TabInterface* placeholder = this->placeholder();
   placeholder_ = tabs::TabHandle::Null();
   if (had_still) {
@@ -1420,7 +1494,6 @@ void ClairBrowserWindow::StillTabClosed() {
   tabs::TabInterface* placeholder = this->placeholder();
   still_tab_ = tabs::TabHandle::Null();
   still_image_ = nil;
-  ++still_generation_;
   placeholder_ = tabs::TabHandle::Null();
   [bridge_ stillChanged];
   if (!placeholder || !space_tabs_) {
@@ -1879,6 +1952,15 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
   // back, or the user selected another row or Space.
   if (!new_is_placeholder && still_tab_ != tabs::TabHandle::Null()) {
     EndStill();
+  }
+  // D2: the row shown until now goes back to a window with a still of it,
+  // if no window shows it once the strip is done.
+  if (old_tab && !old_closed && !old_is_placeholder) {
+    tabs::TabInterface* old_row = RowOf(old_tab);
+    if (!new_tab || RowOf(new_tab) != old_row) {
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(&GiveBackToStill, old_row->GetHandle()));
+    }
   }
   // ClairUI swaps the page in the card now, before visibility changes.
   [bridge_ activeTabChanged];

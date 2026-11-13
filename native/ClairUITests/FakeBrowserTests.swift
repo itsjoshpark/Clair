@@ -212,6 +212,31 @@ struct FakeBrowserTests {
     #expect(w.windowA.calls.last == "active \(w.docs.tabID)")
   }
 
+  @Test func movingOnGivesTheTabBackToItsStill() {
+    let w = TwoWindows()
+    w.b.activate(tab: w.docs.tabID)
+    #expect(w.a.stillTabID == w.docs.tabID)
+    // B shows another tab: A shows Docs live again, without a click.
+    w.b.activate(tab: w.bTab.tabID)
+    #expect(w.a.stillTabID == ClairTabIDNone)
+    #expect(w.a.activeTabID == w.docs.tabID)
+    #expect(w.holder(w.docs) == w.a.browserID)
+    #expect(w.b.activeTabID == w.bTab.tabID)
+    #expect(w.b.stillTabID == ClairTabIDNone)
+  }
+
+  @Test func aTabShownElsewhereIsNotGivenBack() {
+    let w = TwoWindows()
+    let c = FakeBrowser(host: w.host)
+    w.b.activate(tab: w.docs.tabID)
+    // C takes Docs from B; B moving on doesn't matter, since C shows it.
+    c.activate(tab: w.docs.tabID)
+    #expect(w.b.stillTabID == w.docs.tabID)
+    w.b.activate(tab: w.bTab.tabID)
+    #expect(c.activeTabID == w.docs.tabID)
+    #expect(w.a.stillTabID == w.docs.tabID)
+  }
+
   @Test func selectingAnotherRowEndsTheStill() {
     let w = TwoWindows()
     w.b.activate(tab: w.docs.tabID)

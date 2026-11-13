@@ -181,6 +181,13 @@ final class SharedTabsTests: NativeWindowTestCase {
     XCTAssertTrue(stillInB, "B shows no still once A took the tab back")
     let countBack = try await self.count(a)
     XCTAssertEqual(countBack, 7, "Taking the tab back reloaded its page")
+
+    // A moves on to another row: B shows the tab live again, unclicked.
+    windowA.tabRow("Counter b")?.click()
+    _ = await windowA.waitForActiveRow("Counter b")
+    let given = await windowB.waitForStill(false)
+    XCTAssertTrue(given, "Moving on in A didn't give the tab back to B")
+    XCTAssertEqual(windowB.activeRow, "Counter a", "B doesn't show the tab it got back")
   }
 
   func testSelectingATabNoWindowShows() async throws {
@@ -211,26 +218,35 @@ final class SharedTabsTests: NativeWindowTestCase {
       a.close()
       b.close()
     }
-    // B takes a; A moves on to another row: the still goes, a stays in B.
+    // B takes a. A first click on another row in A, which isn't key, only
+    // takes a back, as in Arc; the second selects the row, and B gets a back.
     windowB.tabRow("Counter a")?.click()
     _ = await windowB.waitForActiveRow("Counter a")
     var still = await windowA.waitForStill()
     try require(still, "A shows no still")
     windowA.tabRow("Counter b")?.click()
+    let back = await windowA.waitForStill(false)
+    XCTAssertTrue(back, "A click in A didn't take the tab back")
+    let stillInB = await windowB.waitForStill()
+    XCTAssertTrue(stillInB, "B shows no still once A took the tab back")
+    windowA.tabRow("Counter b")?.click()
     _ = await windowA.waitForActiveRow("Counter b")
-    let gone = await windowA.waitForStill(false)
-    XCTAssertTrue(gone, "Selecting another row didn't end the still")
-    XCTAssertEqual(windowB.activeRow, "Counter a", "Moving on in A took the tab from B")
+    let given = await windowB.waitForStill(false)
+    XCTAssertTrue(given, "Moving on in A didn't give the tab back to B")
+    XCTAssertEqual(windowB.activeRow, "Counter a", "B doesn't show the tab it got back")
 
     // Switching Space in a window showing a still needs the window key,
     // which takes the tab back first; the unit tests cover it
     // (StillTests.switchingSpaceEndsTheStill).
 
     // B closes the still's tab: A shows a new tab page with the command bar.
+    windowA.click()
     windowA.tabRow("Counter a")?.click()
     _ = await windowA.waitForActiveRow("Counter a")
+    still = await windowB.waitForStill()
+    try require(still, "B shows no still of a")
     windowB.click()
-    windowB.tabRow("Counter a")?.click()
+    _ = await windowB.waitForActiveRow("Counter a")
     still = await windowA.waitForStill()
     try require(still, "A shows no still of a")
     browser.ui.typeKey("w", modifierFlags: .command)

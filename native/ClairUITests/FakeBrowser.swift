@@ -521,64 +521,77 @@ final class FakeBrowser: NSObject, ClairBrowser {
   /// tab's Space (D3, D4). A window showing a still of it shows its
   /// placeholder as a new tab page (share-tabs-across-windows D2).
   func closeTabNow(_ tabID: TabID) {
-    guard let tab = tab(tabID) else { return }
-    var next = ClairTabIDNone
-    if activeTabID == tabID {
-      let strip = allTabs
-      if let index = strip.firstIndex(where: { $0.tabID == tabID }) {
-        let others = windowTabs(inSpace: tab.spaceID).filter { $0.tabID != tabID }
-        let inSpaceIndex = windowTabs(inSpace: tab.spaceID).firstIndex { $0.tabID == tabID } ?? 0
-        if !others.isEmpty {
-          next = others[min(inSpaceIndex, others.count - 1)].tabID
-        } else if strip.count > 1 {
-          next = strip[index + 1 < strip.count ? index + 1 : index - 1].tabID
+    host.operation {
+      guard let tab = tab(tabID) else { return }
+      var next = ClairTabIDNone
+      if activeTabID == tabID {
+        let strip = allTabs
+        if let index = strip.firstIndex(where: { $0.tabID == tabID }) {
+          let others = windowTabs(inSpace: tab.spaceID).filter { $0.tabID != tabID }
+          let inSpaceIndex = windowTabs(inSpace: tab.spaceID).firstIndex { $0.tabID == tabID } ?? 0
+          if !others.isEmpty {
+            next = others[min(inSpaceIndex, others.count - 1)].tabID
+          } else if strip.count > 1 {
+            next = strip[index + 1 < strip.count ? index + 1 : index - 1].tabID
+          }
         }
       }
+      host.pageViews[tabID] = nil
+      mutate(tab.spaceID) { $0.removeAll { $0.tabID == tabID } }
+      if cameFromID == tabID {
+        cameFromID = ClairTabIDNone
+      }
+      if activeTabID == tabID {
+        // A close that changes the active tab clears the came-from (D4).
+        cameFromID = ClairTabIDNone
+        isChoosingNext = true
+        setActive(next)
+        isChoosingNext = false
+      }
+      host.tabClosed(tabID)
     }
-    host.pageViews[tabID] = nil
-    mutate(tab.spaceID) { $0.removeAll { $0.tabID == tabID } }
-    if cameFromID == tabID {
-      cameFromID = ClairTabIDNone
-    }
-    if activeTabID == tabID {
-      // A close that changes the active tab clears the came-from (D4).
-      cameFromID = ClairTabIDNone
-      isChoosingNext = true
-      setActive(next)
-      isChoosingNext = false
-    }
-    host.tabClosed(tabID)
   }
 
   /// Makes a tab active, as Chromium does for any reason. The window shows
   /// the tab's Space (D3), and remembers the row the user came from (D4).
   /// The placeholder leaves both alone; any other tab ends the still.
   func setActive(_ tabID: TabID) {
-    let previous = activeTabID
-    activeTabID = tabID
-    if tabID != placeholderID, let tab = tab(tabID) {
-      host.stamp(tabID)
-      if previous != ClairTabIDNone, previous == placeholderID {
-        // Taking the still's tab back keeps the came-from; moving on doesn't.
-        let row = tab.peekParentID != ClairTabIDNone ? tab.peekParentID : tab.tabID
-        if row != stillTabID {
-          cameFromID = ClairTabIDNone
+    host.operation {
+      let previous = activeTabID
+      activeTabID = tabID
+      if tabID != placeholderID, let tab = tab(tabID) {
+        host.stamp(tabID)
+        if previous != ClairTabIDNone, previous == placeholderID {
+          // Taking the still's tab back keeps the came-from; moving on doesn't.
+          let row = tab.peekParentID != ClairTabIDNone ? tab.peekParentID : tab.tabID
+          if row != stillTabID {
+            cameFromID = ClairTabIDNone
+          }
+        } else if !isChoosingNext, previous != ClairTabIDNone, previous != tabID, let from = self.tab(previous) {
+          let row = from.peekParentID != ClairTabIDNone ? from.peekParentID : from.tabID
+          if row != tabID && row != tab.peekParentID {
+            cameFromID = row
+          }
         }
-      } else if !isChoosingNext, previous != ClairTabIDNone, previous != tabID, let from = self.tab(previous) {
+        lastActive[tab.spaceID] = tabID
+        if tab.spaceID != shownSpaceID {
+          setShown(tab.spaceID)
+        }
+      }
+      if tabID != placeholderID, stillTabID != ClairTabIDNone {
+        endStill()
+      }
+      clairWindow?.activeTabDidChange(tabID)
+      // D2: the row shown until now goes back to a window with a still of it,
+      // if no window shows it.
+      if previous != placeholderID, let from = self.tab(previous) {
         let row = from.peekParentID != ClairTabIDNone ? from.peekParentID : from.tabID
-        if row != tabID && row != tab.peekParentID {
-          cameFromID = row
+        let newRow = self.tab(tabID).map { $0.peekParentID != ClairTabIDNone ? $0.peekParentID : $0.tabID }
+        if row != newRow {
+          host.giveBack(row)
         }
       }
-      lastActive[tab.spaceID] = tabID
-      if tab.spaceID != shownSpaceID {
-        setShown(tab.spaceID)
-      }
     }
-    if tabID != placeholderID, stillTabID != ClairTabIDNone {
-      endStill()
-    }
-    clairWindow?.activeTabDidChange(tabID)
   }
 
   private func setShown(_ spaceID: SpaceID) {
@@ -730,12 +743,21 @@ final class FakeBrowser: NSObject, ClairBrowser {
     clairWindow?.showCommandBar(mode: .currentTab)
   }
 
+  /// D2: takes back the tab of its still, which no window shows any more,
+  /// without becoming key.
+  func takeBack(_ row: TabID) {
+    guard stillTabID == row else { return }
+    activateRow(row)
+  }
+
   /// The window became key, as when the user clicks in it: it becomes the
   /// most recently active, and takes back the tab of its still (D2).
   func becomeKey() {
-    host.activated(self)
-    if stillTabID != ClairTabIDNone {
-      activateRow(stillTabID)
+    host.operation {
+      host.activated(self)
+      if stillTabID != ClairTabIDNone {
+        activateRow(stillTabID)
+      }
     }
   }
 
@@ -856,59 +878,67 @@ final class FakeBrowser: NSObject, ClairBrowser {
   }
 
   func showSpace(_ spaceID: SpaceID) {
-    record("showSpace \(spaceID)")
-    guard profileKind == .regular, host.isSpace(spaceID), spaceID != shownSpaceID else { return }
-    // share-tabs-across-windows D3: the tab last active there here unless
-    // another window shows it, else the most recently active row no window
-    // shows, from any window.
-    let list = host.list(spaceID)
-    let rows = TabListLogic.rows(list).map(\.tabID).filter { !host.isShown($0, except: self) }
-    let last = lastActive[spaceID].flatMap { id -> TabID? in
-      guard let tab = list.first(where: { $0.tabID == id }) else { return nil }
-      return rows.contains(tab.peekParentID != ClairTabIDNone ? tab.peekParentID : id) ? id : nil
-    }
-    let recent = rows.max { host.lastActive(row: $0) < host.lastActive(row: $1) }
-    setShown(spaceID)
-    if let last {
-      if tab(last) != nil { setActive(last) } else { take(last) }
-    } else if let recent {
-      activateRow(recent)
-    } else {
-      // D3: a Space with no tab to show opens a new tab page with the
-      // command bar.
-      addTab(url: "chrome://newtab/")
-      clairWindow?.showCommandBar(mode: .currentTab)
+    host.operation {
+      record("showSpace \(spaceID)")
+      guard profileKind == .regular, host.isSpace(spaceID), spaceID != shownSpaceID else { return }
+      // share-tabs-across-windows D3: the tab last active there here unless
+      // another window shows it, else the most recently active row no window
+      // shows, from any window.
+      let list = host.list(spaceID)
+      let rows = TabListLogic.rows(list).map(\.tabID).filter { !host.isShown($0, except: self) }
+      let last = lastActive[spaceID].flatMap { id -> TabID? in
+        guard let tab = list.first(where: { $0.tabID == id }) else { return nil }
+        return rows.contains(tab.peekParentID != ClairTabIDNone ? tab.peekParentID : id) ? id : nil
+      }
+      let recent = rows.max { host.lastActive(row: $0) < host.lastActive(row: $1) }
+      setShown(spaceID)
+      if let last {
+        if tab(last) != nil { setActive(last) } else { take(last) }
+      } else if let recent {
+        activateRow(recent)
+      } else {
+        // D3: a Space with no tab to show opens a new tab page with the
+        // command bar.
+        addTab(url: "chrome://newtab/")
+        clairWindow?.showCommandBar(mode: .currentTab)
+      }
     }
   }
 
   func activate(tab tabID: TabID) {
-    record("activate \(tabID)")
-    if tab(tabID) != nil {
-      setActive(tabID)
-    } else if rowTab(tabID) != nil {
-      take(tabID)
+    host.operation {
+      record("activate \(tabID)")
+      if tab(tabID) != nil {
+        setActive(tabID)
+      } else if rowTab(tabID) != nil {
+        take(tabID)
+      }
     }
   }
 
   func close(tab tabID: TabID) {
-    record("close \(tabID)")
-    // D4: Clair picks the next tab before it closes the active row, in the
-    // window that holds it.
-    guard let tab = rowTab(tabID) else { return }
-    holder(of: tab)?.closeAsClair(tabID)
+    host.operation {
+      record("close \(tabID)")
+      // D4: Clair picks the next tab before it closes the active row, in the
+      // window that holds it.
+      guard let tab = rowTab(tabID) else { return }
+      holder(of: tab)?.closeAsClair(tabID)
+    }
   }
 
   func closeTabs(below tabID: TabID) {
-    record("closeBelow \(tabID)")
-    // As the engine: from the tab's Peek, which stays (ClairPeeks::LastOfFamily),
-    // over the rows of its Space, in whichever window holds each.
-    guard let tab = rowTab(tabID) else { return }
-    let list = listed(inSpace: tab.spaceID)
-    let last = tab.peekID != ClairTabIDNone ? tab.peekID : tabID
-    guard let index = list.firstIndex(where: { $0.tabID == last }) else { return }
-    for below in list[(index + 1)...] {
-      if let current = host.tab(below.tabID) {
-        holder(of: current)?.closeAsClair(below.tabID)
+    host.operation {
+      record("closeBelow \(tabID)")
+      // As the engine: from the tab's Peek, which stays (ClairPeeks::LastOfFamily),
+      // over the rows of its Space, in whichever window holds each.
+      guard let tab = rowTab(tabID) else { return }
+      let list = listed(inSpace: tab.spaceID)
+      let last = tab.peekID != ClairTabIDNone ? tab.peekID : tabID
+      guard let index = list.firstIndex(where: { $0.tabID == last }) else { return }
+      for below in list[(index + 1)...] {
+        if let current = host.tab(below.tabID) {
+          holder(of: current)?.closeAsClair(below.tabID)
+        }
       }
     }
   }
@@ -1033,10 +1063,12 @@ final class FakeBrowser: NSObject, ClairBrowser {
   }
 
   func requestClose() {
-    record("requestClose")
-    // D4: another regular window keeps the tabs, and this one closes.
-    if handTabsToAnotherWindow() {
-      closeWindow()
+    host.operation {
+      record("requestClose")
+      // D4: another regular window keeps the tabs, and this one closes.
+      if handTabsToAnotherWindow() {
+        closeWindow()
+      }
     }
   }
 }

@@ -26,7 +26,7 @@ final class PageCardView: NSView {
   private(set) weak var parentPageView: NSView?
   /// Moves the window from the top of the page (drag-window-from-page-top).
   let dragStrip = PageTopDragStrip()
-  /// The dimmed still of a page another window took, over the hidden
+  /// The faded still of a page another window took, over the hidden
   /// placeholder tab (share-tabs-across-windows D2).
   let stillView = StillView()
   private(set) weak var devToolsView: NSView?
@@ -295,8 +295,8 @@ final class PageCardView: NSView {
     }
   }
 
-  /// Shows the dimmed still, with `image` or as a dimmed background alone,
-  /// or hides it.
+  /// Shows the faded still, with `image` or as the window's background
+  /// alone, or hides it.
   func showStill(_ shows: Bool, image: NSImage?) {
     stillView.image = shows ? image : nil
     stillView.isHidden = !shows
@@ -579,14 +579,16 @@ enum PeekWash {
 
 /// An NSView whose origin is at the top left, as Chromium's and DevTools'
 /// coordinates are.
-/// A still of a page, dimmed, as Arc shows a tab another window took: the
-/// image fills the card from its top, over the page's background colour.
+/// A still of a page, faded, as Arc shows a tab another window took: the
+/// image fills the card from its top, partly see-through over the window's
+/// background colour.
 final class StillView: NSView {
-  /// How much the still darkens.
-  static let dimming: CGFloat = 0.35
+  /// The image's opacity. Arc's still takes the page's #2B6FD6 to about
+  /// #80A4E2 over its light background, which is 60% (measured with
+  /// tests/probe/).
+  static let imageOpacity: Float = 0.6
 
   private let imageLayer = CALayer()
-  private let dimLayer = CALayer()
 
   var image: NSImage? {
     didSet {
@@ -601,9 +603,8 @@ final class StillView: NSView {
     imageLayer.contentsGravity = .resizeAspectFill
     imageLayer.masksToBounds = true
     imageLayer.isHidden = true
-    dimLayer.backgroundColor = NSColor.black.withAlphaComponent(Self.dimming).cgColor
+    imageLayer.opacity = Self.imageOpacity
     layer?.addSublayer(imageLayer)
-    layer?.addSublayer(dimLayer)
     setAccessibilityElement(true)
     setAccessibilityRole(.image)
     setAccessibilityLabel("Open in another window")
@@ -625,7 +626,7 @@ final class StillView: NSView {
 
   private func updateBackground() {
     effectiveAppearance.performAsCurrentDrawingAppearance {
-      layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+      layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
     }
   }
 
@@ -641,7 +642,6 @@ final class StillView: NSView {
     } else {
       imageLayer.frame = bounds
     }
-    dimLayer.frame = bounds
     CATransaction.commit()
   }
 
