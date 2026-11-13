@@ -33,7 +33,7 @@ The archived `add-spaces` change's `design.md` (`openspec/changes/archive/2026-1
 
 ## Tabs shared across windows
 
-The `share-tabs-across-windows` change's `design.md` (`openspec/changes/share-tabs-across-windows/`, archived under `openspec/changes/archive/` once it ships) has the reasoning (D1–D5). Every tab still lives in one real browser; what changed is which rows a window lists and what happens when it selects a row another browser holds.
+The archived `share-tabs-across-windows` change's `design.md` (`openspec/changes/archive/2026-11-13-share-tabs-across-windows/`) has the reasoning (D1–D5). Every tab still lives in one real browser; what changed is which rows a window lists and what happens when it selects a row another browser holds.
 
 - **One list (D1).** A regular window lists its shown Space's whole list, whichever browser holds each tab; an incognito or guest window lists its own tabs, by `browserID`. `ClairBrowserWindow::Rows()` and the tab commands work over that list, and the bridge accepts any listed tab of the profile in its commands (`rowTabWithID:`).
 - **Take (D1).** Selecting a row another browser holds runs `ClairBrowserWindow::Take`: the holder starts a still if it shows the tab, then `MoveFamilyHere` detaches the tab and its Peek with `TabStripModel::DetachTabAtForInsertion` and inserts them here with `InsertDetachedTabAt`, so the page and its tab handle survive. `ClairPeeks::Release` takes the pair out of the holder's Peek table first, so the move neither orphans nor unlinks the Peek, and `ClairPeeks::Adopt` links it again here. `ClairSpaceTabs::BeginMove` and `EndMove` keep the tabs at their places in the Space's list and push their new `browserID`.
