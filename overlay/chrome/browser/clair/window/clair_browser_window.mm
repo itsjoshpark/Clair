@@ -548,11 +548,15 @@ void ClairExclusiveAccessContext::EnterFullscreen(
 }
 
 void ClairExclusiveAccessContext::ExitFullscreen() {
+  const bool was_page_fullscreen = page_fullscreen_;
   SetPageFullscreen(false);
   HideNotice(ExclusiveAccessBubbleHideReason::kInterrupted);
   NSWindow* window = window_->FullscreenNSWindow();
+  // add-profiles D4: the browser's full screen, asked for in the window
+  // covering its group's full-screen one, ends the group's.
+  const bool covering = window != window_->ns_window();
   // Leave only what entering changed: a window already in full screen stays.
-  if (entered_window_fullscreen_ &&
+  if ((entered_window_fullscreen_ || (covering && !was_page_fullscreen)) &&
       (window.styleMask & NSWindowStyleMaskFullScreen)) {
     [window toggleFullScreen:nil];
   }
