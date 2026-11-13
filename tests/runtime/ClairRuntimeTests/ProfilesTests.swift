@@ -423,8 +423,10 @@ final class ProfilesTests: NativeWindowTestCase {
     browser.profileRow("Work")?.click()
     let popup = browser.settingsElement("clair.downloadLocation")
     try require(popup.waitForExistence(timeout: 10), "The page has no Download location")
+    // ungoogled-chromium asks where to save by default: Work saves to its
+    // folder instead, and the default profile goes on asking.
     popup.click()
-    try await browser.openMenuItem("Ask every time").click()
+    try await browser.openMenuItem("Downloads").click()
     try await Task.sleep(for: .seconds(1))
 
     // Search Engine opens Chromium's page in a Space of Work.
@@ -445,7 +447,7 @@ final class ProfilesTests: NativeWindowTestCase {
     defer { workSettings.close() }
     let asks = try await workSettings.evaluate(
       "(async () => (await new Promise(r => chrome.settingsPrivate.getPref('download.prompt_for_download', r))).value)()")
-    XCTAssertEqual(asks as? Bool, true, "Ask every time didn't apply to Work")
+    XCTAssertEqual(asks as? Bool, false, "Choosing the folder didn't apply to Work")
     browser.ui.typeKey("1", modifierFlags: .control)
     _ = await browser.waitForSpace("Home")
     let homeSettings = try await browser.open("chrome://settings/downloads")
@@ -453,7 +455,7 @@ final class ProfilesTests: NativeWindowTestCase {
     try await Task.sleep(for: .seconds(2))
     let homeAsks = try await homeSettings.evaluate(
       "(async () => (await new Promise(r => chrome.settingsPrivate.getPref('download.prompt_for_download', r))).value)()")
-    XCTAssertEqual(homeAsks as? Bool, false, "Ask every time applied to the default profile")
+    XCTAssertEqual(homeAsks as? Bool, true, "Work's folder applied to the default profile")
   }
 
   func testWarnBeforeQuittingOff() async throws {

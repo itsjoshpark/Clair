@@ -600,6 +600,25 @@ struct SwapTests {
     _ = browser
   }
 
+  /// D9: the shown Space's profile changed; the window of the new profile is
+  /// swapped in for the same Space, with no slide, and Manage Spaces moves.
+  @Test func aSwapForTheSameSpaceKeepsManageSpaces() throws {
+    let (host, _, controller, work, _) = profilesWindow()
+    controller.manageSpaces()
+    let state = try #require(controller.openManageSpaces)
+    let member = FakeBrowser(host: host)
+    member.showSpace(work)
+    let incoming = BrowserWindowController(
+      browser: member, spaces: member.spaces,
+      preferences: SidebarPreferences(defaults: UserDefaults(suiteName: #function + ".member")!))
+    member.clairWindow = incoming
+    incoming.shownSpaceDidChange(FakeHost.homeID, from: FakeHost.homeID)
+    #expect(incoming.model.shownSpaceID == FakeHost.homeID)
+    #expect(incoming.model.spaceSlide == nil)
+    #expect(incoming.openManageSpaces === state)
+    #expect(controller.openManageSpaces == nil)
+  }
+
   @Test func manageSpacesFollowsTheSwap() throws {
     let (host, _, controller, work, _) = profilesWindow()
     controller.manageSpaces()

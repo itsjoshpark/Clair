@@ -110,6 +110,8 @@ void ClairWindowGroup::Join(ClairBrowserWindow* window) {
   group->Add(window);
   group->shown_ = window;
   // D6: session restore's windows wait until it has finished.
+  LOG(WARNING) << "ClairDebug Join restoring "
+               << SessionRestore::IsRestoring(window->browser()->GetProfile());
   if (SessionRestore::IsRestoring(window->browser()->GetProfile())) {
     Restored().push_back(window->GetWeakPtr());
     if (!g_arrange_posted) {
@@ -743,6 +745,12 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
     }
   }
   ClairBrowserWindow* last_active = LastActivatedByRestore().get();
+  LOG(WARNING) << "ClairDebug Arrange " << windows.size() << " windows, restore "
+               << g_restore_windows;
+  for (ClairBrowserWindow* window : windows) {
+    LOG(WARNING) << "ClairDebug   tag '" << window->RestoredGroupTag()
+                 << "' profile " << ProfileIDOf(window);
+  }
   Restored().clear();
   LastActivatedByRestore() = nullptr;
   g_arrange_posted = false;

@@ -1127,17 +1127,23 @@ bool ClairBrowserWindow::ShowNextRow(tabs::TabInterface* row,
   return true;
 }
 
-bool ClairBrowserWindow::KeepEmptiedSpace(tabs::TabInterface* row) {
+bool ClairBrowserWindow::IsEmptiedSpacePage(tabs::TabInterface* row) const {
   if (!row || !space_tabs_ || !space_tabs_->is_regular() || RowOf(row) != row) {
     return false;
   }
   const std::vector<tabs::TabInterface*> rows = Rows();
   const GURL& url = row->GetContents()->GetVisibleURL();
-  const bool new_tab_page =
-      url.SchemeIs(content::kChromeUIScheme) &&
-      (url.host() == chrome::kChromeUINewTabHost ||
-       url.host() == chrome::kChromeUINewTabPageHost);
-  if (new_tab_page && rows.size() == 1 && rows.front() == row) {
+  return rows.size() == 1 && rows.front() == row &&
+         url.SchemeIs(content::kChromeUIScheme) &&
+         (url.host() == chrome::kChromeUINewTabHost ||
+          url.host() == chrome::kChromeUINewTabPageHost);
+}
+
+bool ClairBrowserWindow::KeepEmptiedSpace(tabs::TabInterface* row) {
+  if (!row || !space_tabs_ || !space_tabs_->is_regular() || RowOf(row) != row) {
+    return false;
+  }
+  if (IsEmptiedSpacePage(row)) {
     // Closing the emptied Space's new tab page closes the window, as the
     // user's close does, and the page closes with it.
     if (ClairWindowGroup* group = ClairWindowGroup::Of(this)) {
@@ -1165,6 +1171,12 @@ void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
   // D4: Clair picks the next tab first; without one in the Space, a new tab
   // page takes its place (add-profiles D13).
   if (IsActiveRow(tab)) {
+    // D13: the emptied Space's own new tab page closes the window, whatever
+    // the page answers about unloading.
+    if (IsEmptiedSpacePage(tab)) {
+      KeepEmptiedSpace(tab);
+      return;
+    }
     if (tab->GetContents()->NeedToFireBeforeUnloadOrUnloadEvents()) {
       // Chromium asks the page before it closes the tab, and its leave-page
       // confirmation makes the tab active again. The choice waits for the

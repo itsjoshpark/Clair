@@ -616,6 +616,8 @@ class ClairBrowserWindow : public BrowserWindow {
   // when `row` is itself a new tab page and the Space's only row, the window
   // closes as the user's close does. Returns whether the window closes.
   bool KeepEmptiedSpace(tabs::TabInterface* row);
+  // D13: whether `row` is a new tab page that is the shown Space's only row.
+  bool IsEmptiedSpacePage(tabs::TabInterface* row) const;
   // Closes `handle`'s tab, with its leave-page confirmation.
   void CloseTabNow(tabs::TabHandle handle);
   // D1: whether `tab` is one this window can take: another regular window's
