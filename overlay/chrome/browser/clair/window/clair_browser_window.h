@@ -379,6 +379,10 @@ class ClairBrowserWindow : public BrowserWindow {
   // Orders the window in above `above` (or front), makes it key when
   // `make_key`, and shows its pages.
   void Reveal(NSWindow* above, bool make_key);
+  // The window comes in on the active macOS Space, whichever it was on when
+  // ordered out, until the current task is done: ordering it in mustn't
+  // switch macOS Spaces (add-profiles D3, D4).
+  void JoinActiveSpace();
   // Hides its pages and, with `order_out`, orders the window out. A still it
   // showed ends, its placeholder staying active without one, and a take it
   // waits for is dropped (D5).

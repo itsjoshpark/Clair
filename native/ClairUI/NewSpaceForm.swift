@@ -86,16 +86,29 @@ struct NewSpaceFormView: View {
           .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.75))
           .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.05), radius: 0.5, y: 0.5))
       .padding(.top, 36)
-      // Arc's Profile row, under the name field.
+      // Arc's Profile row, under the name field: a glyph, "Profile", the
+      // profile's name as a pill popup, and an (i) at the trailing end.
       HStack(spacing: 6) {
-        Text("Profile")
+        Image(systemName: "person.crop.circle")
           .font(.system(size: 13))
           .foregroundStyle(.secondary)
-        Spacer(minLength: 4)
+          .frame(width: 24)
+        Text("Profile")
+          .font(.system(size: 13, weight: .medium))
         ProfilePopup(
           profiles: model.spaces.profiles, selection: form.profileID,
           onSelect: { model.newSpaceForm?.profileID = $0 },
-          onNewProfile: { actions?.newProfileForNewSpace() })
+          onNewProfile: { actions?.newProfileForNewSpace() }
+        )
+        .padding(.horizontal, 8)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(Color.primary.opacity(0.07)))
+        Spacer(minLength: 4)
+        Image(systemName: "info.circle")
+          .font(.system(size: 13))
+          .foregroundStyle(.secondary)
+          .help("Profiles keep a Space's history, logins, cookies and extensions apart from other Profiles'.")
+          .accessibilityLabel("About Profiles")
       }
       .padding(.horizontal, 8)
       .frame(height: Self.fieldHeight)

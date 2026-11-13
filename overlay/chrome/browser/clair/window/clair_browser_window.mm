@@ -1280,7 +1280,25 @@ void ClairBrowserWindow::BeginSwapIn(const std::string& previous_space) {
   [bridge_ swappedInFrom:previous_space];
 }
 
+void ClairBrowserWindow::JoinActiveSpace() {
+  const NSWindowCollectionBehavior behavior = ns_window_.collectionBehavior;
+  if (behavior & NSWindowCollectionBehaviorMoveToActiveSpace) {
+    return;
+  }
+  ns_window_.collectionBehavior = behavior | NSWindowCollectionBehaviorMoveToActiveSpace;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(
+                     [](base::WeakPtr<ClairBrowserWindow> window) {
+                       if (window) {
+                         window->ns_window().collectionBehavior &=
+                             ~NSWindowCollectionBehaviorMoveToActiveSpace;
+                       }
+                     },
+                     weak_factory_.GetWeakPtr()));
+}
+
 void ClairBrowserWindow::Reveal(NSWindow* above, bool make_key) {
+  JoinActiveSpace();
   if (above && above.visible) {
     [ns_window_ orderWindow:NSWindowAbove relativeTo:above.windowNumber];
   } else {

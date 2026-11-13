@@ -260,15 +260,17 @@ struct ProfilesSettingsView: View {
               if let count = SpacesLogic.spaceCountLabel(state.spaces.spaceCount(ofProfile: profile.profileID)) {
                 Text(count)
                   .font(.system(size: 12))
-                  .foregroundStyle(selected ? AnyShapeStyle(Color.white.opacity(0.8)) : AnyShapeStyle(.secondary))
+                  .foregroundStyle(.secondary)
               }
             }
-            .foregroundStyle(selected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .frame(height: Self.rowHeight)
+            // Arc marks the selected profile with a light tint, not a fill.
             .background {
               if selected {
-                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor).padding(.horizontal, 4)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                  .fill(Color.accentColor.opacity(0.12))
+                  .padding(.horizontal, 6)
               }
             }
             .contentShape(Rectangle())
@@ -299,10 +301,14 @@ struct ProfilesSettingsView: View {
         .help("Remove Profile")
         .accessibilityIdentifier("clair.profilesRemove")
         Spacer(minLength: 0)
-        Button("Rename") {
+        Button {
           if let profile = state.selectedProfile { actions?.renameProfile(profile) }
+        } label: {
+          Image(systemName: "character.cursor.ibeam").frame(width: 26, height: 22)
         }
         .disabled(state.selectedProfile == nil)
+        .help("Rename Profile")
+        .accessibilityLabel("Rename")
         .accessibilityIdentifier("clair.profilesRename")
       }
       .buttonStyle(.borderless)
@@ -335,6 +341,11 @@ struct ProfilesSettingsView: View {
       }
       .padding(12)
       .background(SettingsCard.background)
+      Text("Your Data and Settings")
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(.secondary)
+        .padding(.leading, 4)
+        .padding(.bottom, -8)
       VStack(alignment: .leading, spacing: 0) {
         ForEach(Array(ProfileSettingsLink.allCases.enumerated()), id: \.offset) { index, link in
           if index > 0 {
@@ -352,7 +363,7 @@ struct ProfilesSettingsView: View {
                 .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(link.color))
               Text(link.title)
               Spacer(minLength: 4)
-              Image(systemName: "arrow.up.forward").foregroundStyle(.secondary)
+              Image(systemName: "arrow.right").foregroundStyle(Color.accentColor)
             }
             .padding(.horizontal, 12)
             .frame(height: 36)

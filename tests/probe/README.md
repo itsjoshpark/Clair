@@ -60,6 +60,10 @@ tests/probe/serve.sh stop
 - `probe.sh send <line>...` runs lines in order and prints their output. It
   fails when a line failed (`error: …`) or the probe stopped.
 - `probe.sh status` and `probe.sh stop`.
+- `click-element.sh <identifier|title|label> [right]` clicks (or
+  right-clicks) the first element of that name in the tree that has a size,
+  at its centre, so a script needn't know where a window opened. An open
+  menu's items have a size; the menu bar's closed ones don't.
 
 **When the owner's own Clair is running** (for example a `run-local.sh` build
 they're trying), never attach the probe to Clair: with two copies running,

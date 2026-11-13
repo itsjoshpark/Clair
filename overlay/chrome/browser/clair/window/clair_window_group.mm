@@ -443,6 +443,7 @@ void ClairWindowGroup::Cover(ClairBrowserWindow* member) {
   [member->bridge() flush];
   // The owner's corners and window controls mustn't show around it.
   member->SetCovering(true);
+  member->JoinActiveSpace();
   [owner_window addChildWindow:window ordered:NSWindowAbove];
   member->Reveal(nil, /*make_key=*/true);
   if (previous_cover && previous_cover != member) {
