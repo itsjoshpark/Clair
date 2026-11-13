@@ -12,6 +12,8 @@ This is the last of the changes proposed together in #130. `add-clair-dialogs`, 
 - **Switching profile in the same window.** Switching to a Space of another profile looks like any other switch: same window, same frame, same slide, including in full screen.
 - **Choosing and changing a Space's profile.** The New Space form and Manage Spaces gain a profile popup with "New Profile…", and the Space header's menu gains Set Profile and the Spaces menu Change Profile, as in Arc. Changing the profile of a Space with tabs asks first, then reloads its tabs in the new profile.
 - **Move to Space across profiles** opens the tab's URL in the other profile.
+- **Move to Space follows the active tab.** Moving the active tab switches the window to its new Space; moving any other tab leaves the window alone and shows the notice "Tab was moved to …". Today the window always stays.
+- **Settings opens on General** each time, no longer on the page last shown.
 - **No Profiles menu.** Chromium's Profiles menu leaves the menu bar, and Chromium's profile picker never shows at launch.
 - **A Profiles page in Settings,** between General and Links, laid out as Arc's: the help text, then "Your Profiles" on the left with Add, Remove and Rename at the bottom, and the selected profile's settings on the right: Download location (a folder, or asking every time), then Search Engine, Privacy and Security, Notifications and Clear Browsing Data, which each open Chromium's page for that profile.
 - **Removing a profile follows Arc:** only a profile that no Space uses can be removed, after typing its name.
@@ -33,9 +35,9 @@ This is the last of the changes proposed together in #130. `add-clair-dialogs`, 
 
 ### Modified Capabilities
 
-- `spaces`: the header's menu, the New Space form and Manage Spaces gain the profile; "Moving a tab to another Space" keeps the page only within a profile; "Tab chosen after a close" keeps the window on an emptied Space; "Spaces restored after a relaunch" no longer depends on which windows come back.
+- `spaces`: the header's menu, the New Space form and Manage Spaces gain the profile; "Moving a tab to another Space" keeps the page only within a profile, follows the active tab and shows a notice for any other; "Tab chosen after a close" keeps the window on an emptied Space; "Spaces restored after a relaunch" no longer depends on which windows come back.
 - `browser-window`: adds "Windows restored at launch", and "Window size and placement restored" follows it.
-- `settings-window`: "Settings pages" adds Profiles between General and Links, and the Advanced page gains the restore-windows and "Warn before quitting" toggles.
+- `settings-window`: "Settings pages" is replaced by "Pages of the Settings window", which adds Profiles between General and Links and drops the remembered page, and the Advanced page gains the restore-windows and "Warn before quitting" toggles.
 - `chromium-engine`: "Browser behavior as in ungoogled-chromium outside Clair's interface" excepts profile management.
 
 ## Impact

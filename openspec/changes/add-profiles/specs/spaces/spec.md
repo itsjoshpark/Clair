@@ -44,15 +44,15 @@ Manage Spaces…, in the Spaces menu and the Space header's menu, SHALL open a d
 - **THEN** the dialog closes and the window shows the Space it showed before, unless that Space was removed
 
 ### Requirement: Moving a tab to another Space
-With more than one Space, a tab row's context menu SHALL offer "Move to Space" with every other Space. Choosing one SHALL put the tab at the top of that Space's list and remove it from this one, leaving the window on the Space it shows. A tab moved to a Space using the same profile SHALL keep its page as it is; moving to a Space of another profile follows `profiles`.
-
-#### Scenario: Moving a tab
-- **WHEN** the user moves a tab with a half-filled form from "Home" to "Research", which uses the same profile
-- **THEN** the tab is first in "Research" with the form as it was, and "Home" no longer lists it
+With more than one Space, a tab row's context menu SHALL offer "Move to Space" with every other Space. Choosing one SHALL put the tab at the top of that Space's list and remove it from this one. Moving the active tab SHALL switch the window to that Space, showing the tab. Moving any other tab SHALL leave the window as it is and show the notice "Tab was moved to" followed by the Space's name, in the popup Copy URL uses. A tab moved to a Space using the same profile SHALL keep its page as it is; moving to a Space of another profile follows `profiles`.
 
 #### Scenario: Moving the active tab
-- **WHEN** the user moves the active tab to another Space
-- **THEN** the window stays on its Space and shows the tab it would show had the moved tab been closed
+- **WHEN** a window shows "Home" on a tab, and the user moves that tab to "Research"
+- **THEN** the window shows "Research" with the tab first in its list and active, and "Home" no longer lists it
+
+#### Scenario: Moving a tab
+- **WHEN** a window shows "Home" on the tab "Docs", and the user moves the tab "Maps", which has a half-filled form, to "Research", which uses the same profile
+- **THEN** the window keeps showing "Docs" in "Home", "Maps" is first in "Research" with the form as it was, and a notice says "Tab was moved to Research"
 
 #### Scenario: One Space
 - **WHEN** there is one Space
@@ -111,3 +111,7 @@ After Clair quits and relaunches, each restored tab SHALL return to its Space at
 #### Scenario: Reopen Closed Tab
 - **WHEN** the user closes a tab of "Work", switches to "Home" and chooses Restore Last Closed Tab
 - **THEN** the tab comes back in "Work", and the window shows "Work"
+
+#### Scenario: Reopening a tab of a deleted Space
+- **WHEN** the user closes a tab of "Work", deletes "Work", and chooses Restore Last Closed Tab in a window showing "Home"
+- **THEN** the tab comes back in "Home"

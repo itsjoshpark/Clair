@@ -114,15 +114,19 @@ When a Space's tabs reopen in a new profile, no page SHALL ask before leaving, s
 - **THEN** the dialog stays open, showing "Work" in the popup, and the window shows "Docs" loaded in "Work"
 
 ### Requirement: Moving a tab to a Space of another profile
-"Move to Space" SHALL list Spaces of every profile. A tab moved to a Space of another profile SHALL be opened there at its URL, at the top of that Space's list, and removed from this one, since a page can't change profile. Its page SHALL NOT ask before leaving, and its Peek SHALL close. The window SHALL stay on the Space it shows, as for any move.
+"Move to Space" SHALL list Spaces of every profile. A tab moved to a Space of another profile SHALL be opened there at its URL, at the top of that Space's list, and removed from this one, since a page can't change profile. Its page SHALL NOT ask before leaving, and its Peek SHALL close. As for any move (`spaces`), moving the active tab SHALL switch the window to that Space, showing the reopened tab, and moving any other tab SHALL show the notice.
 
 #### Scenario: Another profile
 - **WHEN** the user moves a tab from "Home" to "Work", which uses another profile
 - **THEN** "Work" lists a tab at the same URL, loaded in its profile, and "Home" no longer lists the tab
 
 #### Scenario: Moving the active tab
-- **WHEN** the user moves the active tab of "Home" to "Work", which uses another profile
-- **THEN** the window stays on "Home" and shows the tab it would show had the moved tab been closed
+- **WHEN** a window shows "Home" on the tab "Docs", and the user moves it to "Work", which uses another profile
+- **THEN** the same window shows "Work" on "Docs", reopened in its profile
+
+#### Scenario: Moving another tab
+- **WHEN** the user moves a tab that isn't active from "Home" to "Work", which uses another profile
+- **THEN** the window stays as it is, and a notice says "Tab was moved to Work"
 
 #### Scenario: Same profile
 - **WHEN** the user moves a tab to a Space using the same profile

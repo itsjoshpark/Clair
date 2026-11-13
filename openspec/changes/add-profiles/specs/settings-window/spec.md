@@ -28,23 +28,27 @@ The Advanced page SHALL have a toggle labelled "When opening Clair, restore wind
 - **WHEN** the user turns the toggle on, quits with two windows open and relaunches
 - **THEN** both windows reopen
 
-## MODIFIED Requirements
+### Requirement: Pages of the Settings window
+The Settings window SHALL show a toolbar of pages, General, Profiles, Links and Advanced in that order, with each page's rows grouped in rounded cards. Choosing a toolbar item SHALL show that page in place of the current one, and the window's title SHALL be the shown page's name. The window SHALL open on General each time it opens; it SHALL NOT remember the page last shown.
 
-### Requirement: Settings pages
-The Settings window SHALL show a toolbar of pages, General, Profiles, Links and Advanced in that order, with each page's rows grouped in rounded cards. Choosing a toolbar item SHALL show that page in place of the current one, and the window's title SHALL be the shown page's name. The window SHALL open on General the first time, and afterwards on the page last shown, across launches.
-
-#### Scenario: First opening
-- **WHEN** the user opens Settings for the first time
+#### Scenario: Opening
+- **WHEN** the user opens Settings
 - **THEN** the window shows the General page, titled "General", with toolbar items General, Profiles, Links and Advanced
 
 #### Scenario: Switching pages
 - **WHEN** the Settings window shows General and the user chooses Advanced in the toolbar
 - **THEN** the window shows the Advanced page in place of General, and its title becomes "Advanced"
 
-#### Scenario: Last page remembered
-- **WHEN** the user leaves the Settings window on Advanced, quits Clair, relaunches it and opens Settings
-- **THEN** the window shows the Advanced page
+#### Scenario: Opening again
+- **WHEN** the user leaves the Settings window on Advanced, closes it and opens Settings again
+- **THEN** the window shows the General page
 
 #### Scenario: Profiles page
 - **WHEN** the user chooses Profiles in the toolbar
 - **THEN** the window shows the Profiles page, wider than the other pages, and its title becomes "Profiles"
+
+## REMOVED Requirements
+
+### Requirement: Settings pages
+**Reason**: Replaced by "Pages of the Settings window", which adds the Profiles page and no longer reopens the window on the page last shown.
+**Migration**: None for users. The `ClairSettingsPage` user default is no longer read or written.

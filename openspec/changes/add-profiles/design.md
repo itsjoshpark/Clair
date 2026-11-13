@@ -129,7 +129,9 @@ A new window shows the Space of the group that was active when it opened, or `cl
 - **The active tab.** In each group showing the Space, the tab reopened from the active one becomes active, in the group's member for the new profile, which the group swaps to (D3).
 - **Stills.** A window showing a still of one of the tabs gets a new tab page, as for any still whose tab closes (`share-tabs` D2). A take waiting for its page's copy is dropped first.
 
-Moving one tab to a Space of another profile is this step for one tab, with `add-spaces` D7's choice of the window's next tab when it was active; to a Space of the same profile it stays `add-spaces`' retag.
+Moving one tab to a Space of another profile is this step for one tab; to a Space of the same profile it stays `add-spaces`' retag.
+
+**The window follows the active tab.** This replaces `add-spaces` D7's choice of a next tab. When `moveTab:toSpace:` moves the tab that is active in the window it was called for, that window shows the destination Space with the tab, or the tab reopened from it, active; across profiles that is the group's swap (D3). When it moves any other tab, the window stays, and `ClairUI`, which knows which case it is, shows "Tab was moved to <name>" in its `NoticePopup`, as Copy URL does. Another window that was showing the moved tab picks its next tab as if the tab had closed there.
 
 ### D10. Menus
 
@@ -150,7 +152,7 @@ Moving one tab to a Space of another profile is this step for one tab, with `add
 
 - **The slide across profiles:** `shownSpaceDidChange:from:` reaches the window that is now shown, which draws the earlier Space's header and rows from `SpacesModel` and slides to the new one. So a cross-profile swap animates in the incoming window.
 - **Dialogs:** `ProfileDialogs` holds the new, rename and delete dialogs as `ClairDialog`s, used from Settings and from "New Profile…" in the form, the Set Profile and Change Profile menus and Manage Spaces, where they swap the card's content.
-- **Settings:** `SettingsPage` gains `profiles` after `general`; `ProfilesSettingsView` is the page, 684 pt wide, where the other pages stay 520. The Advanced page gains two toggles: "Warn before quitting", bound to the host's `warnsBeforeQuitting`, and "When opening Clair, restore windows from previous session", bound to `ClairRestoreWindows` (D6).
+- **Settings:** `SettingsPage` gains `profiles` after `general`; `ProfilesSettingsView` is the page, 684 pt wide, where the other pages stay 520. The window opens on General each time: `SettingsPage.stored(in:)` and the `ClairSettingsPage` user default go. The Advanced page gains two toggles: "Warn before quitting", bound to the host's `warnsBeforeQuitting`, and "When opening Clair, restore windows from previous session", bound to `ClairRestoreWindows` (D6).
 - **A dialog follows a swap.** A `ClairDialog` is attached to one member's window. When the group swaps under an open Manage Spaces dialog, as when the shown Space's profile changes there, the incoming window presents the dialog again with the same selection, in the same run-loop turn.
 
 ### D13. An emptied Space keeps its window
