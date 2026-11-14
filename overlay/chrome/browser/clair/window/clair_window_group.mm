@@ -266,7 +266,9 @@ void ClairWindowGroup::Activated() {
 }
 
 void ClairWindowGroup::ShownSpaceChanged(ClairBrowserWindow* member) {
-  if (member != shown_ || !is_regular()) {
+  // D6: a window session restore holds hasn't been arranged; what it shows
+  // isn't the user's yet.
+  if (member != shown_ || !is_regular() || IsRestored(member)) {
     return;
   }
   const std::string space = member->shown_space();
@@ -866,7 +868,11 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
         }
       }
       shown->Show();
-      group->ShownSpaceChanged(shown);
+      // A member standing in for one of a profile session restore hasn't
+      // reached yet leaves the group's Space as it was.
+      if (space.empty() || store->ProfileOf(space) == ProfileIDOf(shown)) {
+        group->ShownSpaceChanged(shown);
+      }
     }
   } else if (ClairWindowGroup* earlier = RestoreGroup().get();
              earlier && earlier->shown_ && !regular.empty()) {
