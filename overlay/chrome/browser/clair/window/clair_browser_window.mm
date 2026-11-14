@@ -2189,6 +2189,10 @@ void ClairBrowserWindow::Show() {
   // or Switch to Tab: the group switches to it.
   if (ClairWindowGroup* group = ClairWindowGroup::Of(this);
       group && group->IsHidden(this)) {
+    // Start-up showing what it restored, after the arrangement chose.
+    if (ClairWindowGroup::JustArranged()) {
+      return;
+    }
     group->ShowMember(this);
     if (!IsHiddenMember()) {
       Activate();
@@ -2261,6 +2265,9 @@ void ClairBrowserWindow::Activate() {
   }
   if (ClairWindowGroup* group = ClairWindowGroup::Of(this);
       group && group->IsHidden(this)) {
+    if (ClairWindowGroup::JustArranged()) {
+      return;
+    }
     group->ShowMember(this);
     if (IsHiddenMember()) {
       return;

@@ -75,6 +75,8 @@ base::WeakPtr<ClairBrowserWindow>& LastActivatedByRestore() {
   return *window;
 }
 bool g_arrange_posted = false;
+// When the last arrangement ran.
+base::TimeTicks g_arranged_at;
 // The group the first arrangement of this launch made, with restoring off:
 // browsers a later profile's session restore brings join it (D6).
 base::WeakPtr<ClairWindowGroup>& RestoreGroup() {
@@ -398,6 +400,11 @@ void ClairWindowGroup::SwapTo(ClairBrowserWindow* member,
   [NSAnimationContext endGrouping];
   in.animationBehavior = in_behavior;
   out.animationBehavior = out_behavior;
+  // The Space a new window shows (add-spaces D1): the swap took the key
+  // window, whether or not AppKit reports the key change.
+  if (make_key) {
+    clair::ClairSpaceStore::Get()->SetLastSpace(member->shown_space());
+  }
   ShownSpaceChanged(member);
 }
 
@@ -730,6 +737,12 @@ bool ClairWindowGroup::HoldsShow(ClairBrowserWindow* window) {
 }
 
 // static
+bool ClairWindowGroup::JustArranged() {
+  return !g_arranged_at.is_null() &&
+         base::TimeTicks::Now() - g_arranged_at < base::Seconds(5);
+}
+
+// static
 void ClairWindowGroup::NoteRestoreActivation(ClairBrowserWindow* window) {
   if (IsRestored(window)) {
     LastActivatedByRestore() = window->GetWeakPtr();
@@ -770,6 +783,9 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
   }
   Restored().clear();
   LastActivatedByRestore() = nullptr;
+  if (!windows.empty()) {
+    g_arranged_at = base::TimeTicks::Now();
+  }
   g_arrange_posted = false;
   clair::ClairSpaceStore* store = clair::ClairSpaceStore::Get();
 
