@@ -62,6 +62,14 @@ enum Harness {
     return (try? await condition()) == true
   }
 
+  /// Turns "When opening Clair, restore windows from previous session" on or
+  /// off, as Settings › Advanced does (add-profiles D6). Clair reads it at
+  /// launch.
+  static func setRestoreWindows(_ on: Bool) throws {
+    let result = try run("/usr/bin/defaults", ["write", bundleID, "ClairRestoreWindows", "-bool", on ? "YES" : "NO"])
+    try require(result.status == 0, "Couldn't set ClairRestoreWindows: \(result.output)")
+  }
+
   /// Clears what an earlier test left behind: running copies of Clair and
   /// Autoupdate, Sparkle's state, and Clair's data. run.sh refuses to run
   /// anywhere this could reach someone's real data.

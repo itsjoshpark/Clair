@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Closing a Space''s last tab keeps the window on that Space, on a new tab page, as in Arc; closing that new tab page closes the window'
+time: 2026-11-13T14:10:01-05:00

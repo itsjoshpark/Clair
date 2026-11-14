@@ -12,6 +12,12 @@
 # - browser_tabrestore.cc: CreateRestoredTab, which session restore and Reopen
 #   Closed Tab both use, reads the tags onto the new WebContents before it
 #   joins a tab strip.
+# - session_restore.cc: beside DropPeeks, drops the tabs on the new tab page
+#   and the windows left empty, so a launch adds only its own new tab page
+#   (add-profiles design D6).
+#
+# The tags include the window's group (add-profiles design D6), which the
+# same calls carry.
 
 --- a/chrome/browser/sessions/session_service_base.cc
 +++ b/chrome/browser/sessions/session_service_base.cc
@@ -77,3 +83,23 @@
  
    std::vector<std::unique_ptr<NavigationEntry>> entries =
        ContentSerializedNavigationBuilder::ToNavigationEntries(
+--- a/chrome/browser/sessions/session_restore.cc
++++ b/chrome/browser/sessions/session_restore.cc
+@@ -40,6 +40,7 @@
+ #include "build/build_config.h"
+ #include "chrome/browser/after_startup_task_utils.h"
+ #include "chrome/browser/clair/window/clair_peek_session.h"
++#include "chrome/browser/clair/window/clair_space_session.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/buildflags.h"
+ #include "chrome/browser/prefs/session_startup_pref.h"
+@@ -769,6 +770,9 @@
+     PruneWindows(windows);
+     // Clair: Peeks end with the session (add-peek design D9).
+     clair::DropPeeks(windows);
++    // Clair: new tab pages don't come back, and a window holding nothing
++    // else doesn't either (add-profiles design D6).
++    clair::DropNewTabPages(windows);
+ 
+     if (windows->empty()) {
+       // Restore was unsuccessful. The cookie/storage systems can also delete

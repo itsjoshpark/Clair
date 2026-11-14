@@ -254,3 +254,18 @@ struct TitleBarAreaTests {
     #expect(doubleClicks == 1)
   }
 }
+
+/// The card before a page's view arrives, as when a window opens on a new tab
+/// page: a blank page, not the window's material, which looked like a still.
+@MainActor
+struct EmptyCardTests {
+  @Test func anEmptyCardShowsThePagesBackground() {
+    let card = PageCardView(frame: CGRect(x: 0, y: 0, width: 400, height: 300))
+    #expect(card.pageView == nil)
+    var expected: CGColor?
+    card.effectiveAppearance.performAsCurrentDrawingAppearance {
+      expected = NSColor.textBackgroundColor.cgColor
+    }
+    #expect(card.container.layer?.backgroundColor == expected)
+  }
+}

@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clair cookie page</title>
+<script>
+  // add-profiles runtime tests: "?set" stores a cookie, which another page of
+  // the same profile then sees and a page of another profile doesn't. The
+  // title names the page by its query.
+  if (location.search === "?set") {
+    document.cookie = "clair=1; path=/; max-age=3600";
+  }
+  window.hasCookie = () => document.cookie.split("; ").includes("clair=1");
+  document.title = "Cookie " + (location.search.slice(1) || "page");
+</script>

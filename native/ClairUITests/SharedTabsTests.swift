@@ -235,8 +235,12 @@ struct OtherWindowRowTests {
     w.controllerA.moveTab(w.bTab.tabID, toSpace: work)
     #expect(w.host.list(work).first?.tabID == w.bTab.tabID)
     #expect(!w.controllerA.model.tabs.contains { $0.tabID == w.bTab.tabID })
-    // B, which showed it, stays on its Space.
-    #expect(w.b.shownSpaceID == FakeHost.homeID)
+    // add-profiles D9: B, which showed it, follows it; A, which didn't, says
+    // where it went.
+    #expect(w.b.shownSpaceID == work)
+    #expect(w.b.activeTabID == w.bTab.tabID)
+    #expect(w.a.shownSpaceID == FakeHost.homeID)
+    #expect(w.controllerA.model.notice.notice?.text == "Tab was moved to Work")
   }
 
   @Test func draggingIt() {
@@ -249,9 +253,12 @@ struct OtherWindowRowTests {
 
   @Test func tabCommandsReachRowsFromAnotherWindow() {
     let w = SharedWindows()
-    // Close Tabs Below from B's row closes A's rows too.
+    // Close Tabs Below from B's row closes A's rows too. A, left with no row
+    // it may show, stays on its Space on a new tab page (add-profiles D13).
     w.controllerB.closeTabs(below: w.bTab.tabID)
-    #expect(w.titles(w.controllerA) == ["B tab"])
-    #expect(w.titles(w.controllerB) == ["B tab"])
+    #expect(w.titles(w.controllerA) == ["", "B tab"])
+    #expect(w.titles(w.controllerB) == ["", "B tab"])
+    #expect(w.controllerA.model.activeTab?.isNewTabPage == true)
+    #expect(w.b.activeTabID == w.bTab.tabID)
   }
 }

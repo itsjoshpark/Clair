@@ -312,6 +312,10 @@ void RegisterProfilePrefOverrides(user_prefs::PrefRegistrySyncable* registry) {
 
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
   ClairSpaceStore::RegisterPrefs(registry);
+  // add-profiles D1: Chromium's profile picker never shows at launch, however
+  // many profiles exist (ProfilePicker::AvailabilityOnStartup::kDisabled).
+  registry->SetDefaultPrefValue(prefs::kBrowserProfilePickerAvailabilityOnStartup,
+                                base::Value(1));
 }
 
 void ApplyPasswordAndAutofillOverrides(Profile* profile) {
@@ -333,6 +337,33 @@ void InstallNativeWindowMenus() {
   NSMenu* main_menu = NSApp.mainMenu;
   // D10: no Bookmarks menu.
   [main_menu itemWithTag:IDC_BOOKMARKS_MENU].hidden = YES;
+
+  // add-profiles D10: no Profiles menu. ProfileMenuController sets its item's
+  // `hidden` on every rebuild, so the item leaves the menu bar; the controller
+  // keeps updating an item nobody sees.
+  if (NSMenuItem* profiles = [main_menu itemWithTag:IDC_PROFILE_MAIN_MENU]) {
+    [main_menu removeItem:profiles];
+  }
+  // add-profiles D10: Settings › Advanced replaces "Warn Before Quitting",
+  // which has no tag; it's found by its action, with the separator after it.
+  if (NSMenu* app_menu = main_menu.itemArray.firstObject.submenu) {
+    NSInteger found = -1;
+    for (NSMenuItem* item in app_menu.itemArray) {
+      if (item.action == NSSelectorFromString(@"toggleConfirmToQuit:")) {
+        found = [app_menu indexOfItem:item];
+        break;
+      }
+    }
+    if (found >= 0) {
+      [app_menu removeItemAtIndex:found];
+      if (found < app_menu.numberOfItems &&
+          [app_menu itemAtIndex:found].separatorItem) {
+        [app_menu removeItemAtIndex:found];
+      } else if (found > 0 && [app_menu itemAtIndex:found - 1].separatorItem) {
+        [app_menu removeItemAtIndex:found - 1];
+      }
+    }
+  }
 
   // Hide the items of features the window doesn't host, and drop their key
   // equivalents, which a hidden item would still fire.

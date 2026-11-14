@@ -101,7 +101,30 @@ struct FakeBrowserTests {
     #expect(activeTitle(browser) == "Y")
   }
 
-  @Test func closingASpacesLastTabShowsAnotherSpace() {
+  /// add-profiles D13: the window stays on the emptied Space, on a new tab
+  /// page with the command bar, and no tab of another Space shows.
+  @Test func closingASpacesLastTabKeepsTheWindowOnIt() {
+    let host = FakeHost()
+    let work = host.addSpaces("Work")[0]
+    let browser = FakeBrowser(host: host)
+    let window = RecordingWindow()
+    browser.clairWindow = window
+    let homeTab = browser.addTab(title: "Home tab")
+    browser.showSpace(work)
+    let page = browser.allTabs.first { $0.spaceID == work }!
+    browser.change(page.with(title: "Work tab", url: "https://work.example/"))
+    browser.close(tab: page.tabID)
+    #expect(browser.shownSpaceID == work)
+    #expect(browser.tabs.count == 1)
+    #expect(browser.tabs.first?.isNewTabPage == true)
+    #expect(browser.activeTabID == browser.tabs.first?.tabID)
+    #expect(window.calls.last == "commandBar 1")
+    #expect(!window.calls.contains("space \(FakeHost.homeID) from \(work)"))
+    #expect(host.tab(homeTab.tabID)?.browserID == browser.browserID)
+  }
+
+  /// D13: closing the new tab page an emptied Space shows closes the window.
+  @Test func closingAnEmptySpacesNewTabPageClosesTheWindow() {
     let host = FakeHost()
     let work = host.addSpaces("Work")[0]
     let browser = FakeBrowser(host: host)
@@ -109,11 +132,26 @@ struct FakeBrowserTests {
     browser.clairWindow = window
     browser.addTab(title: "Home tab")
     browser.showSpace(work)
-    let only = browser.allTabs.first { $0.spaceID == work }!
-    browser.close(tab: only.tabID)
-    #expect(browser.shownSpaceID == FakeHost.homeID)
-    #expect(activeTitle(browser) == "Home tab")
-    #expect(window.calls.contains("space \(FakeHost.homeID) from \(work)"))
+    #expect(browser.tabs.first?.isNewTabPage == true)
+    browser.close(tab: browser.tabs[0].tabID)
+    #expect(browser.isClosed)
+    #expect(window.calls.last == "closed")
+    #expect(host.list(work).isEmpty)
+  }
+
+  /// D13: with another window open, its tabs go there, and the page closes.
+  @Test func closingAnEmptySpacesNewTabPageHandsTheOtherTabsOn() {
+    let host = FakeHost()
+    let work = host.addSpaces("Work")[0]
+    let other = FakeBrowser(host: host)
+    other.addTab(title: "Other")
+    let browser = FakeBrowser(host: host)
+    let homeTab = browser.addTab(title: "Home tab")
+    browser.showSpace(work)
+    browser.close(tab: browser.tabs[0].tabID)
+    #expect(browser.isClosed)
+    #expect(host.list(work).isEmpty)
+    #expect(host.tab(homeTab.tabID)?.browserID == other.browserID)
   }
 
   @Test func showingAnEmptySpaceOpensANewTabPageWithTheCommandBar() {

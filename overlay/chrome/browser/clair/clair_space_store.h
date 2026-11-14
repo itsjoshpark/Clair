@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_CLAIR_CLAIR_SPACE_STORE_H_
 
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -23,8 +24,11 @@ namespace clair {
 // Local State prefs (add-spaces design D1).
 inline constexpr char kSpacesPref[] = "clair.spaces";
 inline constexpr char kLastSpacePref[] = "clair.last_space";
+// add-profiles design D2: each window group's UUID and the Space it shows.
+inline constexpr char kWindowsPref[] = "clair.windows";
 
-// One Space: a named set of tabs with an optional emoji icon.
+// One Space: a named set of tabs with an optional emoji icon, using one
+// profile (add-profiles design D2).
 struct Space {
   // A lowercase UUID, which never changes.
   std::string id;
@@ -32,6 +36,8 @@ struct Space {
   std::string name;
   // One emoji, or empty.
   std::string icon;
+  // The profile's directory name, such as "Default"; never empty.
+  std::string profile;
 };
 
 // The app's Spaces, in the user's order, kept in Chromium's Local State
@@ -40,11 +46,15 @@ struct Space {
 //   clair.spaces      { "version": 1,
 //                       "order": ["<uuid>", …],
 //                       "spaces": { "<uuid>": { "name": "Work",
-//                                               "icon": "💼" } } }
+//                                               "icon": "💼",
+//                                               "profile": "Profile 1" } } }
 //   clair.last_space  "<uuid>"   // the Space last shown in a key window
+//   clair.windows     { "<group uuid>": "<space uuid>" }
 //
 // There is always at least one Space: with none stored it creates "Home", and
-// it refuses to delete the last.
+// it refuses to delete the last. A Space without "profile", as stored before
+// add-profiles, uses the default profile, as does one whose profile is gone
+// (add-profiles design D2).
 class ClairSpaceStore {
  public:
   class Observer : public base::CheckedObserver {
@@ -75,9 +85,20 @@ class ClairSpaceStore {
   // The first Space's ID.
   const std::string& first() const { return spaces_.front().id; }
 
-  // Adds a Space after the last one and returns its ID, or an empty string
-  // for an empty name.
-  std::string Create(std::string_view name, std::string_view icon);
+  // Adds a Space after the last one, using `profile`, and returns its ID, or
+  // an empty string for an empty name or an unknown profile.
+  std::string Create(std::string_view name,
+                     std::string_view icon,
+                     std::string_view profile);
+  // add-profiles D9: makes the Space use `profile`. Returns whether it
+  // changed. Reopening its tabs is the caller's.
+  bool SetProfile(std::string_view id, std::string_view profile);
+  // D2: `profile` is gone; its Spaces use the default profile.
+  void ProfileRemoved(std::string_view profile);
+  // How many Spaces use `profile`.
+  int SpaceCountOf(std::string_view profile) const;
+  // The profile a Space uses, or an empty string for an unknown Space.
+  std::string ProfileOf(std::string_view id) const;
   // An empty name is ignored.
   void Rename(std::string_view id, std::string_view name);
   // An empty icon removes it.
@@ -92,6 +113,13 @@ class ClairSpaceStore {
   // first.
   std::string last_space() const;
   void SetLastSpace(std::string_view id);
+
+  // add-profiles D2, D6: the Space a window group shows, or empty.
+  std::string WindowSpace(std::string_view group) const;
+  void SetWindowSpace(std::string_view group, std::string_view space);
+  // Drops the entries of groups not in `groups`, once session restore has
+  // finished.
+  void KeepWindows(const std::set<std::string>& groups);
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);

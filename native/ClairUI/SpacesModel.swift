@@ -13,8 +13,15 @@ protocol SpacesModelListener: AnyObject {
   func spaceTabsDidChange(_ spaceID: SpaceID)
   /// One tab's state changed.
   func spaceTabDidChange(_ tab: any ClairTab)
-  /// Spaces were added, removed, renamed, given an icon or reordered.
+  /// Spaces were added, removed, renamed, given an icon, reordered or given
+  /// another profile.
   func spacesDidChange()
+  /// Profiles were created, renamed or deleted.
+  func profilesDidChange()
+}
+
+extension SpacesModelListener {
+  func profilesDidChange() {}
 }
 
 /// Every Space and each Space's tabs, as the host's `ClairSpacesObserver`
@@ -30,6 +37,9 @@ final class SpacesModel: NSObject, ClairSpacesObserver {
   /// Every Space, in the user's order.
   private(set) var spaces: [any ClairSpace] = []
 
+  /// Every profile, in Chromium's order (add-profiles design D1).
+  private(set) var profiles: [any ClairProfile] = []
+
   /// Each Space's tabs, in its order, as last reported.
   @ObservationIgnored private var tabsBySpace: [SpaceID: [any ClairTab]] = [:]
   @ObservationIgnored private let listeners = NSHashTable<AnyObject>.weakObjects()
@@ -39,6 +49,7 @@ final class SpacesModel: NSObject, ClairSpacesObserver {
     super.init()
     guard let host else { return }
     spaces = host.spaces
+    profiles = host.profiles
     host.addObserver(self)
   }
 
@@ -88,16 +99,40 @@ final class SpacesModel: NSObject, ClairSpacesObserver {
     TabListLogic.rowCount(tabs(inSpace: spaceID))
   }
 
+  func profile(_ profileID: ProfileID) -> (any ClairProfile)? {
+    profiles.first { $0.profileID == profileID }
+  }
+
+  /// The profile a Space uses, or nil for an unknown Space.
+  func profileID(ofSpace spaceID: SpaceID) -> ProfileID? {
+    space(spaceID)?.profileID
+  }
+
+  /// How many Spaces use a profile.
+  func spaceCount(ofProfile profileID: ProfileID) -> Int {
+    spaces.count { $0.profileID == profileID }
+  }
+
+  /// The profile a new Space uses unless the user chooses one: that of the
+  /// Space shown before, or else the first profile (profiles spec, "Each
+  /// Space uses one profile").
+  func defaultProfile(after spaceID: SpaceID?) -> ProfileID? {
+    if let spaceID, let profileID = profileID(ofSpace: spaceID), profile(profileID) != nil {
+      return profileID
+    }
+    return profiles.first?.profileID
+  }
+
   // MARK: Changing
 
   // Every change to the Spaces goes through here, so the sidebar, the menu
   // bar and Manage Spaces follow the same rules.
 
   /// Creates a Space after the last, named `name` without the spaces around
-  /// it. Nil when the name is empty.
+  /// it, using `profileID`. Nil when the name is empty.
   @discardableResult
-  func createSpace(named name: String, icon: String?) -> SpaceID? {
-    host?.createSpace(named: SpacesLogic.cleanName(name), icon: icon)
+  func createSpace(named name: String, icon: String?, profile profileID: ProfileID) -> SpaceID? {
+    host?.createSpace(named: SpacesLogic.cleanName(name), icon: icon, profile: profileID)
   }
 
   /// Renames a Space to `name` without the spaces around it. An empty name,
@@ -118,6 +153,64 @@ final class SpacesModel: NSObject, ClairSpacesObserver {
 
   func moveTab(_ tab: TabID, toSpace spaceID: SpaceID) {
     host?.move(tab: tab, toSpace: spaceID)
+  }
+
+  // MARK: Profiles (add-profiles design D1, D7, D9)
+
+  /// Creates a profile named `name` without the spaces around it, and calls
+  /// `completion` with its ID once it exists, or with nil.
+  func createProfile(named name: String, completion: @escaping (ProfileID?) -> Void) {
+    let name = SpacesLogic.cleanName(name)
+    guard !name.isEmpty, let host else {
+      completion(nil)
+      return
+    }
+    host.createProfile(named: name, completion: completion)
+  }
+
+  /// Renames a profile; an empty name, or the one it has, changes nothing.
+  func renameProfile(_ profileID: ProfileID, to name: String) {
+    let name = SpacesLogic.cleanName(name)
+    guard !name.isEmpty, let profile = profile(profileID), profile.name != name else { return }
+    host?.renameProfile(profileID, to: name)
+  }
+
+  /// Whether a profile can be removed: only one no Space uses, which is never
+  /// the last (D7).
+  func canDeleteProfile(_ profileID: ProfileID) -> Bool {
+    profile(profileID) != nil && spaceCount(ofProfile: profileID) == 0
+  }
+
+  /// Deletes a profile and its data, without asking; the caller asks.
+  func deleteProfile(_ profileID: ProfileID) {
+    guard canDeleteProfile(profileID) else { return }
+    host?.deleteProfile(profileID)
+  }
+
+  /// What changing a Space's profile takes, or nil when there's nothing to
+  /// change: an unknown Space or profile, or the one it uses.
+  struct ProfileChange {
+    let space: any ClairSpace
+    let profile: any ClairProfile
+    /// Its rows, in every window.
+    let tabCount: Int
+    /// Whether to ask first: only when it has tabs (profiles spec, "Changing
+    /// a Space's profile").
+    var needsConfirmation: Bool { tabCount > 0 }
+  }
+
+  func profileChange(of spaceID: SpaceID, to profileID: ProfileID) -> ProfileChange? {
+    guard let space = space(spaceID), space.profileID != profileID, let profile = profile(profileID) else {
+      return nil
+    }
+    return ProfileChange(space: space, profile: profile, tabCount: rowCount(inSpace: spaceID))
+  }
+
+  /// Makes a Space use another profile, reopening its tabs there, without
+  /// asking; the caller asks where `profileChange(of:to:)` says to.
+  func setProfile(_ profileID: ProfileID, forSpace spaceID: SpaceID) {
+    guard profileChange(of: spaceID, to: profileID) != nil else { return }
+    host?.setProfile(profileID, forSpace: spaceID)
   }
 
   /// What deleting a Space takes.
@@ -164,6 +257,13 @@ final class SpacesModel: NSObject, ClairSpacesObserver {
     tabsBySpace[spaceID] = tabs
     for listener in allListeners {
       listener.spaceTabsDidChange(spaceID)
+    }
+  }
+
+  func profilesDidChange(_ profiles: [any ClairProfile]) {
+    self.profiles = profiles
+    for listener in allListeners {
+      listener.profilesDidChange()
     }
   }
 

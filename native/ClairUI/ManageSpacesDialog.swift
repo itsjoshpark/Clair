@@ -44,11 +44,13 @@ final class ManageSpacesState {
     nameDraft = selectedSpace?.name ?? ""
   }
 
-  /// Adds a Space named "New Space" after the last, selects it and focuses
-  /// its name.
+  /// Adds a Space named "New Space" after the last, on the selected Space's
+  /// profile, selects it and focuses its name.
   func add() {
     commitName()
-    guard let spaceID = spaces.createSpace(named: Self.newSpaceName, icon: nil) else { return }
+    guard let profileID = spaces.defaultProfile(after: selection),
+      let spaceID = spaces.createSpace(named: Self.newSpaceName, icon: nil, profile: profileID)
+    else { return }
     selection = spaceID
     nameDraft = Self.newSpaceName
     nameFocusRequests += 1
@@ -103,23 +105,72 @@ enum ManageSpacesDialog {
   static let listWidth: CGFloat = 176
   static let height: CGFloat = 260
 
-  static func show(for controller: BrowserWindowController) {
-    let state = ManageSpacesState(spaces: controller.model.spaces, selecting: controller.model.shownSpaceID)
-    let dialog = ClairDialog(page(state: state, remove: { _ in }))
-    // The page's Remove needs the dialog, to ask in place of the list.
-    dialog.update { $0 = page(state: state, remove: { [weak dialog, weak controller] spaceID in
-      guard let dialog, let controller else { return }
-      remove(spaceID, state: state, dialog: dialog, controller: controller)
-    }) }
-    controller.dialogs.show(dialog) { _ in state.commitName() }
+  /// Opens the dialog on the window, with `state`'s selection when it comes
+  /// from another window of the group (add-profiles D12), or the window's
+  /// Space.
+  static func show(for controller: BrowserWindowController, state: ManageSpacesState? = nil) {
+    let state = state ?? ManageSpacesState(spaces: controller.model.spaces, selecting: controller.model.shownSpaceID)
+    let dialog = ClairDialog(page(state: state, remove: { _ in }, profile: { _ in }, newProfile: {}))
+    // The page's Remove, profile popup and New Profile need the dialog, to
+    // ask in place of the list.
+    dialog.update {
+      $0 = page(
+        state: state,
+        remove: { [weak dialog, weak controller] spaceID in
+          guard let dialog, let controller else { return }
+          remove(spaceID, state: state, dialog: dialog, controller: controller)
+        },
+        profile: { [weak dialog] profileID in
+          guard let dialog else { return }
+          setProfile(profileID, state: state, dialog: dialog)
+        },
+        newProfile: { [weak dialog] in
+          guard let dialog else { return }
+          ProfileDialogs.swapToNewProfile(in: dialog, spaces: state.spaces) { profileID in
+            if let profileID {
+              setProfile(profileID, state: state, dialog: dialog)
+            }
+          }
+        })
+    }
+    controller.manageSpacesDidOpen(state, dialog: dialog)
+    controller.dialogs.show(dialog) { [weak controller] answer in
+      state.commitName()
+      controller?.manageSpacesDidClose(state)
+    }
   }
 
-  static func page(state: ManageSpacesState, remove: @escaping @MainActor (SpaceID) -> Void) -> ClairDialogPage {
+  static func page(
+    state: ManageSpacesState, remove: @escaping @MainActor (SpaceID) -> Void,
+    profile: @escaping @MainActor (ProfileID) -> Void, newProfile: @escaping @MainActor () -> Void
+  ) -> ClairDialogPage {
     ClairDialogPage(
       title: "Manage Spaces",
-      content: AnyView(ManageSpacesView(state: state, onRemove: remove)),
+      content: AnyView(
+        ManageSpacesView(state: state, onRemove: remove, onProfile: profile, onNewProfile: newProfile)),
       buttons: [ClairDialogButton(title: "Done", role: .default)],
       escapePressesDefault: true)
+  }
+
+  /// Gives the selected Space another profile: at once without tabs, or
+  /// after asking in place of the list (profiles spec, "Changing a Space's
+  /// profile").
+  static func setProfile(_ profileID: ProfileID, state: ManageSpacesState, dialog: ClairDialog) {
+    guard let spaceID = state.selection, let change = state.spaces.profileChange(of: spaceID, to: profileID) else {
+      return
+    }
+    guard change.needsConfirmation else {
+      state.spaces.setProfile(profileID, forSpace: spaceID)
+      return
+    }
+    dialog.swap(
+      to: BrowserWindowController.profileChangePage(
+        for: change,
+        confirm: { dialog in
+          dialog.swapBack()
+          state.spaces.setProfile(profileID, forSpace: spaceID)
+        },
+        cancel: { dialog in dialog.swapBack() }))
   }
 
   /// Removes a Space: at once without tabs, or after asking in place of the
@@ -153,6 +204,8 @@ enum ManageSpacesDialog {
 struct ManageSpacesView: View {
   @Bindable var state: ManageSpacesState
   let onRemove: @MainActor (SpaceID) -> Void
+  let onProfile: @MainActor (ProfileID) -> Void
+  let onNewProfile: @MainActor () -> Void
 
   @FocusState private var nameFocused: Bool
   @State private var editsIcon = false
@@ -213,6 +266,10 @@ struct ManageSpacesView: View {
         .buttonStyle(.plain)
         .help("Choose an Icon")
         .accessibilityIdentifier("clair.manageSpacesIcon")
+        Text("Profile").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary).padding(.top, 6)
+        ProfilePopup(
+          profiles: state.spaces.profiles, selection: state.selectedSpace?.profileID,
+          onSelect: { onProfile($0) }, onNewProfile: { onNewProfile() })
         Spacer(minLength: 0)
       }
       .disabled(state.selectedSpace == nil)

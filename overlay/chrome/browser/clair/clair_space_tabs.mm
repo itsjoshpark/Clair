@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/barrier_closure.h"
 #include "base/check.h"
 #include "base/functional/bind.h"
 #include "base/logging.h"
@@ -15,12 +16,17 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/clair/clair_profiles.h"
 #include "chrome/browser/clair/window/clair_browser_window.h"
+#include "chrome/browser/clair/window/clair_window_group.h"
 #include "chrome/browser/clair/window/clair_peeks.h"
 #include "chrome/browser/clair/window/clair_space_session.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/sessions/session_service.h"
 #include "chrome/browser/sessions/session_service_factory.h"
 #include "chrome/browser/ssl/chrome_security_state_util.h"
@@ -42,8 +48,10 @@
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/common/referrer.h"
 #include "content/public/common/url_constants.h"
 #include "net/base/apple/url_conversions.h"
+#include "ui/base/page_transition_types.h"
 #include "ui/gfx/image/image.h"
 #include "url/gurl.h"
 
@@ -68,7 +76,18 @@ struct SpaceTag : public base::SupportsUserData::Data {
   // What the session holds for the tab, so it's written only on a change.
   std::string written_space;
   int written_rank = -1;
+  // add-profiles D6: the window group a restored tab's window belonged to,
+  // and the group the session holds for it.
+  std::string window;
+  std::string written_window;
 };
+
+// add-profiles D6: the group of the window holding `contents`, or empty.
+std::string GroupOf(content::WebContents* contents) {
+  ClairBrowserWindow* window = ClairBrowserWindow::FromWebContents(contents);
+  ClairWindowGroup* group = window ? ClairWindowGroup::Of(window) : nullptr;
+  return group ? group->id() : std::string();
+}
 
 SpaceTag* GetTag(content::WebContents* contents) {
   return contents ? static_cast<SpaceTag*>(contents->GetUserData(kSpaceTagKey))
@@ -272,12 +291,14 @@ ClairTabIndicators IndicatorsOf(content::WebContents* contents) {
 @synthesize spaceID = _spaceID;
 @synthesize name = _name;
 @synthesize icon = _icon;
+@synthesize profileID = _profileID;
 
 - (instancetype)initWithSpace:(const clair::Space&)space {
   if ((self = [super init])) {
     _spaceID = base::SysUTF8ToNSString(space.id);
     _name = base::SysUTF8ToNSString(space.name);
     _icon = space.icon.empty() ? nil : base::SysUTF8ToNSString(space.icon);
+    _profileID = base::SysUTF8ToNSString(space.profile);
   }
   return self;
 }
@@ -363,6 +384,20 @@ void ClairSpaceTabs::SetRestoredTag(content::WebContents* contents,
 }
 
 // static
+void ClairSpaceTabs::SetRestoredWindowTag(content::WebContents* contents,
+                                          const std::string& group) {
+  if (contents && !group.empty()) {
+    EnsureTag(contents)->window = group;
+  }
+}
+
+// static
+std::string ClairSpaceTabs::WindowTag(content::WebContents* contents) {
+  SpaceTag* tag = GetTag(contents);
+  return tag ? tag->window : std::string();
+}
+
+// static
 std::map<std::string, std::string> ClairSpaceTabs::SessionTags(
     content::WebContents* contents) {
   std::map<std::string, std::string> tags;
@@ -383,6 +418,9 @@ std::map<std::string, std::string> ClairSpaceTabs::SessionTags(
   tags[clair::kSpaceSessionKey] = tag->space;
   if (rank >= 0) {
     tags[clair::kOrderSessionKey] = base::NumberToString(rank);
+  }
+  if (std::string group = GroupOf(contents); !group.empty()) {
+    tags[clair::kWindowSessionKey] = group;
   }
   return tags;
 }
@@ -779,6 +817,7 @@ void ClairSpaceTabs::EndMove(tabs::TabInterface* tab) {
   if (SpaceTag* tag = GetTag(tab->GetContents())) {
     tag->written_space.clear();
     tag->written_rank = -1;
+    tag->written_window.clear();
   }
   ListChanged(SpaceOf(tab));
 }
@@ -801,6 +840,19 @@ void ClairSpaceTabs::ListChanged(const std::string& space) {
   }
   changed_spaces_.insert(space);
   PostFlush();
+}
+
+void ClairSpaceTabs::AllListsChanged() {
+  for (const auto& [space, list] : lists_) {
+    for (const tabs::TabHandle& handle : list) {
+      if (tabs::TabInterface* tab = handle.Get()) {
+        if (SpaceTag* tag = GetTag(tab->GetContents())) {
+          tag->written_window.clear();
+        }
+      }
+    }
+    ListChanged(space);
+  }
 }
 
 void ClairSpaceTabs::TabChanged(content::WebContents* contents) {
@@ -868,8 +920,10 @@ void ClairSpaceTabs::WriteSessionTags(const std::string& space) {
     // Restored ranks have done their work once the list is written.
     tag->rank.reset();
     BrowserWindowInterface* browser = tab->GetBrowserWindowInterface();
+    const std::string group = GroupOf(contents);
     if (service && browser &&
-        (tag->written_space != space || tag->written_rank != index)) {
+        (tag->written_space != space || tag->written_rank != index ||
+         tag->written_window != group)) {
       const SessionID window_id = browser->GetSessionID();
       const SessionID tab_id = sessions::SessionTabHelper::IdForTab(contents);
       if (window_id.is_valid() && tab_id.is_valid()) {
@@ -877,8 +931,13 @@ void ClairSpaceTabs::WriteSessionTags(const std::string& space) {
                                  space);
         service->AddTabExtraData(window_id, tab_id, clair::kOrderSessionKey,
                                  base::NumberToString(index));
+        if (!group.empty()) {
+          service->AddTabExtraData(window_id, tab_id, clair::kWindowSessionKey,
+                                   group);
+        }
         tag->written_space = space;
         tag->written_rank = index;
+        tag->written_window = group;
       }
     }
     ++index;
@@ -1049,6 +1108,7 @@ class StoreWatcher : public ClairSpaceStore::Observer {
 
   // ClairSpaceStore::Observer:
   void OnSpacesChanged() override {
+    KeepLastUsedProfileOnASpace();
     NSArray<id<ClairSpace>>* spaces = SpaceSnapshots();
     for (id<ClairSpacesObserver> observer in Observers().allObjects) {
       [observer spacesDidChange:spaces];
@@ -1070,7 +1130,31 @@ NSInteger InfobarIDOf(const infobars::InfoBar* infobar) {
 
 void AddSpacesObserver(id<ClairSpacesObserver> observer) {
   static base::NoDestructor<StoreWatcher> watcher;
+  ClairProfiles::Get()->Start();
   [Observers() addObject:observer];
+}
+
+void NotifyProfiles(NSArray<id<ClairProfile>>* profiles) {
+  for (id<ClairSpacesObserver> observer in Observers().allObjects) {
+    [observer profilesDidChange:profiles];
+  }
+}
+
+void KeepLastUsedProfileOnASpace() {
+  ProfileManager* manager = g_browser_process->profile_manager();
+  if (!manager) {
+    return;
+  }
+  ClairSpaceStore* store = ClairSpaceStore::Get();
+  const std::string last_used =
+      manager->GetLastUsedProfileDir().BaseName().AsUTF8Unsafe();
+  if (store->SpaceCountOf(last_used) > 0) {
+    return;
+  }
+  const std::string profile = store->ProfileOf(store->last_space());
+  if (!profile.empty()) {
+    profiles::SetLastUsedProfile(base::FilePath::FromUTF8Unsafe(profile));
+  }
 }
 
 NSArray<id<ClairSpace>>* SpaceSnapshots() {
@@ -1106,19 +1190,15 @@ void NotifyTab(id<ClairTab> tab) {
   }
 }
 
-void DeleteSpace(const std::string& space) {
+namespace {
+
+// Closes the tabs of a deleted Space in every window, each with its
+// leave-page confirmation, and removes it (D7).
+void CloseTabsOfDeletedSpace(const std::string& space,
+                             const std::string& neighbour) {
   ClairSpaceStore* store = ClairSpaceStore::Get();
-  std::optional<size_t> index = store->IndexOf(space);
-  if (!index || store->spaces().size() <= 1) {
+  if (!store->Contains(space)) {
     return;
-  }
-  // The Space before it, or the one after when it was first.
-  const std::string neighbour =
-      store->spaces()[*index > 0 ? *index - 1 : 1].id;
-  for (ClairBrowserWindow* window : ClairBrowserWindow::All()) {
-    if (window->shown_space() == space) {
-      window->ShowSpace(neighbour);
-    }
   }
   for (ClairSpaceTabs* lists : ClairSpaceTabs::All()) {
     if (!lists->is_regular()) {
@@ -1154,11 +1234,161 @@ void DeleteSpace(const std::string& space) {
   }
 }
 
+// add-profiles D9: opens `url` as a tab of `space`, at `rank` in its list, in
+// `window`'s strip, without activating it.
+tabs::TabInterface* OpenTabInSpace(ClairBrowserWindow* window,
+                                   const GURL& url,
+                                   const std::string& space,
+                                   int rank) {
+  Profile* profile = window->browser()->GetProfile();
+  std::unique_ptr<content::WebContents> contents =
+      content::WebContents::Create(content::WebContents::CreateParams(profile));
+  // Its Space and place, before it joins the strip, as a restored tab's.
+  ClairSpaceTabs::SetRestoredTag(contents.get(), space, rank);
+  contents->GetController().LoadURL(
+      url.is_valid() ? url : GURL(chrome::kChromeUINewTabURL),
+      content::Referrer(), ui::PAGE_TRANSITION_AUTO_TOPLEVEL, std::string());
+  content::WebContents* raw = contents.get();
+  TabStripModel* strip = window->browser()->tab_strip_model();
+  strip->InsertWebContentsAt(strip->count(), std::move(contents),
+                             AddTabTypes::ADD_NONE);
+  return tabs::TabInterface::MaybeGetFromContents(raw);
+}
+
+// add-profiles D9: closes `row` and its Peek at once, without their pages
+// asking before leaving. A window with a still of it shows a new tab page
+// (share-tabs-across-windows D2).
+void CloseReopened(tabs::TabHandle handle) {
+  tabs::TabInterface* row = handle.Get();
+  ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(row);
+  if (!row || !holder) {
+    return;
+  }
+  for (ClairBrowserWindow* window : ClairBrowserWindow::All()) {
+    window->DropPendingTakeOf(row);
+  }
+  TabStripModel* strip = holder->browser()->tab_strip_model();
+  std::vector<tabs::TabHandle> family;
+  if (holder->peeks()) {
+    if (tabs::TabInterface* peek = holder->peeks()->PeekOf(row)) {
+      family.push_back(peek->GetHandle());
+    }
+  }
+  family.push_back(handle);
+  for (const tabs::TabHandle& member : family) {
+    tabs::TabInterface* tab = member.Get();
+    const int index = tab ? strip->GetIndexOfTab(tab) : TabStripModel::kNoTab;
+    if (index != TabStripModel::kNoTab) {
+      strip->DetachAndDeleteWebContentsAt(index);
+    }
+  }
+}
+
+// add-profiles D9: reopens each of `rows`, in order, as a tab of `space` in
+// its window group's member for the Space's profile, from `first_rank` on,
+// and closes the originals. In a window that showed one of them, the tab
+// reopened from it becomes active, and the group shows its member.
+void ReopenInProfile(std::vector<tabs::TabHandle> rows,
+                     const std::string& space,
+                     int first_rank) {
+  ClairSpaceStore* store = ClairSpaceStore::Get();
+  const std::string profile = store->ProfileOf(space);
+  ClairProfiles::Get()->Load(
+      profile,
+      base::BindOnce(
+          [](std::vector<tabs::TabHandle> rows, std::string space,
+             int first_rank, Profile* loaded) {
+            if (!loaded || !ClairSpaceStore::Get()->Contains(space)) {
+              return;
+            }
+            const std::string profile = ClairProfiles::IDOf(loaded);
+            int rank = first_rank;
+            for (const tabs::TabHandle& handle : rows) {
+              tabs::TabInterface* row = handle.Get();
+              ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(row);
+              ClairWindowGroup* group =
+                  holder ? ClairWindowGroup::Of(holder) : nullptr;
+              if (!row || !group) {
+                continue;
+              }
+              const bool shown =
+                  holder->IsActiveRow(row) && !holder->IsHiddenMember();
+              const std::string previous = group->shown_space();
+              const GURL url = row->GetContents()->GetVisibleURL();
+              const int this_rank = rank++;
+              // The profile is loaded, so the member comes at once.
+              group->EnsureMember(
+                  profile,
+                  base::BindOnce(
+                      [](tabs::TabHandle handle, GURL url, std::string space,
+                         int rank, bool shown, std::string previous,
+                         base::WeakPtr<ClairBrowserWindow> holder,
+                         ClairBrowserWindow* member) {
+                        if (!member) {
+                          return;
+                        }
+                        tabs::TabInterface* reopened =
+                            OpenTabInSpace(member, url, space, rank);
+                        if (shown && reopened) {
+                          ClairWindowGroup* group =
+                              ClairWindowGroup::Of(member);
+                          if (group && group->shown() != member) {
+                            member->BeginSwapIn(previous);
+                          }
+                          member->ActivateTab(reopened);
+                          if (group) {
+                            group->SwapTo(member, previous);
+                          }
+                        }
+                        CloseReopened(handle);
+                      },
+                      handle, url, space, this_rank, shown, previous,
+                      holder->GetWeakPtr()));
+            }
+          },
+          std::move(rows), space, first_rank));
+}
+
+}  // namespace
+
+void DeleteSpace(const std::string& space) {
+  ClairSpaceStore* store = ClairSpaceStore::Get();
+  std::optional<size_t> index = store->IndexOf(space);
+  if (!index || store->spaces().size() <= 1) {
+    return;
+  }
+  // The Space before it, or the one after when it was first.
+  const std::string neighbour =
+      store->spaces()[*index > 0 ? *index - 1 : 1].id;
+  // Each window showing it shows the neighbour first, which may be of another
+  // profile, whose member may need its profile loaded (add-profiles D3).
+  std::vector<ClairWindowGroup*> showing;
+  for (ClairWindowGroup* group : ClairWindowGroup::RegularByActivation()) {
+    if (group->shown_space() == space) {
+      showing.push_back(group);
+    }
+  }
+  base::RepeatingClosure barrier = base::BarrierClosure(
+      showing.size(),
+      base::BindOnce(&CloseTabsOfDeletedSpace, space, neighbour));
+  if (showing.empty()) {
+    return;
+  }
+  for (ClairWindowGroup* group : showing) {
+    group->ShowSpace(neighbour,
+                     base::BindOnce(
+                         [](base::RepeatingClosure barrier, ClairBrowserWindow*) {
+                           barrier.Run();
+                         },
+                         barrier));
+  }
+}
+
 void MoveTabToSpace(tabs::TabInterface* tab, const std::string& space) {
   ClairSpaceTabs* lists =
       tab ? ClairSpaceTabs::ForWebContents(tab->GetContents()) : nullptr;
-  if (!lists || !lists->is_regular() ||
-      !ClairSpaceStore::Get()->Contains(space)) {
+  ClairSpaceStore* store = ClairSpaceStore::Get();
+  if (!lists || !lists->is_regular() || !store->Contains(space)) {
     return;
   }
   ClairBrowserWindow* window =
@@ -1172,12 +1402,54 @@ void MoveTabToSpace(tabs::TabInterface* tab, const std::string& space) {
   if (lists->SpaceOf(tab) == space) {
     return;
   }
-  // The window stays on its Space: it shows the tab a close would have, or a
-  // new tab page (D7).
-  if (window && window->IsActiveRow(tab) && !window->ShowNextRow(tab)) {
-    window->OpenNewTabPage(/*show_command_bar=*/false);
+  // add-profiles D9: a page can't change profile; it reopens at the top of
+  // the other Space, in its profile.
+  if (store->ProfileOf(space) != ClairProfiles::IDOf(lists->profile())) {
+    ReopenInProfile({tab->GetHandle()}, space, /*first_rank=*/0);
+    return;
   }
+  // Another window with a still of it picks its next tab, as if the tab had
+  // closed there.
+  for (ClairBrowserWindow* other : ClairBrowserWindow::All()) {
+    if (other != window && other->still_tab() == tab->GetHandle()) {
+      other->StillTabClosed();
+    }
+  }
+  const bool follows = window && window->IsActiveRow(tab);
   lists->SetSpace(tab, space);
+  // The window follows its active tab, which stays active (D9, replacing
+  // add-spaces D7's next-tab choice).
+  if (follows) {
+    window->FollowActiveTab();
+  }
+}
+
+void SetSpaceProfile(const std::string& space, const std::string& profile) {
+  ClairSpaceStore* store = ClairSpaceStore::Get();
+  const std::string old_profile = store->ProfileOf(space);
+  if (old_profile.empty() || old_profile == profile ||
+      !store->SetProfile(space, profile)) {
+    return;
+  }
+  // D9: every tab of the Space, in its order, Peeks left out.
+  std::vector<tabs::TabHandle> rows;
+  for (ClairSpaceTabs* lists : ClairSpaceTabs::All()) {
+    if (!lists->is_regular() ||
+        ClairProfiles::IDOf(lists->profile()) != old_profile) {
+      continue;
+    }
+    for (tabs::TabInterface* tab : lists->TabsIn(space)) {
+      ClairBrowserWindow* holder = ClairBrowserWindow::HolderOf(tab);
+      if (holder && holder->peeks() && holder->peeks()->ParentOf(tab)) {
+        continue;
+      }
+      rows.push_back(tab->GetHandle());
+    }
+  }
+  if (rows.empty()) {
+    return;
+  }
+  ReopenInProfile(std::move(rows), space, /*first_rank=*/0);
 }
 
 }  // namespace clair

@@ -63,29 +63,28 @@ struct SettingsWindowTests {
     #expect(item.target == nil)
   }
 
-  @Test func opensOnThePageLastShown() throws {
-    defaults.set(SettingsPage.advanced.rawValue, forKey: SettingsPage.key)
+  /// add-profiles D12: the window opens on General each time, whichever page
+  /// it showed when it closed.
+  @Test func opensOnGeneralEachTime() throws {
     let settings = SettingsWindowController(host: FakeHost(), defaults: defaults)
     settings.show()
     let window = try #require(settings.window)
-    #expect(window.title == "Advanced")
-    let tabs = try #require(window.contentViewController as? NSTabViewController)
-    #expect(tabs.tabViewItems.map(\.label) == ["General", "Links", "Advanced"])
-
-    tabs.selectedTabViewItemIndex = 0
     #expect(window.title == "General")
-    #expect(SettingsPage.stored(in: defaults) == .general)
+    let tabs = try #require(window.contentViewController as? NSTabViewController)
+    #expect(tabs.tabViewItems.map(\.label) == ["General", "Profiles", "Links", "Advanced"])
+
+    tabs.selectedTabViewItemIndex = 3
+    #expect(window.title == "Advanced")
+    window.close()
+    settings.show()
+    #expect(window.title == "General")
+    #expect(defaults.object(forKey: "ClairSettingsPage") == nil)
     window.close()
   }
 
-  @Test func aMissingOrUnknownPageOpensGeneral() {
-    #expect(SettingsPage.stored(in: defaults) == .general)
-    defaults.set("privacy", forKey: SettingsPage.key)
-    #expect(SettingsPage.stored(in: defaults) == .general)
-  }
-
-  @Test func linksSitsBetweenGeneralAndAdvanced() {
-    #expect(SettingsPage.allCases == [.general, .links, .advanced])
+  @Test func profilesSitsBetweenGeneralAndLinks() {
+    #expect(SettingsPage.allCases == [.general, .profiles, .links, .advanced])
+    #expect(SettingsPage.profiles.label == "Profiles")
     #expect(SettingsPage.links.label == "Links")
   }
 
@@ -107,12 +106,14 @@ struct SettingsWindowTests {
     #expect(!controller.opensPeekOnShiftClick)
   }
 
-  @Test func linksOpensOnItsPage() throws {
-    defaults.set(SettingsPage.links.rawValue, forKey: SettingsPage.key)
+  @Test func theProfilesPageIsWider() throws {
     let settings = SettingsWindowController(host: FakeHost(), defaults: defaults)
     settings.show()
     let window = try #require(settings.window)
-    #expect(window.title == "Links")
+    let tabs = try #require(window.contentViewController as? NSTabViewController)
+    tabs.selectedTabViewItemIndex = 1
+    #expect(window.title == "Profiles")
+    #expect(ProfilesSettingsView.width > SettingsWindowController.width)
     window.close()
   }
 

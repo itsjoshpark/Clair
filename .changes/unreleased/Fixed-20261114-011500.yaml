@@ -1,0 +1,3 @@
+kind: Fixed
+body: A window that opens before its page has drawn shows a blank page, not a grey card that looked like a page open in another window
+time: 2026-11-14T01:15:00.000000-05:00

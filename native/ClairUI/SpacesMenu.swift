@@ -6,7 +6,8 @@ import AppKit
 import ClairHost
 
 /// The menu bar's Spaces menu, after View (add-spaces design D8): New Space…,
-/// Rename Space, Manage Spaces…, Next Space (Opt+Cmd+Right), Previous Space
+/// Rename Space, Change Profile › (add-profiles D10), Manage Spaces…, Next
+/// Space (Opt+Cmd+Right), Previous Space
 /// (Opt+Cmd+Left), then one item per Space, Ctrl+1 to Ctrl+9 for the first
 /// nine, with a checkmark on the main window's. It's rebuilt whenever the
 /// Spaces change, so the shortcuts follow their order. Its items act on the
@@ -26,6 +27,9 @@ final class SpacesMenu: NSObject, NSMenuDelegate, NSMenuItemValidation, SpacesMo
     case next
     case previous
     case space
+    case changeProfile
+    case profile
+    case newProfile
   }
 
   init(spaces: SpacesModel) {
@@ -57,6 +61,9 @@ final class SpacesMenu: NSObject, NSMenuDelegate, NSMenuItemValidation, SpacesMo
     let shown = currentController()?.model.shownSpaceID
     add("New Space…", .newSpace)
     add("Rename Space", .rename)
+    let changeProfile = add("Change Profile", .changeProfile)
+    changeProfile.action = nil
+    changeProfile.submenu = profileMenu(for: currentController()?.model.shownSpace)
     add("Manage Spaces…", .manage)
     menu.addItem(.separator())
     add("Next Space", .next, key: Self.arrow(NSRightArrowFunctionKey), modifiers: [.command, .option])
@@ -75,14 +82,35 @@ final class SpacesMenu: NSObject, NSMenuDelegate, NSMenuItemValidation, SpacesMo
 
   @discardableResult
   private func add(
-    _ title: String, _ command: Command, key: String = "", modifiers: NSEvent.ModifierFlags = []
+    _ title: String, _ command: Command, key: String = "", modifiers: NSEvent.ModifierFlags = [], to menu: NSMenu? = nil
   ) -> NSMenuItem {
     let item = NSMenuItem(title: title, action: #selector(choose(_:)), keyEquivalent: key)
     item.keyEquivalentModifierMask = modifiers
     item.target = self
     item.tag = command.rawValue
-    menu.addItem(item)
+    (menu ?? self.menu).addItem(item)
     return item
+  }
+
+  /// Change Profile's items: every profile, with a checkmark on the Space's,
+  /// and "New Profile…".
+  private func profileMenu(for space: (any ClairSpace)?) -> NSMenu {
+    let submenu = NSMenu(title: "Change Profile")
+    for item in SpacesLogic.profileMenu(spaces.profiles, checked: space?.profileID) {
+      guard let item else {
+        submenu.addItem(.separator())
+        continue
+      }
+      switch item.command {
+      case .profile(let profileID):
+        let menuItem = add(item.title, .profile, to: submenu)
+        menuItem.representedObject = profileID
+        menuItem.state = item.isChecked ? .on : .off
+      case .newProfile:
+        add(item.title, .newProfile, to: submenu)
+      }
+    }
+    return submenu
   }
 
   private static func arrow(_ key: Int) -> String {
@@ -93,7 +121,7 @@ final class SpacesMenu: NSObject, NSMenuDelegate, NSMenuItemValidation, SpacesMo
     guard let controller = currentController(), controller.model.showsSpaces else { return false }
     switch Command(rawValue: item.tag) {
     case .next, .previous: return controller.model.spaces.spaces.count > 1
-    case .rename: return controller.model.shownSpace != nil
+    case .rename, .changeProfile, .profile, .newProfile: return controller.model.shownSpace != nil
     default: return true
     }
   }
@@ -110,13 +138,25 @@ final class SpacesMenu: NSObject, NSMenuDelegate, NSMenuItemValidation, SpacesMo
       if let spaceID = sender.representedObject as? SpaceID {
         controller.showSpace(spaceID)
       }
-    case nil: break
+    case .profile:
+      if let profileID = sender.representedObject as? ProfileID, let spaceID = controller.model.shownSpace?.spaceID {
+        controller.setProfile(profileID, forSpace: spaceID)
+      }
+    case .newProfile:
+      if let spaceID = controller.model.shownSpace?.spaceID {
+        controller.newProfile(forSpace: spaceID)
+      }
+    case .changeProfile, nil: break
     }
   }
 
   // MARK: SpacesModelListener
 
   func spacesDidChange() {
+    rebuild()
+  }
+
+  func profilesDidChange() {
     rebuild()
   }
 

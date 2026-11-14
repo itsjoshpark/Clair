@@ -618,16 +618,6 @@ final class FakeBrowser: NSObject, ClairBrowser {
     return rows[(index + 1)...].first(where: usable)
   }
 
-  /// D3: the most recently active row of another Space than `rowID`'s that
-  /// no window shows.
-  private func rowOfAnotherSpace(than rowID: TabID) -> TabID? {
-    guard profileKind == .regular, let tab = host.tab(rowID) else { return nil }
-    return host.spaces.map(\.spaceID).filter { $0 != tab.spaceID }
-      .flatMap { TabListLogic.rows(host.list($0)).map(\.tabID) }
-      .filter { !host.isShown($0, except: self) }
-      .max { host.lastActive(row: $0) < host.lastActive(row: $1) }
-  }
-
   /// Shows `row`, or its Peek, taking it from another window if need be.
   private func activateRow(_ row: TabID) {
     guard let tab = host.tab(row) else { return }
@@ -654,32 +644,67 @@ final class FakeBrowser: NSObject, ClairBrowser {
     activeTabID != placeholderID && TabListLogic.highlightedRow(activeTabID: activeTabID, in: tabs) == tabID
   }
 
-  /// Before the active row moves to another Space (D7): shows the next row,
-  /// or a new tab page, so the window stays on its Space.
-  func leaveBeforeMoving(_ tabID: TabID) {
-    guard isActiveRow(tabID) else { return }
-    if let next = nextRow(leaving: tabID) {
-      choose(next)
-    } else {
-      isChoosingNext = true
-      addTab(url: "chrome://newtab/")
-      isChoosingNext = false
-      cameFromID = ClairTabIDNone
+  /// add-profiles D9: the active tab moved to another Space; the window
+  /// shows that Space, with the tab still active.
+  func followActiveTab() {
+    guard let tab = tab(activeTabID), tab.spaceID != shownSpaceID else { return }
+    lastActive[tab.spaceID] = tab.tabID
+    setShown(tab.spaceID)
+    clairWindow?.activeTabDidChange(activeTabID)
+  }
+
+  /// add-profiles D9: `tabID` was reopened in another profile; it closes at
+  /// once with its Peek, without its page asking, and picks no next tab.
+  func closeReopened(_ tabID: TabID) {
+    guard let tab = tab(tabID) else { return }
+    if let peek = self.tab(tab.peekID) {
+      closeTabNow(peek.tabID)
     }
+    closeTabNow(tabID)
   }
 
   /// Closes a tab this window holds as Clair does, first showing the next
-  /// tab if it's the active row (D4, share-tabs-across-windows D3).
+  /// tab if it's the active row (D4, share-tabs-across-windows D3). The last
+  /// row of the Space leaves a new tab page with the command bar in its place,
+  /// and closing a new tab page that is the Space's only row closes the
+  /// window (add-profiles D13).
   fileprivate func closeAsClair(_ tabID: TabID, forAnotherWindow: Bool = false) {
     guard let tab = tab(tabID) else { return }
     if isActiveRow(tabID) {
       if let next = nextRow(leaving: tabID, avoidingShown: forAnotherWindow) {
         choose(next)
-      } else if tab.peekParentID == ClairTabIDNone, let other = rowOfAnotherSpace(than: tabID) {
-        choose(other)
+      } else if tab.peekParentID == ClairTabIDNone, profileKind == .regular {
+        if tab.isNewTabPage {
+          closeWindowAsUser(closing: tabID)
+          return
+        }
+        isChoosingNext = true
+        addTab(url: "chrome://newtab/")
+        isChoosingNext = false
+        cameFromID = ClairTabIDNone
+        clairWindow?.showCommandBar(mode: .currentTab)
       }
     }
     closeTabNow(tabID)
+  }
+
+  /// D13: the user's close of the window, as its close button does, with
+  /// `tabID` closing instead of being handed on.
+  private func closeWindowAsUser(closing tabID: TabID) {
+    // The page closes with the window, without another tab becoming active.
+    if let tab = tab(tabID) {
+      host.pageViews[tabID] = nil
+      mutate(tab.spaceID) { $0.removeAll { $0.tabID == tabID } }
+      activeTabID = ClairTabIDNone
+    }
+    if !handTabsToAnotherWindow() {
+      // Chromium's close flow: every tab closes with the window.
+      for tab in allTabs {
+        host.pageViews[tab.tabID] = nil
+        mutate(tab.spaceID) { $0.removeAll { $0.tabID == tab.tabID } }
+      }
+    }
+    closeWindow()
   }
 
   // MARK: Tabs shared across windows (share-tabs-across-windows D1, D2, D4)
@@ -1142,5 +1167,9 @@ final class RecordingSpacesObserver: NSObject, ClairSpacesObserver {
   func tabDidChange(_ tab: any ClairTab) {
     lastTab = tab
     calls.append("tab \(tab.tabID)")
+  }
+
+  func profilesDidChange(_ profiles: [any ClairProfile]) {
+    calls.append("profiles \(profiles.map(\.name).joined(separator: ","))")
   }
 }

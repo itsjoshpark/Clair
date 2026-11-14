@@ -390,12 +390,23 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     // in, unless Reduce Motion is on (D10).
     // Nor from a Space that's gone: there's no header to slide out, and no
     // place in the order to tell the side from.
-    if let previousSpaceID, previousSpaceID != spaceID, model.showsSpaces, window.isVisible,
+    // A window of another profile that the group swaps in (add-profiles
+    // D12) didn't show the earlier Space: it draws it from the model, and
+    // takes the outgoing window's sidebar (D3). The engine tells it before
+    // it orders the window in.
+    let swappedIn = previousSpaceID != nil && previousSpaceID != model.shownSpaceID
+    let outgoing = swappedIn ? previousSpaceID.flatMap(swapSource(showing:)) : nil
+    if let outgoing {
+      model.sidebar.width = outgoing.model.sidebar.width
+      model.sidebar.isHidden = outgoing.model.sidebar.isHidden
+      model.sidebar.isRevealed = false
+    }
+    if let previousSpaceID, previousSpaceID != spaceID, model.showsSpaces, window.isVisible || swappedIn,
       let previousSpace = model.spaces.space(previousSpaceID),
       !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     {
       model.spaceSlide = SpaceSlide(
-        fromSpace: previousSpace, fromTabs: model.tabs,
+        fromSpace: previousSpace, fromTabs: swappedIn ? model.spaces.tabs(inSpace: previousSpaceID) : model.tabs,
         fromTrailing: SpacesLogic.slidesFromTrailing(to: spaceID, from: previousSpaceID, in: model.spaces.spaces))
     } else {
       model.spaceSlide = nil
@@ -404,6 +415,56 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     model.newSpaceForm = nil
     model.setShownSpace(spaceID)
     tabsChanged()
+    if let outgoing {
+      takeManageSpaces(from: outgoing)
+    }
+  }
+
+  /// The window of the group this one is swapped in for, which shows
+  /// `spaceID`: the key one, as the user switched there, or else one already
+  /// ordered out.
+  private func swapSource(showing spaceID: SpaceID) -> BrowserWindowController? {
+    let candidates = Self.all.allObjects.filter {
+      $0 !== self && $0.browser != nil && $0.model.spaces === model.spaces && $0.model.shownSpaceID == spaceID
+    }
+    // With a dialog up, its sheet is key and the window main.
+    return candidates.first { $0.window.isKeyWindow || $0.window.isMainWindow }
+      ?? candidates.first { !$0.window.isVisible }
+  }
+
+  /// D12: a dialog follows a swap. When the group swaps from a window with
+  /// Manage Spaces open, as when the shown Space's profile changes there,
+  /// this window presents it again with the same selection.
+  private func takeManageSpaces(from other: BrowserWindowController) {
+    guard dialogs.showing == nil, let state = other.openManageSpaces else { return }
+    other.closeManageSpaces()
+    ManageSpacesDialog.show(for: self, state: state)
+  }
+
+  /// The Manage Spaces dialog on the window, if it's open.
+  private(set) var openManageSpaces: ManageSpacesState?
+  private weak var manageSpacesDialog: ClairDialog?
+
+  /// Manage Spaces opened on the window.
+  func manageSpacesDidOpen(_ state: ManageSpacesState, dialog: ClairDialog) {
+    openManageSpaces = state
+    manageSpacesDialog = dialog
+  }
+
+  /// Manage Spaces closed, or moved to another window.
+  func manageSpacesDidClose(_ state: ManageSpacesState) {
+    if openManageSpaces === state {
+      openManageSpaces = nil
+      manageSpacesDialog = nil
+    }
+  }
+
+  private func closeManageSpaces() {
+    if let dialog = manageSpacesDialog {
+      openManageSpaces = nil
+      manageSpacesDialog = nil
+      dialogs.dismiss(dialog)
+    }
   }
 
   func spaceTabsDidChange(_ spaceID: SpaceID) {
@@ -881,15 +942,18 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     guard model.showsSpaces else { return }
     showSidebarForEditing()
     model.spaceHeaderEdit = nil
-    model.newSpaceForm = NewSpaceFormState()
+    // The popup starts on the profile of the Space shown before.
+    model.newSpaceForm = NewSpaceFormState(profileID: model.spaces.defaultProfile(after: model.shownSpaceID))
   }
 
   func cancelNewSpace() {
     model.newSpaceForm = nil
   }
 
-  func createSpace(named name: String, icon: String?) {
-    guard let spaceID = model.spaces.createSpace(named: name, icon: icon) else { return }
+  func createSpace(named name: String, icon: String?, profile: ProfileID?) {
+    guard let profile = profile ?? model.spaces.defaultProfile(after: model.shownSpaceID),
+      let spaceID = model.spaces.createSpace(named: name, icon: icon, profile: profile)
+    else { return }
     model.newSpaceForm = nil
     // A Space with no tab here opens on a new tab page with the command bar.
     browser?.showSpace(spaceID)
@@ -955,7 +1019,64 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
   }
 
   func moveTab(_ tab: TabID, toSpace spaceID: SpaceID) {
+    // add-profiles D9: the window follows its active tab; moving any other
+    // tab leaves it, and says where the tab went.
+    let isActive =
+      !model.isShowingStill && TabListLogic.highlightedRow(activeTabID: model.activeTabID, in: model.tabs) == tab
+    guard let space = model.spaces.space(spaceID) else { return }
     model.spaces.moveTab(tab, toSpace: spaceID)
+    if !isActive {
+      model.notice.show(
+        Notice(text: SpacesLogic.movedNotice(space.name), identifier: Self.movedNoticeID),
+        for: NoticeState.copiedDuration)
+    }
+  }
+
+  static let movedNoticeID = "clair.tabMoved"
+
+  // MARK: Profiles (add-profiles D9, D10, D12)
+
+  func newProfileForNewSpace() {
+    ProfileDialogs.showNewProfile(on: dialogs, spaces: model.spaces) { [weak self] profileID in
+      guard let self, let profileID, self.model.newSpaceForm != nil else { return }
+      self.model.newSpaceForm?.profileID = profileID
+    }
+  }
+
+  func setProfile(_ profileID: ProfileID, forSpace spaceID: SpaceID) {
+    let spaces = model.spaces
+    guard let change = spaces.profileChange(of: spaceID, to: profileID) else { return }
+    guard change.needsConfirmation else {
+      spaces.setProfile(profileID, forSpace: spaceID)
+      return
+    }
+    dialogs.show(ClairDialog(Self.profileChangePage(for: change))) { answer in
+      if answer == .accepted {
+        spaces.setProfile(profileID, forSpace: spaceID)
+      }
+    }
+  }
+
+  func newProfile(forSpace spaceID: SpaceID) {
+    ProfileDialogs.showNewProfile(on: dialogs, spaces: model.spaces) { [weak self] profileID in
+      guard let self, let profileID else { return }
+      self.setProfile(profileID, forSpace: spaceID)
+    }
+  }
+
+  /// The confirmation for a Space with tabs taking another profile, after
+  /// Arc's.
+  static func profileChangePage(
+    for change: SpacesModel.ProfileChange, confirm: (@MainActor (ClairDialog) -> Void)? = nil,
+    cancel: (@MainActor (ClairDialog) -> Void)? = nil
+  ) -> ClairDialogPage {
+    ClairDialogPage(
+      title: SpacesLogic.profileChangeTitle(change.profile.name),
+      message: SpacesLogic.profileChangeMessage(change.space.name),
+      buttons: [
+        ClairDialogButton(title: "Cancel", role: .cancel, action: cancel),
+        ClairDialogButton(title: SpacesLogic.profileChangeButton, role: .default, action: confirm),
+      ])
   }
 
   func manageSpaces() {

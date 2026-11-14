@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>fullscreen</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #2050c0; }
+  button { position: absolute; inset: 0; width: 100%; height: 100%; font: 32px system-ui; background: none; color: #ffd000; border: 0; }
+</style>
+<!-- A click anywhere asks for the page's own full screen, or leaves it. -->
+<button onclick="document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()">
+  Click for the page's full screen
+</button>

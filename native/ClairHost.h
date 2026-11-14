@@ -71,6 +71,11 @@ typedef NSInteger ClairBrowserID NS_SWIFT_NAME(BrowserID);
 // A Space's ID, a UUID string that never changes (add-spaces design D1).
 typedef NSString *ClairSpaceID NS_SWIFT_BRIDGED_TYPEDEF NS_SWIFT_NAME(SpaceID);
 
+// A profile's ID: the base name of its directory in Clair's data folder, such
+// as "Default" or "Profile 1", which never changes (add-profiles design D1).
+typedef NSString *ClairProfileID NS_SWIFT_BRIDGED_TYPEDEF NS_SWIFT_NAME(ProfileID);
+
+@protocol ClairProfile;
 @protocol ClairSpace;
 @protocol ClairSpacesObserver;
 @protocol ClairTab;
@@ -124,11 +129,13 @@ NS_SWIFT_NAME(ClairHost)
 // Starts telling `observer` what changes. Chromium keeps it weakly.
 - (void)addObserver:(id<ClairSpacesObserver>)observer NS_SWIFT_NAME(addObserver(_:));
 
-// Adds a Space after the last one and returns its ID. `icon` is one emoji, or
-// nil. An empty name is ignored, and returns nil.
+// Adds a Space after the last one, using `profileID`, and returns its ID.
+// `icon` is one emoji, or nil. An empty name or an unknown profile is ignored,
+// and returns nil.
 - (nullable ClairSpaceID)createSpaceNamed:(NSString *)name
                                      icon:(nullable NSString *)icon
-    NS_SWIFT_NAME(createSpace(named:icon:));
+                                  profile:(ClairProfileID)profileID
+    NS_SWIFT_NAME(createSpace(named:icon:profile:));
 // Renames a Space. An empty name is ignored.
 - (void)renameSpace:(ClairSpaceID)spaceID to:(NSString *)name NS_SWIFT_NAME(renameSpace(_:to:));
 // Sets a Space's icon, one emoji, or removes it with nil.
@@ -141,10 +148,70 @@ NS_SWIFT_NAME(ClairHost)
 // its leave-page confirmation. Ignored for the only Space. ClairUI asks the
 // user first.
 - (void)deleteSpace:(ClairSpaceID)spaceID NS_SWIFT_NAME(deleteSpace(_:));
-// Moves a tab, with its Peek, to the top of another Space's list, keeping its
-// page and its window. If it was its window's active tab, the window first
-// shows the tab a close would have shown, so it stays on its Space.
+// Moves a tab, with its Peek, to the top of another Space's list. Within a
+// profile it keeps its page and its window. To a Space of another profile it
+// reopens at its URL in that profile, without its Peek and without asking
+// before leaving the page (add-profiles design D9). A window whose active tab
+// it was shows the destination Space with the tab, or the tab reopened from
+// it, active; another window showing a still of it picks its next tab as if
+// it had closed there.
 - (void)moveTab:(ClairTabID)tabID toSpace:(ClairSpaceID)spaceID NS_SWIFT_NAME(move(tab:toSpace:));
+
+// --- Profiles (add-profiles design D1, D7, D9 and D11) ---
+// A profile is a Chromium profile: its own cookies, history, logins,
+// extensions and downloads. Every Space uses one, and several Spaces may use
+// the same one. There is always at least one profile. Changes reach every
+// observer through -[ClairSpacesObserver profilesDidChange:].
+
+// Every profile, in Chromium's order: the default profile first, then by name.
+@property(nonatomic, readonly, copy) NSArray<id<ClairProfile>> *profiles;
+
+// Creates a profile named `name`, with no Spaces, and calls `completion` with
+// its ID once it exists, or with nil when it couldn't be created. An empty
+// name is ignored, and calls `completion` with nil at once.
+- (void)createProfileNamed:(NSString *)name
+                completion:(void (^)(ClairProfileID _Nullable profileID))completion
+    NS_SWIFT_NAME(createProfile(named:completion:));
+// Renames a profile. An empty name is ignored. Its Spaces keep their names.
+- (void)renameProfile:(ClairProfileID)profileID to:(NSString *)name NS_SWIFT_NAME(renameProfile(_:to:));
+// Deletes a profile and its data folder. Ignored for a profile a Space uses,
+// and so for the last one. ClairUI asks the user first.
+- (void)deleteProfile:(ClairProfileID)profileID NS_SWIFT_NAME(deleteProfile(_:));
+
+// Makes a Space use another profile. Its tabs, in their order, reopen at their
+// URLs in that profile, without their Peeks and without asking before leaving
+// their pages; in each window showing the Space, the tab reopened from its
+// active one becomes active (add-profiles design D9). ClairUI asks the user
+// first when the Space has tabs. Ignored for an unknown Space or profile, and
+// for the profile the Space uses.
+- (void)setProfile:(ClairProfileID)profileID forSpace:(ClairSpaceID)spaceID
+    NS_SWIFT_NAME(setProfile(_:forSpace:));
+
+// A profile's download location, read from its prefs, loading the profile if
+// it isn't loaded yet: `directory` is the folder its downloads are saved to,
+// and `asksWhereToSave` whether each download asks instead. `completion` runs
+// once, on the main thread, with a nil `directory` for an unknown profile.
+- (void)downloadSettingsForProfile:(ClairProfileID)profileID
+                        completion:(void (^)(NSURL *_Nullable directory, BOOL asksWhereToSave))completion
+    NS_SWIFT_NAME(downloadSettings(forProfile:completion:));
+// Saves a profile's downloads to `directory`, and stops asking where to save.
+- (void)setDownloadDirectory:(NSURL *)directory forProfile:(ClairProfileID)profileID
+    NS_SWIFT_NAME(setDownloadDirectory(_:forProfile:));
+// Makes each download of a profile ask where to save, or stop asking.
+- (void)setAsksWhereToSave:(BOOL)asks forProfile:(ClairProfileID)profileID
+    NS_SWIFT_NAME(setAsksWhereToSave(_:forProfile:));
+
+// Opens `url` in a new foreground tab of a Space using `profileID`: in the
+// most recently active browser window, or a new one if none is open, showing
+// the Space of that profile it showed most recently, or else the profile's
+// first Space. Ignored for a profile no Space uses.
+- (void)openURL:(NSURL *)url inProfile:(ClairProfileID)profileID NS_SWIFT_NAME(open(_:inProfile:));
+
+// --- App settings ---
+
+// Whether Cmd+Q quits only when held: Chromium's warn-before-quitting
+// setting, on unless the user turned it off. Setting it applies at once.
+@property(nonatomic) BOOL warnsBeforeQuitting;
 
 @end
 
@@ -393,6 +460,17 @@ NS_SWIFT_NAME(ClairSpace)
 @property(nonatomic, readonly, copy) NSString *name;
 // One emoji, or nil.
 @property(nonatomic, readonly, copy, nullable) NSString *icon;
+// The profile the Space's tabs use (add-profiles design D2).
+@property(nonatomic, readonly, copy) ClairProfileID profileID;
+@end
+
+// A profile, as a snapshot (add-profiles design D1). Chromium implements it.
+NS_SWIFT_UI_ACTOR
+NS_SWIFT_NAME(ClairProfile)
+@protocol ClairProfile <NSObject>
+@property(nonatomic, readonly, copy) ClairProfileID profileID;
+// The name Chromium shows for it. Never empty.
+@property(nonatomic, readonly, copy) NSString *name;
 @end
 
 // What ClairUI implements to hear about Spaces and their tabs, app-wide
@@ -411,6 +489,10 @@ NS_SWIFT_NAME(ClairSpacesObserver)
     NS_SWIFT_NAME(tabsDidChange(_:inSpace:));
 // One tab's state changed.
 - (void)tabDidChange:(id<ClairTab>)tab NS_SWIFT_NAME(tabDidChange(_:));
+// Profiles were created, renamed or deleted (add-profiles design D1).
+// `profiles` is the new list, as -[ClairHost profiles] returns it. A change
+// of a Space's profile arrives through -spacesDidChange:.
+- (void)profilesDidChange:(NSArray<id<ClairProfile>> *)profiles NS_SWIFT_NAME(profilesDidChange(_:));
 @end
 
 // A suggestion in the command bar. Chromium implements it as a snapshot of an

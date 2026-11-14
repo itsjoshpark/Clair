@@ -39,7 +39,9 @@
 #include "chrome/browser/clair/window/clair_extensions.h"
 #import "chrome/browser/clair/window/clair_native_window.h"
 #include "chrome/browser/clair/window/clair_peeks.h"
+#include "chrome/browser/clair/window/clair_window_group.h"
 #include "chrome/browser/clair/window/clair_window_hooks.h"
+#include "chrome/browser/clair/clair_profiles.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/global_keyboard_shortcuts_mac.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
@@ -59,6 +61,8 @@
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/find_bar/find_bar_controller.h"
+#include "chrome/browser/ui/navigator/browser_navigator.h"
+#include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -84,6 +88,7 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/url_constants.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -529,7 +534,9 @@ void ClairExclusiveAccessContext::EnterFullscreen(
           bubble_type)) {
     SetPageFullscreen(true);
   }
-  NSWindow* window = window_->ns_window();
+  // add-profiles D4: the group's full-screen window, while this one covers
+  // it.
+  NSWindow* window = window_->FullscreenNSWindow();
   if (!(window.styleMask & NSWindowStyleMaskFullScreen)) {
     entered_window_fullscreen_ = true;
     entering_window_fullscreen_ = true;
@@ -543,7 +550,10 @@ void ClairExclusiveAccessContext::EnterFullscreen(
 void ClairExclusiveAccessContext::ExitFullscreen() {
   SetPageFullscreen(false);
   HideNotice(ExclusiveAccessBubbleHideReason::kInterrupted);
-  NSWindow* window = window_->ns_window();
+  // add-profiles D4: the group's full-screen window, while this one covers
+  // it. A cover leaves the group's full screen only when asked to by the
+  // user (IDC_FULLSCREEN, toggleFullScreen:), never with a page's.
+  NSWindow* window = window_->FullscreenNSWindow();
   // Leave only what entering changed: a window already in full screen stays.
   if (entered_window_fullscreen_ &&
       (window.styleMask & NSWindowStyleMaskFullScreen)) {
@@ -774,13 +784,21 @@ ClairBrowserWindow::ClairBrowserWindow(Browser* browser)
                                                     contentRect:ToNSRect(bounds)];
   [ns_window_ setFrame:ToNSRect(bounds) display:NO];
 
-  // add-spaces D3: a new window shows the Space last shown in a key window,
-  // which is the Space of the window it was opened from; an incognito or
-  // guest window, its profile's own.
+  // add-profiles D3: the window joins the group creating it, or starts one.
+  ClairWindowGroup::Join(this);
+  // add-spaces D3, add-profiles D8: a new window shows the Space last shown
+  // in a key window, which is the Space of the window it was opened from,
+  // when it's of the window's profile; or else the profile's Space shown
+  // most recently, or its first. A member its group creates waits for the
+  // group to show a Space. An incognito or guest window shows its profile's
+  // own.
   space_tabs_ = ClairSpaceTabs::ForProfile(browser->GetProfile());
-  shown_space_ = space_tabs_->is_regular()
-                     ? clair::ClairSpaceStore::Get()->last_space()
-                     : space_tabs_->private_space();
+  if (!space_tabs_->is_regular()) {
+    shown_space_ = space_tabs_->private_space();
+  } else if (!IsHiddenMember()) {
+    shown_space_ = ClairWindowGroup::SpaceForNewWindow(browser->GetProfile());
+    hands_over_ = shown_space_.empty();
+  }
 
   bridge_ = [[ClairChromiumBrowser alloc] initWithBrowserWindow:this];
   // Before the Peeks, so the lists hear of a tab before it's linked.
@@ -801,9 +819,23 @@ ClairBrowserWindow::ClairBrowserWindow(Browser* browser)
     zoom_subscription_ = zoom->RegisterZoomChangedCallback(base::BindRepeating(
         &ClairBrowserWindow::ZoomChanged, weak_factory_.GetWeakPtr()));
   }
+
+  // add-profiles D8: a window of a profile no Space uses hands its pages to
+  // clair.last_space and closes, once Chromium has given it its tabs.
+  if (hands_over_) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(
+                       [](base::WeakPtr<ClairBrowserWindow> window) {
+                         if (window) {
+                           ClairWindowGroup::HandOverToLastSpace(window.get());
+                         }
+                       },
+                       weak_factory_.GetWeakPtr()));
+  }
 }
 
 ClairBrowserWindow::~ClairBrowserWindow() {
+  ClairWindowGroup::Leave(this);
   browser_->GetFeatures().TearDownPreBrowserWindowDestruction();
   peeks_.reset();
   if (space_tabs_) {
@@ -873,6 +905,9 @@ void ClairBrowserWindow::SetShownSpace(const std::string& space) {
   shown_space_ = space;
   if (IsActive() && space_tabs_ && space_tabs_->is_regular()) {
     clair::ClairSpaceStore::Get()->SetLastSpace(space);
+  }
+  if (ClairWindowGroup* group = ClairWindowGroup::Of(this)) {
+    group->ShownSpaceChanged(this);
   }
   [bridge_ shownSpaceChangedFrom:previous];
 }
@@ -992,7 +1027,9 @@ tabs::TabInterface* ClairBrowserWindow::HighlightedRow() const {
 
 bool ClairBrowserWindow::IsShownElsewhere(const tabs::TabInterface* row) const {
   ClairBrowserWindow* holder = HolderOf(row);
-  return holder && holder != this && holder->IsActiveRow(row);
+  // add-profiles D5: a hidden member shows no tab.
+  return holder && holder != this && !holder->IsHiddenMember() &&
+         holder->IsActiveRow(row);
 }
 
 void ClairBrowserWindow::ActivateTab(tabs::TabInterface* tab,
@@ -1088,32 +1125,34 @@ bool ClairBrowserWindow::ShowNextRow(tabs::TabInterface* row,
   return true;
 }
 
-bool ClairBrowserWindow::ShowTabOfAnotherSpace(tabs::TabInterface* row,
-                                               base::OnceClosure* then) {
-  if (!row || !space_tabs_ || !space_tabs_->is_regular()) {
+bool ClairBrowserWindow::IsEmptiedSpacePage(tabs::TabInterface* row) const {
+  if (!row || !space_tabs_ || !space_tabs_->is_regular() || RowOf(row) != row) {
     return false;
   }
-  const std::string space = space_tabs_->SpaceOf(row);
-  tabs::TabInterface* best = nullptr;
-  for (const std::string& other : space_tabs_->SpacesWithTabs()) {
-    if (other == space) {
-      continue;
-    }
-    for (tabs::TabInterface* tab : space_tabs_->TabsIn(other)) {
-      if (RowOf(tab) != tab || IsShownElsewhere(tab)) {
-        continue;
-      }
-      if (!best || LastActive(tab) > LastActive(best)) {
-        best = tab;
-      }
-    }
-  }
-  if (!best) {
+  const std::vector<tabs::TabInterface*> rows = Rows();
+  const GURL& url = row->GetContents()->GetVisibleURL();
+  return rows.size() == 1 && rows.front() == row &&
+         url.SchemeIs(content::kChromeUIScheme) &&
+         (url.host() == chrome::kChromeUINewTabHost ||
+          url.host() == chrome::kChromeUINewTabPageHost);
+}
+
+bool ClairBrowserWindow::KeepEmptiedSpace(tabs::TabInterface* row) {
+  if (!row || !space_tabs_ || !space_tabs_->is_regular() || RowOf(row) != row) {
     return false;
   }
-  // The window's shown Space follows the tab (add-spaces D3).
-  ChooseRow(best, then);
-  return true;
+  if (IsEmptiedSpacePage(row)) {
+    // Closing the emptied Space's new tab page closes the window, as the
+    // user's close does, and the page closes with it.
+    if (ClairWindowGroup* group = ClairWindowGroup::Of(this)) {
+      group->CloseByUser(row);
+      return true;
+    }
+    return false;
+  }
+  // The window stays on its Space, as Arc keeps an empty Space.
+  OpenNewTabPage(/*show_command_bar=*/true);
+  return false;
 }
 
 void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
@@ -1127,9 +1166,15 @@ void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
     holder->CloseTab(tab);
     return;
   }
-  // D4: Clair picks the next tab first; without one in the Space, the most
-  // recently active tab of another Space, or else Chromium's choice stands.
+  // D4: Clair picks the next tab first; without one in the Space, a new tab
+  // page takes its place (add-profiles D13).
   if (IsActiveRow(tab)) {
+    // D13: the emptied Space's own new tab page closes the window, whatever
+    // the page answers about unloading.
+    if (IsEmptiedSpacePage(tab)) {
+      KeepEmptiedSpace(tab);
+      return;
+    }
     if (tab->GetContents()->NeedToFireBeforeUnloadOrUnloadEvents()) {
       // Chromium asks the page before it closes the tab, and its leave-page
       // confirmation makes the tab active again. The choice waits for the
@@ -1143,8 +1188,9 @@ void ClairBrowserWindow::CloseTab(tabs::TabInterface* tab) {
       base::OnceClosure close =
           base::BindOnce(&ClairBrowserWindow::CloseTabNow,
                          weak_factory_.GetWeakPtr(), tab->GetHandle());
-      if (!ShowNextRow(tab, &close) && RowOf(tab) == tab) {
-        ShowTabOfAnotherSpace(tab, &close);
+      if (!ShowNextRow(tab, &close) && RowOf(tab) == tab &&
+          KeepEmptiedSpace(tab)) {
+        return;
       }
       if (close) {
         std::move(close).Run();
@@ -1176,8 +1222,11 @@ void ClairBrowserWindow::BeforeUnloadFired(content::WebContents* contents,
   base::AutoReset<bool> elsewhere(&closing_for_another_window_,
                                   pending_close_for_another_window_);
   // Staying on the page leaves everything as it was, the came-from row too.
-  if (proceed && IsActiveRow(tab) && !ShowNextRow(tab) && RowOf(tab) == tab) {
-    ShowTabOfAnotherSpace(tab);
+  // The page agreed to leave, so an emptied Space keeps a new tab page
+  // rather than closing the window (add-profiles D13).
+  if (proceed && IsActiveRow(tab) && !ShowNextRow(tab) && RowOf(tab) == tab &&
+      space_tabs_ && space_tabs_->is_regular()) {
+    OpenNewTabPage(/*show_command_bar=*/true);
   }
 }
 
@@ -1220,11 +1269,248 @@ void ClairBrowserWindow::OpenNewTabPage(bool show_command_bar) {
   }
 }
 
-void ClairBrowserWindow::ShowSpace(const std::string& space) {
-  if (!space_tabs_ || !space_tabs_->is_regular() ||
-      !clair::ClairSpaceStore::Get()->Contains(space) ||
-      space == shown_space_) {
+void ClairBrowserWindow::OpenInShownSpace(const GURL& url) {
+  if (url.is_empty()) {
+    OpenNewTabPage(/*show_command_bar=*/true);
     return;
+  }
+  // At the top of the shown Space, as any new tab.
+  NavigateParams params(browser_, url, ui::PAGE_TRANSITION_AUTO_BOOKMARK);
+  params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
+  Navigate(&params);
+}
+
+// --- Window groups (add-profiles D3 to D6, D8, D13) ---
+
+bool ClairBrowserWindow::IsHiddenMember() const {
+  ClairWindowGroup* group = ClairWindowGroup::Of(this);
+  return group && group->IsHidden(this);
+}
+
+void ClairBrowserWindow::BeginSwapIn(const std::string& previous_space) {
+  [bridge_ swappedInFrom:previous_space];
+}
+
+void ClairBrowserWindow::JoinActiveSpace() {
+  const NSWindowCollectionBehavior behavior = ns_window_.collectionBehavior;
+  if (behavior & NSWindowCollectionBehaviorMoveToActiveSpace) {
+    return;
+  }
+  ns_window_.collectionBehavior = behavior | NSWindowCollectionBehaviorMoveToActiveSpace;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(
+                     [](base::WeakPtr<ClairBrowserWindow> window) {
+                       if (window) {
+                         window->ns_window().collectionBehavior &=
+                             ~NSWindowCollectionBehaviorMoveToActiveSpace;
+                       }
+                     },
+                     weak_factory_.GetWeakPtr()));
+}
+
+void ClairBrowserWindow::Reveal(NSWindow* above, bool make_key) {
+  JoinActiveSpace();
+  if (above && above.visible) {
+    [ns_window_ orderWindow:NSWindowAbove relativeTo:above.windowNumber];
+  } else {
+    [ns_window_ orderFront:nil];
+  }
+  if (make_key) {
+    BrowserActiveStateManager::From(browser_)->DidBecomeActive();
+    [ns_window_ makeKeyWindow];
+  }
+  if (content::WebContents* active =
+          browser_->tab_strip_model()->GetActiveWebContents()) {
+    for (content::WebContents* page : PagesShownWith(active)) {
+      page->UpdateWebContentsVisibility(content::Visibility::VISIBLE);
+    }
+    if (make_key) {
+      active->Focus();
+    }
+  }
+}
+
+void ClairBrowserWindow::Conceal(bool order_out) {
+  // D5: a still ends when the group swaps away; the tab stays with the
+  // window that took it, and the placeholder stays active without a still.
+  if (still_tab_ != tabs::TabHandle::Null()) {
+    still_tab_ = tabs::TabHandle::Null();
+    still_image_ = nil;
+    [bridge_ stillChanged];
+  }
+  CancelPendingTake();
+  if (content::WebContents* active =
+          browser_->tab_strip_model()->GetActiveWebContents()) {
+    for (content::WebContents* page : PagesShownWith(active)) {
+      page->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
+    }
+  }
+  if (order_out) {
+    [ns_window_ orderOut:nil];
+  }
+}
+
+void ClairBrowserWindow::SetCovering(bool covering) {
+  ns_window_.covering = covering;
+  // Square corners: no shadow of the rounded frame shows over the owner.
+  ns_window_.hasShadow = !covering;
+}
+
+NSWindow* ClairBrowserWindow::FullscreenNSWindow() const {
+  ClairWindowGroup* group = ClairWindowGroup::Of(this);
+  ClairBrowserWindow* owner = group ? group->fullscreen_owner() : nullptr;
+  return owner && owner != this && !IsHiddenMember() ? owner->ns_window()
+                                                     : ns_window_;
+}
+
+void ClairBrowserWindow::CloseTabWithoutChoosing(tabs::TabInterface* tab) {
+  TabStripModel* strip = browser_->tab_strip_model();
+  const int index = tab ? strip->GetIndexOfTab(tab) : TabStripModel::kNoTab;
+  if (index != TabStripModel::kNoTab) {
+    strip->CloseWebContentsAt(index, TabCloseTypes::CLOSE_USER_GESTURE);
+  }
+}
+
+bool ClairBrowserWindow::NeedsBeforeUnload() const {
+  TabStripModel* strip = browser_->tab_strip_model();
+  for (int i = 0; i < strip->count(); ++i) {
+    if (strip->GetWebContentsAt(i)->NeedToFireBeforeUnloadOrUnloadEvents()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ClairBrowserWindow::HasRealTabs() const {
+  TabStripModel* strip = browser_->tab_strip_model();
+  for (int i = 0; i < strip->count(); ++i) {
+    if (!ClairSpaceTabs::IsPlaceholder(strip->GetWebContentsAt(i))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::vector<GURL> ClairBrowserWindow::PageURLs() const {
+  std::vector<GURL> urls;
+  TabStripModel* strip = browser_->tab_strip_model();
+  for (int i = 0; i < strip->count(); ++i) {
+    content::WebContents* contents = strip->GetWebContentsAt(i);
+    const GURL& url = contents->GetVisibleURL();
+    if (ClairSpaceTabs::IsPlaceholder(contents) || !url.is_valid() ||
+        (url.SchemeIs(content::kChromeUIScheme) &&
+         (url.host() == chrome::kChromeUINewTabHost ||
+          url.host() == chrome::kChromeUINewTabPageHost))) {
+      continue;
+    }
+    urls.push_back(url);
+  }
+  return urls;
+}
+
+std::string ClairBrowserWindow::RestoredGroupTag() const {
+  TabStripModel* strip = browser_->tab_strip_model();
+  for (int i = 0; i < strip->count(); ++i) {
+    std::string tag = ClairSpaceTabs::WindowTag(strip->GetWebContentsAt(i));
+    if (!tag.empty()) {
+      return tag;
+    }
+  }
+  return std::string();
+}
+
+void ClairBrowserWindow::ShowRestoredSpace(const std::string& space) {
+  if (!space_tabs_ || !space_tabs_->is_regular()) {
+    return;
+  }
+  tabs::TabInterface* active = browser_->tab_strip_model()->GetActiveTab();
+  if (active && space_tabs_->IntendedSpaceOf(active) == space) {
+    SetShownSpace(space);
+    return;
+  }
+  // D6: the selected tab didn't come back, as a new tab page: one opens.
+  if (!clair::ClairSpaceStore::Get()->Contains(space)) {
+    return;
+  }
+  SetShownSpace(space);
+  OpenNewTabPage(/*show_command_bar=*/true);
+}
+
+void ClairBrowserWindow::ShowSpaceOnNewTab(const std::string& space,
+                                           const GURL& url,
+                                           bool command_bar) {
+  if (!space_tabs_ || !space_tabs_->is_regular() ||
+      clair::ClairSpaceStore::Get()->ProfileOf(space) !=
+          clair::ClairProfiles::IDOf(browser_->GetProfile())) {
+    return;
+  }
+  SetShownSpace(space);
+  if (url.is_empty() && !command_bar) {
+    OpenNewTabPage(/*show_command_bar=*/false);
+    return;
+  }
+  OpenInShownSpace(url);
+}
+
+void ClairBrowserWindow::OpenCommandBarWhenShown() {
+  // Once the window is key and the page has taken focus, which would close
+  // it.
+  if (!IsActive()) {
+    command_bar_when_key_ = true;
+    return;
+  }
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(
+                     [](base::WeakPtr<ClairBrowserWindow> window) {
+                       if (window && window->clair_window() && window->IsVisible()) {
+                         [window->clair_window()
+                             showCommandBarWithMode:ClairCommandBarModeCurrentTab];
+                       }
+                     },
+                     weak_factory_.GetWeakPtr()));
+}
+
+void ClairBrowserWindow::FollowActiveTab() {
+  tabs::TabInterface* active = browser_->tab_strip_model()->GetActiveTab();
+  if (!active || !space_tabs_ ||
+      ClairSpaceTabs::IsPlaceholder(active->GetContents())) {
+    return;
+  }
+  const std::string space = space_tabs_->SpaceOf(active);
+  if (space.empty() || space == shown_space_) {
+    return;
+  }
+  SetShownSpace(space);
+  last_active_[space] = active->GetHandle();
+}
+
+void ClairBrowserWindow::DropPendingTakeOf(const tabs::TabInterface* tab) {
+  if (tab && taking_ == tab->GetHandle()) {
+    CancelPendingTake();
+  }
+}
+
+void ClairBrowserWindow::ShowSpace(const std::string& space, bool again) {
+  clair::ClairSpaceStore* store = clair::ClairSpaceStore::Get();
+  if (!space_tabs_ || !space_tabs_->is_regular() || !store->Contains(space) ||
+      (space == shown_space_ && !again)) {
+    return;
+  }
+  // add-profiles D3: a Space of another profile is the group's to show.
+  if (store->ProfileOf(space) !=
+      clair::ClairProfiles::IDOf(browser_->GetProfile())) {
+    if (ClairWindowGroup* group = ClairWindowGroup::Of(this)) {
+      group->ShowSpace(space);
+    }
+    return;
+  }
+  // Shown again: the active tab stays if it's a row of the Space.
+  if (space == shown_space_) {
+    tabs::TabInterface* active = browser_->tab_strip_model()->GetActiveTab();
+    if (active && !ClairSpaceTabs::IsPlaceholder(active->GetContents()) &&
+        space_tabs_->SpaceOf(active) == space) {
+      return;
+    }
   }
   // share-tabs-across-windows D3: the tab last active in the Space here,
   // unless another window shows it; else the Space's most recently active row
@@ -1324,6 +1610,14 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
       // (share-tabs-across-windows D4).
       WindowCloseRequested();
       return true;
+    case IDC_FULLSCREEN:
+      // add-profiles D4: a window covering its group's full-screen one
+      // leaves the group's full screen; Chromium would try to enter its own.
+      if (NSWindow* fullscreen = FullscreenNSWindow(); fullscreen != ns_window_) {
+        [fullscreen toggleFullScreen:nil];
+        return true;
+      }
+      return false;
     case IDC_CLOSE_TAB:
       // A Peek's Cmd+W is ClairPeeks'; it runs first. While the window shows
       // a still, the still's row is the one closed.
@@ -1370,8 +1664,9 @@ void ClairBrowserWindow::Take(tabs::TabInterface* tab,
   tabs::TabInterface* row = RowOf(tab);
   const tabs::TabHandle handle = tab->GetHandle();
   ClairBrowserWindow* holder = HolderOf(tab);
-  // D2: the holder keeps a still of what it shows.
-  if (holder->IsActiveRow(row)) {
+  // D2: the holder keeps a still of what it shows; a hidden member shows
+  // nothing (add-profiles D5).
+  if (holder->IsActiveRow(row) && !holder->IsHiddenMember()) {
     if (options.wait_for_copy) {
       // The tab waits for its page's copy, taken while the holder still
       // draws it. The same take again joins it: what it runs then, as a
@@ -1466,7 +1761,7 @@ void ClairBrowserWindow::FinishTake(tabs::TabHandle handle,
   }
   tabs::TabInterface* row = RowOf(tab);
   ClairBrowserWindow* holder = HolderOf(tab);
-  if (holder->IsActiveRow(row)) {
+  if (holder->IsActiveRow(row) && !holder->IsHiddenMember()) {
     holder->BeginStill(row, copy);
   }
   MoveFamilyHere(holder, row);
@@ -1655,28 +1950,16 @@ void ClairBrowserWindow::StillTabClosed() {
   [clair_window_ showCommandBarWithMode:ClairCommandBarModeCurrentTab];
 }
 
-bool ClairBrowserWindow::HandTabsToAnotherWindow() {
-  if (!space_tabs_ || !space_tabs_->is_regular() || detached_ ||
+bool ClairBrowserWindow::HandTabsTo(ClairBrowserWindow* target,
+                                    tabs::TabInterface* except) {
+  if (!target || target == this || !space_tabs_ || !space_tabs_->is_regular() ||
+      target->space_tabs_ != space_tabs_ || detached_ || target->detached_ ||
+      target->browser()->IsDeleteScheduled() ||
       browser_shutdown::IsTryingToQuit()) {
     return false;
   }
-  // D4: the most recently active other regular window of the profile.
-  ClairBrowserWindow* target = nullptr;
-  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
-      [this, &target](BrowserWindowInterface* candidate) {
-        ClairBrowserWindow* window = FromBrowser(candidate);
-        if (window && window != this && window->space_tabs_ == space_tabs_ &&
-            !window->detached_ && !window->browser()->IsDeleteScheduled()) {
-          target = window;
-          return false;
-        }
-        return true;
-      });
-  if (!target) {
-    return false;
-  }
-  // Each row with its Peek, the placeholder left out, the active row last so
-  // Chromium picks this window's next tab only once.
+  // Each row with its Peek, the placeholder and `except` left out, the active
+  // row last so Chromium picks this window's next tab only once.
   TabStripModel* strip = browser_->tab_strip_model();
   tabs::TabInterface* active = strip->GetActiveTab();
   tabs::TabInterface* active_row =
@@ -1685,14 +1968,15 @@ bool ClairBrowserWindow::HandTabsToAnotherWindow() {
   std::vector<tabs::TabHandle> rows;
   for (int i = 0; i < strip->count(); ++i) {
     tabs::TabInterface* tab = strip->GetTabAtIndex(i);
-    if (!tab || tab == active_row ||
+    if (!tab || tab == active_row || tab == except ||
         ClairSpaceTabs::IsPlaceholder(tab->GetContents()) ||
         (peeks_ && peeks_->ParentOf(tab))) {
       continue;
     }
     rows.push_back(tab->GetHandle());
   }
-  if (active_row && !ClairSpaceTabs::IsPlaceholder(active_row->GetContents())) {
+  if (active_row && active_row != except &&
+      !ClairSpaceTabs::IsPlaceholder(active_row->GetContents())) {
     rows.push_back(active_row->GetHandle());
   }
   if (rows.empty()) {
@@ -1707,14 +1991,27 @@ bool ClairBrowserWindow::HandTabsToAnotherWindow() {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&GiveBackToStill, handle));
   }
-  // Emptied, the browser closes once Chromium is done with its strip; the
-  // window goes now, so it can't become key meanwhile.
-  if (browser_->tab_strip_model()->empty()) {
+  // Emptied, or left with its placeholder or `except`, the browser closes;
+  // the window goes now, so it can't become key meanwhile.
+  if (!HasRealTabs() ||
+      (except && strip->count() == 1 && strip->GetTabAtIndex(0) == except)) {
     [ns_window_ orderOut:nil];
+  }
+  if (!HasRealTabs() && !strip->empty()) {
+    // Only the placeholder is left: it closes, and the browser with it.
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(
+                       [](base::WeakPtr<ClairBrowserWindow> window) {
+                         if (window && !window->HasRealTabs() &&
+                             !window->browser()->IsDeleteScheduled()) {
+                           window->Close();
+                         }
+                       },
+                       weak_factory_.GetWeakPtr()));
   }
   // The other window showed a still of one of them: it shows the tab now.
   if (tabs::TabInterface* still = target->still_tab_.Get();
-      still && HolderOf(still) == target) {
+      still && HolderOf(still) == target && !target->IsHiddenMember()) {
     target->ActivateRow(still);
   }
   return true;
@@ -1736,6 +2033,13 @@ void ClairBrowserWindow::WindowDidBecomeKey() {
     return;
   }
   BrowserActiveStateManager::From(browser_)->DidBecomeActive();
+  if (ClairWindowGroup* group = ClairWindowGroup::Of(this)) {
+    group->Activated();
+  }
+  if (command_bar_when_key_) {
+    command_bar_when_key_ = false;
+    OpenCommandBarWhenShown();
+  }
   // add-spaces D1: the Space a new window shows.
   if (space_tabs_ && space_tabs_->is_regular()) {
     clair::ClairSpaceStore::Get()->SetLastSpace(shown_space_);
@@ -1778,16 +2082,24 @@ bool ClairBrowserWindow::HandleExclusiveAccessKey(NSEvent* event) {
 void ClairBrowserWindow::WindowFullscreenChanged(bool entered) {
   exclusive_access_context_.WindowFullscreenChanged(entered);
   WindowGeometryChanged();
+  // add-profiles D4: the group's full-screen owner, and its cover.
+  if (ClairWindowGroup* group = ClairWindowGroup::Of(this)) {
+    group->FullscreenChanged(this, entered);
+  }
 }
 
 void ClairBrowserWindow::WindowCloseRequested() {
-  // share-tabs-across-windows D4: when the user closes the window, by its
-  // close button or File > Close Window, and another regular window of the
-  // profile is open, the window's tabs move there and none closes. Moving
-  // the last one empties the strip, and TabStripEmpty() closes the browser.
-  // Every other close, as by an extension or of a profile, is Chromium's.
-  if (!browser_->IsDeleteScheduled() && HandTabsToAnotherWindow() &&
-      (browser_->tab_strip_model()->empty() || browser_->IsDeleteScheduled())) {
+  // share-tabs-across-windows D4, add-profiles D5: when the user closes the
+  // window, by its close button or File > Close Window, and another regular
+  // window is open, the tabs of every member of its group move there and
+  // none closes. Moving the last one empties a strip, and TabStripEmpty()
+  // closes that browser. With none, the members close through Chromium's
+  // close flow. Every other close, as by an extension or of a profile, is
+  // Chromium's for this browser alone.
+  ClairWindowGroup* group = ClairWindowGroup::Of(this);
+  if (group && !browser_->IsDeleteScheduled() && space_tabs_ &&
+      space_tabs_->is_regular()) {
+    group->CloseByUser();
     return;
   }
   Close();
@@ -1842,6 +2154,12 @@ bool ClairBrowserWindow::IsMinimized() const {
 }
 
 bool ClairBrowserWindow::IsFullscreen() const {
+  // add-profiles D4: the cover over a full-screen window is in full screen
+  // with its group.
+  if (ClairWindowGroup* group = ClairWindowGroup::Of(this);
+      group && group->IsFullscreen() && !IsHiddenMember()) {
+    return true;
+  }
   return (ns_window_.styleMask & NSWindowStyleMaskFullScreen) != 0;
 }
 
@@ -1863,6 +2181,28 @@ gfx::Rect ClairBrowserWindow::GetBounds() const {
 }
 
 void ClairBrowserWindow::Show() {
+  // add-profiles D6: session restore's windows wait until it has finished.
+  if (ClairWindowGroup::HoldsShow(this)) {
+    return;
+  }
+  // D3: Chromium asks to see a hidden member, as for a link from another app
+  // or Switch to Tab: the group switches to it.
+  if (ClairWindowGroup* group = ClairWindowGroup::Of(this);
+      group && group->IsHidden(this)) {
+    // Start-up showing what it restored, after the arrangement chose.
+    if (ClairWindowGroup::JustArranged(this)) {
+      return;
+    }
+    group->ShowMember(this);
+    if (!IsHiddenMember()) {
+      Activate();
+    }
+    return;
+  }
+  ShowNow();
+}
+
+void ClairBrowserWindow::ShowNow() {
   // As BrowserView::Show(): the browser becomes the last active one now, not
   // when AppKit gets round to making the window key.
   BrowserActiveStateManager::From(browser_)->DidBecomeActive();
@@ -1899,6 +2239,9 @@ bool ClairBrowserWindow::IsVisible() const {
 }
 
 void ClairBrowserWindow::ShowInactive() {
+  if (ClairWindowGroup::HoldsShow(this) || IsHiddenMember()) {
+    return;
+  }
   [ns_window_ orderFront:nil];
 }
 
@@ -1916,6 +2259,20 @@ void ClairBrowserWindow::Close() {
 }
 
 void ClairBrowserWindow::Activate() {
+  if (ClairWindowGroup::HoldsShow(this)) {
+    ClairWindowGroup::NoteRestoreActivation(this);
+    return;
+  }
+  if (ClairWindowGroup* group = ClairWindowGroup::Of(this);
+      group && group->IsHidden(this)) {
+    if (ClairWindowGroup::JustArranged(this)) {
+      return;
+    }
+    group->ShowMember(this);
+    if (IsHiddenMember()) {
+      return;
+    }
+  }
   [NSApp activateIgnoringOtherApps:YES];
   [ns_window_ makeKeyAndOrderFront:nil];
 }
@@ -2097,8 +2454,10 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
     CancelPendingTake();
   }
   // D2: another tab became active, which ends the still: the still's tab came
-  // back, or the user selected another row or Space.
-  if (!new_is_placeholder && still_tab_ != tabs::TabHandle::Null()) {
+  // back, or the user selected another row or Space. A member swapped away
+  // kept its placeholder without a still (add-profiles D5); it closes too.
+  if (!new_is_placeholder && (still_tab_ != tabs::TabHandle::Null() ||
+                              placeholder_ != tabs::TabHandle::Null())) {
     EndStill();
   }
   // D2: the row shown until now goes back to a window with a still of it,
@@ -2139,7 +2498,23 @@ void ClairBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
 }
 
 void ClairBrowserWindow::OnTabDetached(content::WebContents* contents,
-                                       bool was_active) {}
+                                       bool was_active) {
+  // add-profiles D5: a hidden member needs no tab of its own; when its last
+  // one is taken or closes, it closes.
+  if (IsHiddenMember()) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(
+                       [](base::WeakPtr<ClairBrowserWindow> window) {
+                         ClairWindowGroup* group =
+                             window ? ClairWindowGroup::Of(window.get())
+                                    : nullptr;
+                         if (group) {
+                           group->MaybeCloseEmptyHiddenMember(window.get());
+                         }
+                       },
+                       weak_factory_.GetWeakPtr()));
+  }
+}
 
 gfx::Size ClairBrowserWindow::GetContentsSize() const {
   id<ClairWindow> window = clair_window_;

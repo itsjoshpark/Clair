@@ -38,6 +38,10 @@ inline constexpr NSInteger kClairHideSidebarTag = 0x436C6169;  // 'Clai'
 // The browser window, until it is destroyed.
 @property(nonatomic, readonly) ClairBrowserWindow* browserWindow;
 
+// add-profiles D4: the window covers its group's full-screen window: its
+// window controls hide, and it may lie over the menu bar's place.
+@property(nonatomic) BOOL covering;
+
 // Called when the browser window is destroyed; the window then forwards
 // nothing.
 - (void)detachBrowserWindow;

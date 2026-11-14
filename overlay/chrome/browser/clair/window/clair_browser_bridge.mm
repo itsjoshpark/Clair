@@ -344,6 +344,10 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   // add-spaces D3: the Space the window showed before the change ClairUI
   // hasn't heard of yet.
   std::optional<std::string> _previousSpace;
+  // add-profiles D3: the group swapped this window in, which ClairUI hears
+  // even when the Space is the one the group showed, as when that Space's
+  // profile changed (D9).
+  BOOL _swappedIn;
   ClairChromiumHistoryMenu* __weak _historyMenu;
 }
 
@@ -451,6 +455,12 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   [self postFlush];
 }
 
+- (void)swappedInFrom:(const std::string&)previousSpace {
+  _previousSpace = previousSpace;
+  _swappedIn = YES;
+  [self postFlush];
+}
+
 - (void)activeTabChanged {
   [_historyMenu activeTabChanged];
   _activeTabChanged = YES;
@@ -470,6 +480,7 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   id<ClairWindow> window = _window;
   if (!window || !_browserWindow) {
     _previousSpace.reset();
+    _swappedIn = NO;
     _activeTabChanged = NO;
     _stillChanged = NO;
     return;
@@ -477,7 +488,9 @@ int EventFlagsFor(ClairOpenDisposition disposition) {
   if (_previousSpace) {
     const std::string previous = *_previousSpace;
     _previousSpace.reset();
-    if (previous != _browserWindow->shown_space()) {
+    const BOOL swappedIn = _swappedIn;
+    _swappedIn = NO;
+    if (previous != _browserWindow->shown_space() || swappedIn) {
       [window shownSpaceDidChange:self.shownSpaceID
                              from:previous.empty()
                                       ? nil

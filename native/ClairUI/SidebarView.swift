@@ -1176,6 +1176,8 @@ extension TabRow {
 struct RowClickCatcher: NSViewRepresentable {
   enum Item {
     case action(String, () -> Void)
+    /// An action with a checkmark, as the Space's profile in Set Profile.
+    case checked(String, () -> Void)
     /// Shown, but can't be chosen.
     case disabled(String)
     case submenu(String, [Item])
@@ -1184,7 +1186,7 @@ struct RowClickCatcher: NSViewRepresentable {
     /// The item's title, or nil for a separator.
     var title: String? {
       switch self {
-      case .action(let title, _), .disabled(let title), .submenu(let title, _): title
+      case .action(let title, _), .checked(let title, _), .disabled(let title), .submenu(let title, _): title
       case .separator: nil
       }
     }
@@ -1256,10 +1258,13 @@ struct RowClickCatcher: NSViewRepresentable {
         switch item {
         case .separator:
           menu.addItem(.separator())
-        case .action(let title, let action):
+        case .action(let title, let action), .checked(let title, let action):
           let menuItem = NSMenuItem(title: title, action: #selector(runItem(_:)), keyEquivalent: "")
           menuItem.target = target
           menuItem.representedObject = ItemAction(run: action)
+          if case .checked = item {
+            menuItem.state = .on
+          }
           menu.addItem(menuItem)
         case .disabled(let title):
           let menuItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
