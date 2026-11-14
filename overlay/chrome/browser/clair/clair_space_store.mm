@@ -15,6 +15,7 @@
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/clair/clair_profiles.h"
+#include "chrome/browser/lifetime/browser_shutdown.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
@@ -289,6 +290,12 @@ std::string ClairSpaceStore::last_space() const {
 }
 
 void ClairSpaceStore::SetLastSpace(std::string_view id) {
+  // Not while quitting: each window that closes makes another key, and the
+  // next launch opens the Space shown before the quit (add-profiles D6).
+  if (browser_shutdown::IsTryingToQuit() ||
+      browser_shutdown::HasShutdownStarted()) {
+    return;
+  }
   if (Contains(id) && prefs_->GetString(kLastSpacePref) != id) {
     prefs_->SetString(kLastSpacePref, std::string(id));
   }
