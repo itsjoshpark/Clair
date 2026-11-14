@@ -682,6 +682,14 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
 }
 
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item {
+  // add-profiles D4: AppKit disables full screen for an auxiliary window; a
+  // cover leaves its group's full screen through it.
+  if (_covering && item.action == @selector(toggleFullScreen:)) {
+    if (NSMenuItem* menu_item = base::apple::ObjCCast<NSMenuItem>(item)) {
+      menu_item.title = l10n_util::GetNSString(IDS_EXIT_FULLSCREEN_MAC);
+    }
+    return YES;
+  }
   return [_commandDispatcher validateUserInterfaceItem:item
                                             forHandler:_commandHandler];
 }

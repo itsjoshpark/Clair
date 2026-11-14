@@ -75,6 +75,12 @@ base::WeakPtr<ClairBrowserWindow>& LastActivatedByRestore() {
   return *window;
 }
 bool g_arrange_posted = false;
+// The group the first arrangement of this launch made, with restoring off:
+// browsers a later profile's session restore brings join it (D6).
+base::WeakPtr<ClairWindowGroup>& RestoreGroup() {
+  static base::NoDestructor<base::WeakPtr<ClairWindowGroup>> group;
+  return *group;
+}
 
 bool IsRestored(const ClairBrowserWindow* window) {
   return std::ranges::any_of(Restored(), [window](const auto& weak) {
@@ -787,6 +793,37 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
       }
     }
     for (auto& [tag, members] : by_tag) {
+      // Session restore restores each profile in turn: a group an earlier
+      // arrangement made for this tag takes these members, hidden, and
+      // shows the one of its Space's profile.
+      ClairWindowGroup* existing = nullptr;
+      for (ClairWindowGroup* candidate : Groups()) {
+        if (candidate->id_ == tag &&
+            std::ranges::none_of(members, [candidate](ClairBrowserWindow* m) {
+              return Of(m) == candidate;
+            })) {
+          existing = candidate;
+          break;
+        }
+      }
+      if (existing && existing->shown_) {
+        const std::string space = store->WindowSpace(tag);
+        for (ClairBrowserWindow* member : members) {
+          if (ClairBrowserWindow* same = existing->MemberFor(ProfileIDOf(member))) {
+            if (!member->HandTabsTo(same, nullptr)) {
+              member->Close();
+            }
+            continue;
+          }
+          existing->Adopt(member);
+          [member->ns_window() setFrame:existing->shown_->ns_window().frame display:NO];
+          if (!space.empty() && store->ProfileOf(space) == ProfileIDOf(member)) {
+            member->ShowRestoredSpace(space);
+            existing->ShowMember(member);
+          }
+        }
+        continue;
+      }
       ClairBrowserWindow* lead = members.front();
       ClairWindowGroup* group = Of(lead);
       if (!group) {
@@ -831,6 +868,23 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
       shown->Show();
       group->ShownSpaceChanged(shown);
     }
+  } else if (ClairWindowGroup* earlier = RestoreGroup().get();
+             earlier && earlier->shown_ && !regular.empty()) {
+    // A later profile's session restore: its browsers join the window the
+    // first arrangement made, hidden.
+    for (ClairBrowserWindow* other : regular) {
+      if (Of(other) == earlier) {
+        continue;
+      }
+      if (ClairBrowserWindow* same = earlier->MemberFor(ProfileIDOf(other))) {
+        if (!other->HandTabsTo(same, nullptr)) {
+          other->Close();
+        }
+      } else {
+        earlier->Adopt(other);
+        [other->ns_window() setFrame:earlier->shown_->ns_window().frame display:NO];
+      }
+    }
   } else if (!regular.empty()) {
     // Off, as Arc by default: one window, at the frame of the one last
     // active, on the Space last shown, on a new tab page.
@@ -839,6 +893,9 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
             ? last_active
             : regular.front();
     ClairWindowGroup* group = Of(lead);
+    if (group) {
+      RestoreGroup() = group->weak_factory_.GetWeakPtr();
+    }
     for (ClairBrowserWindow* other : regular) {
       if (other == lead || !group) {
         continue;
