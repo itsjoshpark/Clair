@@ -2190,7 +2190,7 @@ void ClairBrowserWindow::Show() {
   if (ClairWindowGroup* group = ClairWindowGroup::Of(this);
       group && group->IsHidden(this)) {
     // Start-up showing what it restored, after the arrangement chose.
-    if (ClairWindowGroup::JustArranged()) {
+    if (ClairWindowGroup::JustArranged(this)) {
       return;
     }
     group->ShowMember(this);
@@ -2265,7 +2265,7 @@ void ClairBrowserWindow::Activate() {
   }
   if (ClairWindowGroup* group = ClairWindowGroup::Of(this);
       group && group->IsHidden(this)) {
-    if (ClairWindowGroup::JustArranged()) {
+    if (ClairWindowGroup::JustArranged(this)) {
       return;
     }
     group->ShowMember(this);

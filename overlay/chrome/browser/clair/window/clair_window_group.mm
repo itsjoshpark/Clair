@@ -75,8 +75,13 @@ base::WeakPtr<ClairBrowserWindow>& LastActivatedByRestore() {
   return *window;
 }
 bool g_arrange_posted = false;
-// When the last arrangement ran.
+// When the last arrangement ran, and the browsers it took in.
 base::TimeTicks g_arranged_at;
+std::vector<base::WeakPtr<ClairBrowserWindow>>& Arranged() {
+  static base::NoDestructor<std::vector<base::WeakPtr<ClairBrowserWindow>>>
+      arranged;
+  return *arranged;
+}
 // The group the first arrangement of this launch made, with restoring off:
 // browsers a later profile's session restore brings join it (D6).
 base::WeakPtr<ClairWindowGroup>& RestoreGroup() {
@@ -734,9 +739,12 @@ bool ClairWindowGroup::HoldsShow(ClairBrowserWindow* window) {
 }
 
 // static
-bool ClairWindowGroup::JustArranged() {
+bool ClairWindowGroup::JustArranged(const ClairBrowserWindow* window) {
   return !g_arranged_at.is_null() &&
-         base::TimeTicks::Now() - g_arranged_at < base::Seconds(5);
+         base::TimeTicks::Now() - g_arranged_at < base::Seconds(5) &&
+         std::ranges::any_of(Arranged(), [window](const auto& weak) {
+           return weak.get() == window;
+         });
 }
 
 // static
@@ -774,6 +782,10 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
   LastActivatedByRestore() = nullptr;
   if (!windows.empty()) {
     g_arranged_at = base::TimeTicks::Now();
+    Arranged().clear();
+    for (ClairBrowserWindow* window : windows) {
+      Arranged().push_back(window->GetWeakPtr());
+    }
   }
   g_arrange_posted = false;
   clair::ClairSpaceStore* store = clair::ClairSpaceStore::Get();

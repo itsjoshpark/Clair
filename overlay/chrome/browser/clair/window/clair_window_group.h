@@ -120,10 +120,11 @@ class ClairWindowGroup {
   // --- Session restore (D6) ---
   // Whether `window`'s Show() waits for session restore to finish.
   static bool HoldsShow(ClairBrowserWindow* window);
-  // Whether session restore was arranged moments ago: Chromium's start-up
-  // then still shows and activates the browsers it restored, which mustn't
-  // switch a group away from the member the arrangement chose.
-  static bool JustArranged();
+  // Whether session restore arranged `window` moments ago: Chromium's
+  // start-up then still shows and activates the browsers it restored, which
+  // mustn't switch a group away from the member the arrangement chose.
+  // Members the group makes itself aren't held.
+  static bool JustArranged(const ClairBrowserWindow* window);
   // Session restore activated `window`: it was the last active one.
   static void NoteRestoreActivation(ClairBrowserWindow* window);
   // Reads the restore setting and starts listening for session restore.
