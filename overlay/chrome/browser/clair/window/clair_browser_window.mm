@@ -1453,8 +1453,12 @@ void ClairBrowserWindow::ShowSpaceOnNewTab(const std::string& space,
 }
 
 void ClairBrowserWindow::OpenCommandBarWhenShown() {
-  // After the page has taken focus as the window showed, which would close
+  // Once the window is key and the page has taken focus, which would close
   // it.
+  if (!IsActive()) {
+    command_bar_when_key_ = true;
+    return;
+  }
   base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(
                      [](base::WeakPtr<ClairBrowserWindow> window) {
@@ -2031,6 +2035,10 @@ void ClairBrowserWindow::WindowDidBecomeKey() {
   BrowserActiveStateManager::From(browser_)->DidBecomeActive();
   if (ClairWindowGroup* group = ClairWindowGroup::Of(this)) {
     group->Activated();
+  }
+  if (command_bar_when_key_) {
+    command_bar_when_key_ = false;
+    OpenCommandBarWhenShown();
   }
   // add-spaces D1: the Space a new window shows.
   if (space_tabs_ && space_tabs_->is_regular()) {

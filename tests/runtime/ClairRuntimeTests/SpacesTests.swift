@@ -267,7 +267,10 @@ final class SpacesTests: NativeWindowTestCase {
     browser.element("clair.spaceHeader").rightClick()
     browser.ui.menuItems["Rename Space…"].click()
     try require(field.waitForExistence(timeout: 5), "Rename Space… didn't show a field again")
-    _ = await Harness.wait(for: 5) { field.value(forKey: "hasKeyboardFocus") as? Bool == true }
+    let focusedAgain = await Harness.wait(for: 5) { field.value(forKey: "hasKeyboardFocus") as? Bool == true }
+    if !focusedAgain {
+      field.click()
+    }
     field.typeKey("a", modifierFlags: .command)
     field.typeKey(.delete, modifierFlags: [])
     field.typeKey(.return, modifierFlags: [])

@@ -303,6 +303,9 @@ final class SharedTabsTests: NativeWindowTestCase {
     item.click()
     let field = window.element("clair.newSpaceName")
     try require(field.waitForExistence(timeout: 10), "The New Space form didn't open")
+    // Typing needs the field focused; the form focuses it as it appears,
+    // which can come after this.
+    field.click()
     field.typeText("\(name)\n")
     let shown = await Harness.wait(for: 15) { window.spaceName == name }
     try require(shown, "The window doesn't show the new Space \(name)")
