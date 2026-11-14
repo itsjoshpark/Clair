@@ -81,6 +81,7 @@ While a group is in macOS full screen, one member, the **owner**, holds the full
 
 - **Why:** the prototype showed it is instant, where a second full-screen window costs a 0.6 s transition.
 - **Fallback, if it fails with real Chromium windows**: the group leaves full screen, then swaps.
+- **Proved on 2026-11-13** (task 2.5, with `tests/probe/`, on a test build): the switch shows in one frame, with no transition between macOS Spaces; a page's own full screen, Esc and the menu bar's reveal work on the cover; leaving full screen returns the window to its earlier frame. It needed four things the prototype didn't show: the cover is `.fullScreenAuxiliary` only while it covers (with `.fullScreenPrimary` AppKit put it in a full screen of its own, on a new macOS Space); a member is ordered in with `.moveToActiveSpace`, so it never pulls the user back to the macOS Space it was last on; the cover lies over the menu bar's place (`constrainFrameRect:` leaves its frame alone) with its window controls hidden; and Ctrl+Cmd+F, View › Exit Full Screen and AppKit's `toggleFullScreen:` on the cover go to the owner, which AppKit and Chromium would otherwise ignore or treat as entering full screen.
 
 ### D5. Tabs across windows, per profile
 

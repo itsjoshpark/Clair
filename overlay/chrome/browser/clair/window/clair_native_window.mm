@@ -8,9 +8,6 @@
 
 #import "chrome/browser/clair/window/clair_native_window.h"
 
-#include "base/debug/stack_trace.h"
-#include "base/logging.h"
-
 #include <os/log.h>
 #include <stdlib.h>
 
@@ -118,7 +115,6 @@ bool ExecuteCommand(ClairBrowserWindow* window,
                     int command,
                     WindowOpenDisposition disposition,
                     bool is_before_first_responder) {
-  LOG(WARNING) << "ClairDebug ExecuteCommand " << command;
   if (!window) {
     return false;
   }
@@ -627,29 +623,11 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
 }
 
 // Let CommandDispatcher recognize events it is redispatching.
-// TEMPORARY (add-profiles task 2.5): where ordering and full-screen calls
-// come from.
-- (void)orderWindow:(NSWindowOrderingMode)place relativeTo:(NSInteger)other {
-  LOG(WARNING) << "ClairDebug orderWindow " << self.windowNumber << " mode "
-               << place << " visible " << self.visible << " onActiveSpace "
-               << self.onActiveSpace << "\n"
-               << base::debug::StackTrace().ToString();
-  [super orderWindow:place relativeTo:other];
-}
-
-- (void)makeKeyWindow {
-  LOG(WARNING) << "ClairDebug makeKeyWindow " << self.windowNumber
-               << " onActiveSpace " << self.onActiveSpace;
-  [super makeKeyWindow];
-}
-
 // add-profiles D4: a window covering its group's full-screen window never
 // goes full screen itself; the request goes to that window.
 - (void)toggleFullScreen:(id)sender {
   NSWindow* fullscreen =
       _browserWindow ? _browserWindow->FullscreenNSWindow() : self;
-  LOG(WARNING) << "ClairDebug toggleFullScreen " << self.windowNumber
-               << " forwards to " << fullscreen.windowNumber;
   if (fullscreen && fullscreen != self) {
     [fullscreen toggleFullScreen:sender];
     return;

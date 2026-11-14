@@ -1588,9 +1588,6 @@ bool ClairBrowserWindow::ExecuteTabCommand(int command) {
       WindowCloseRequested();
       return true;
     case IDC_FULLSCREEN:
-      LOG(WARNING) << "ClairDebug IDC_FULLSCREEN in " << ns_window_.windowNumber
-                   << " fullscreen window "
-                   << FullscreenNSWindow().windowNumber;
       // add-profiles D4: a window covering its group's full-screen one
       // leaves the group's full screen; Chromium would try to enter its own.
       if (NSWindow* fullscreen = FullscreenNSWindow(); fullscreen != ns_window_) {
