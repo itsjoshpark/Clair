@@ -548,16 +548,14 @@ void ClairExclusiveAccessContext::EnterFullscreen(
 }
 
 void ClairExclusiveAccessContext::ExitFullscreen() {
-  LOG(WARNING) << "ClairDebug ExitFullscreen " << window_->ns_window().windowNumber;
-  const bool was_page_fullscreen = page_fullscreen_;
   SetPageFullscreen(false);
   HideNotice(ExclusiveAccessBubbleHideReason::kInterrupted);
+  // add-profiles D4: the group's full-screen window, while this one covers
+  // it. A cover leaves the group's full screen only when asked to by the
+  // user (IDC_FULLSCREEN, toggleFullScreen:), never with a page's.
   NSWindow* window = window_->FullscreenNSWindow();
-  // add-profiles D4: the browser's full screen, asked for in the window
-  // covering its group's full-screen one, ends the group's.
-  const bool covering = window != window_->ns_window();
   // Leave only what entering changed: a window already in full screen stays.
-  if ((entered_window_fullscreen_ || (covering && !was_page_fullscreen)) &&
+  if (entered_window_fullscreen_ &&
       (window.styleMask & NSWindowStyleMaskFullScreen)) {
     [window toggleFullScreen:nil];
   }
