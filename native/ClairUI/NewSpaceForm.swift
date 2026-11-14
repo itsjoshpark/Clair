@@ -95,6 +95,9 @@ struct NewSpaceFormView: View {
           .frame(width: 24)
         Text("Profile")
           .font(.system(size: 13, weight: .medium))
+          // A long profile name truncates, not the label.
+          .fixedSize()
+          .layoutPriority(1)
         ProfilePopup(
           profiles: model.spaces.profiles, selection: form.profileID,
           onSelect: { model.newSpaceForm?.profileID = $0 },
@@ -172,6 +175,19 @@ struct ProfilePopup: View {
   let onNewProfile: () -> Void
 
   var body: some View {
+    // As wide as the name, or narrower with the name truncated when the row
+    // has no room for it; the tooltip gives the whole name.
+    ViewThatFits(in: .horizontal) {
+      menu.fixedSize()
+      menu.fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private var selectedName: String {
+    profiles.first { $0.profileID == selection }?.name ?? ""
+  }
+
+  private var menu: some View {
     Menu {
       ForEach(Array(SpacesLogic.profileMenu(profiles, checked: selection).enumerated()), id: \.offset) { _, item in
         if let item {
@@ -186,11 +202,12 @@ struct ProfilePopup: View {
         }
       }
     } label: {
-      Text(profiles.first { $0.profileID == selection }?.name ?? "")
+      Text(selectedName)
         .lineLimit(1)
+        .truncationMode(.tail)
     }
     .menuStyle(.borderlessButton)
-    .fixedSize()
+    .help(selectedName)
     .accessibilityIdentifier("clair.profilePopup")
   }
 }

@@ -100,7 +100,7 @@ Each tab's session extra data gains `clair_window`, its group's UUID, beside `cl
 No restored browser shows before session restore has finished: `Show()` and `Activate()` on one are held, and once every profile session restore started on has been restored (`SessionRestore::RegisterOnSessionRestoredCallback`, or 15 s at most), the overlay arranges them:
 
 - **On:** each restored browser joins the group named by its first tagged tab. The group shows the member whose profile matches its Space in `clair.windows`, on the tab Chromium restored as that member's selected one; the others stay hidden.
-- **Off, as Arc by default:** every restored browser joins the group of the window session restore activated, which was the last active, at its frame. A second browser of a profile hands its tabs to the first, as a closing window does (`share-tabs` D4), and closes. The group shows `clair.last_space` on a new tab page with the command bar open, as a new window does.
+- **Off, as Arc by default:** every restored browser joins the group of the window session restore activated, which was the last active, at its frame. A second browser of a profile hands its tabs to the first, as a closing window does (`share-tabs` D4), and closes. The group shows `clair.last_space` on a new tab page with the command bar open, as a new window does. `clair.last_space` doesn't change while Clair quits: each window that closes makes another key, which would otherwise record that window's Space instead of the one shown before the quit.
 
 Today every window comes back (`add-spaces` D11), so "off" as the default is a change of behaviour for existing sessions, to Arc's.
 
