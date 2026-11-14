@@ -444,12 +444,13 @@ void ClairWindowGroup::Cover(ClairBrowserWindow* member) {
   window.collectionBehavior =
       (window.collectionBehavior & ~NSWindowCollectionBehaviorFullScreenPrimary) |
       NSWindowCollectionBehaviorFullScreenAuxiliary;
+  // The owner's corners and window controls mustn't show around it, and it
+  // lies over the menu bar's place too.
+  member->SetCovering(true);
   [window setFrame:owner_window.frame display:NO];
   shown_ = member;
   cover_ = member;
   [member->bridge() flush];
-  // The owner's corners and window controls mustn't show around it.
-  member->SetCovering(true);
   member->JoinActiveSpace();
   [owner_window addChildWindow:window ordered:NSWindowAbove];
   member->Reveal(nil, /*make_key=*/true);

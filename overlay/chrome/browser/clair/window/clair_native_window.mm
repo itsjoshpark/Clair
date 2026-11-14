@@ -118,6 +118,7 @@ bool ExecuteCommand(ClairBrowserWindow* window,
                     int command,
                     WindowOpenDisposition disposition,
                     bool is_before_first_responder) {
+  LOG(WARNING) << "ClairDebug ExecuteCommand " << command;
   if (!window) {
     return false;
   }
@@ -191,6 +192,11 @@ bool ExecuteCommand(ClairBrowserWindow* window,
       menu_item.title = l10n_util::GetNSString(
           browser_window->IsFullscreen() ? IDS_EXIT_FULLSCREEN_MAC
                                          : IDS_ENTER_FULLSCREEN_MAC);
+      // add-profiles D4: a cover leaves its group's full screen, which
+      // Chromium's own state for its browser doesn't know about.
+      if (browser_window->FullscreenNSWindow() != window) {
+        enable = YES;
+      }
       break;
     case IDC_SHOW_AS_TAB:
       menu_item.hidden = YES;
@@ -452,7 +458,8 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
   for (NSWindowButton type :
        {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
     [window standardWindowButton:type].hidden =
-        window.windowControlsHidden || window.windowControlsHiddenForMotion;
+        window.windowControlsHidden || window.windowControlsHiddenForMotion ||
+        window.covering;
   }
 }
 
@@ -466,6 +473,7 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
   ClairNativeWindowDelegate* __strong _windowDelegate;
   CGPoint _windowControlsOrigin;
   BOOL _windowControlsHidden;
+  BOOL _covering;
   BOOL _windowControlsHiddenForMotion;
   // Bumped on every place change in D1's fallback; a pending show for an
   // older one does nothing.
@@ -517,6 +525,20 @@ static constexpr CGFloat kButtonsTopToTitlebarBottom = 23;
 
 - (BOOL)windowControlsHidden {
   return _windowControlsHidden;
+}
+
+- (void)setCovering:(BOOL)covering {
+  if (covering == _covering) {
+    return;
+  }
+  _covering = covering;
+  [self layOutTitlebarNow];
+}
+
+// add-profiles D4: a cover lies over the whole full-screen window, where
+// AppKit would keep a window below the menu bar.
+- (NSRect)constrainFrameRect:(NSRect)frameRect toScreen:(NSScreen*)screen {
+  return _covering ? frameRect : [super constrainFrameRect:frameRect toScreen:screen];
 }
 
 - (BOOL)windowControlsHiddenForMotion {

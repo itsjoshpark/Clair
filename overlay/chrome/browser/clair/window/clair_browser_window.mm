@@ -1353,7 +1353,7 @@ void ClairBrowserWindow::Conceal(bool order_out) {
 }
 
 void ClairBrowserWindow::SetCovering(bool covering) {
-  ns_window_.windowControlsHidden = covering;
+  ns_window_.covering = covering;
   // Square corners: no shadow of the rounded frame shows over the owner.
   ns_window_.hasShadow = !covering;
 }
