@@ -171,10 +171,13 @@ final class PageCardView: NSView {
 
   /// The Peek's card is the page's background colour under the page, so in
   /// the frames between Chromium taking a closing Peek's page away and the
-  /// card animating it out, it shows a card, not its bare shadow.
+  /// card animating it out, it shows a card, not its bare shadow. The card
+  /// is too, so before a page's view arrives, as when a window opens on a
+  /// new tab page, it looks like a blank page rather than a dimmed still.
   private func updatePeekBacking() {
     effectiveAppearance.performAsCurrentDrawingAppearance {
       peekContainer.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+      container.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
     }
   }
 
