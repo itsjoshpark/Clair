@@ -923,8 +923,9 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
                 }
                 group->shown_ = member;
                 [member->ns_window() setFrame:frame display:NO];
-                member->ShowSpaceOnNewTab(space, GURL());
+                member->ShowSpaceOnNewTab(space, GURL(), /*command_bar=*/false);
                 member->Show();
+                member->OpenCommandBarWhenShown();
                 group->ShownSpaceChanged(member);
               },
               group->weak_factory_.GetWeakPtr(), space, frame));

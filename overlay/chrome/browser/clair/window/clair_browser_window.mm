@@ -1437,14 +1437,33 @@ void ClairBrowserWindow::ShowRestoredSpace(const std::string& space) {
 }
 
 void ClairBrowserWindow::ShowSpaceOnNewTab(const std::string& space,
-                                           const GURL& url) {
+                                           const GURL& url,
+                                           bool command_bar) {
   if (!space_tabs_ || !space_tabs_->is_regular() ||
       clair::ClairSpaceStore::Get()->ProfileOf(space) !=
           clair::ClairProfiles::IDOf(browser_->GetProfile())) {
     return;
   }
   SetShownSpace(space);
+  if (url.is_empty() && !command_bar) {
+    OpenNewTabPage(/*show_command_bar=*/false);
+    return;
+  }
   OpenInShownSpace(url);
+}
+
+void ClairBrowserWindow::OpenCommandBarWhenShown() {
+  // After the page has taken focus as the window showed, which would close
+  // it.
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(
+                     [](base::WeakPtr<ClairBrowserWindow> window) {
+                       if (window && window->clair_window() && window->IsVisible()) {
+                         [window->clair_window()
+                             showCommandBarWithMode:ClairCommandBarModeCurrentTab];
+                       }
+                     },
+                     weak_factory_.GetWeakPtr()));
 }
 
 void ClairBrowserWindow::FollowActiveTab() {

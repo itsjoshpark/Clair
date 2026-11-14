@@ -320,8 +320,9 @@ final class ProfilesTests: NativeWindowTestCase {
     browser.tabRow("Counter staying")?.click()
     _ = await browser.waitForActiveRow("Counter staying")
     try await moveRow("Counter home", to: "Work", in: browser)
-    let notice = browser.ui.staticTexts["Tab was moved to Work"].waitForExistence(timeout: 10)
-    XCTAssertTrue(notice, "Moving another tab showed no notice")
+    let notice = browser.element("clair.tabMoved")
+    XCTAssertTrue(notice.waitForExistence(timeout: 10), "Moving another tab showed no notice")
+    XCTAssertEqual(notice.value as? String, "Tab was moved to Work", "The notice doesn't name Work")
     XCTAssertEqual(browser.spaceName, "Home", "Moving another tab left Home")
 
     // The active tab: the window follows it, reopened at the top of Work.
@@ -343,9 +344,13 @@ final class ProfilesTests: NativeWindowTestCase {
 
   func moveRow(_ title: String, to space: String, in browser: Browser) async throws {
     browser.tabRow(title)?.rightClick()
-    let move = try await browser.openMenuItem("Move to Space")
+    let move = browser.ui.menuItems["Move to Space"]
+    try require(move.waitForExistence(timeout: 5), "\(title) has no Move to Space")
     move.hover()
-    try await browser.openMenuItem(space).click()
+    // The submenu's own item: the Spaces menu has one of the same title.
+    let item = move.menuItems[space]
+    try require(item.waitForExistence(timeout: 5), "Move to Space doesn't list \(space)")
+    item.click()
   }
 
   func testTheEmptiedSpace() async throws {
@@ -375,14 +380,15 @@ final class ProfilesTests: NativeWindowTestCase {
     XCTAssertTrue(one, "Clair didn't come back as one window: \(browser.visibleNativeWindowCount)")
     let onHome = await browser.waitForSpace("Home", seconds: 30)
     XCTAssertTrue(onHome, "The window doesn't show the Space last shown: \(browser.spaceName)")
-    let listed = await browser.waitForTabs(30) { $0.contains("Counter home") && $0.contains("Counter other") }
+    let listed = await browser.waitForTabs(30) { $0.contains("Counter home") }
     XCTAssertTrue(listed, "Home doesn't list its tabs: \(browser.tabTitles)")
     XCTAssertTrue(
       browser.element("clair.commandBarField").waitForExistence(timeout: 10), "The window didn't open the command bar")
     browser.ui.typeKey(.escape, modifierFlags: [])
     browser.ui.typeKey("2", modifierFlags: .control)
-    let workBack = await browser.waitForTabs(30) { $0.contains("Counter work") }
-    XCTAssertTrue(workBack, "Work doesn't list its tab: \(browser.tabTitles)")
+    // The second window opened on Work, the Space shown then.
+    let workBack = await browser.waitForTabs(30) { $0.contains("Counter work") && $0.contains("Counter other") }
+    XCTAssertTrue(workBack, "Work doesn't list its tabs: \(browser.tabTitles)")
 
     // A second launch lists one new tab page, not two.
     browser.ui.typeKey("1", modifierFlags: .control)

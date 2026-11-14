@@ -427,7 +427,9 @@ final class BrowserWindowController: NSObject, ClairWindow, SidebarActions, Over
     let candidates = Self.all.allObjects.filter {
       $0 !== self && $0.browser != nil && $0.model.spaces === model.spaces && $0.model.shownSpaceID == spaceID
     }
-    return candidates.first { $0.window.isKeyWindow } ?? candidates.first { !$0.window.isVisible }
+    // With a dialog up, its sheet is key and the window main.
+    return candidates.first { $0.window.isKeyWindow || $0.window.isMainWindow }
+      ?? candidates.first { !$0.window.isVisible }
   }
 
   /// D12: a dialog follows a swap. When the group swaps from a window with

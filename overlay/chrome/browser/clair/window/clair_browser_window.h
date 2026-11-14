@@ -411,8 +411,14 @@ class ClairBrowserWindow : public BrowserWindow {
   // when it's in the Space, or else as ShowSpace() picks.
   void ShowRestoredSpace(const std::string& space);
   // D6, D7: shows `space`, a Space of the window's profile, on a new tab of
-  // `url`, or a new tab page with the command bar when it's empty.
-  void ShowSpaceOnNewTab(const std::string& space, const GURL& url);
+  // `url`, or a new tab page when it's empty, with the command bar unless
+  // `command_bar` is false.
+  void ShowSpaceOnNewTab(const std::string& space,
+                         const GURL& url,
+                         bool command_bar = true);
+  // Opens the command bar on the active tab once the window has shown, as a
+  // window opened on a new tab page does.
+  void OpenCommandBarWhenShown();
   // add-profiles D9: the active tab moved to another Space of the profile;
   // the window shows that Space, the tab staying active.
   void FollowActiveTab();
