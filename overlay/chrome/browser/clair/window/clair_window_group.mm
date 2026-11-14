@@ -116,6 +116,9 @@ void ClairWindowGroup::Join(ClairBrowserWindow* window) {
   group->Add(window);
   group->shown_ = window;
   // D6: session restore's windows wait until it has finished.
+  LOG(WARNING) << "ClairDebug Join " << window << " profile "
+               << ProfileIDOf(window) << " restoring "
+               << SessionRestore::IsRestoring(window->browser()->GetProfile());
   if (SessionRestore::IsRestoring(window->browser()->GetProfile())) {
     Restored().push_back(window->GetWeakPtr());
     if (!g_arrange_posted) {
@@ -757,6 +760,14 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
     }
   }
   ClairBrowserWindow* last_active = LastActivatedByRestore().get();
+  LOG(WARNING) << "ClairDebug Arrange " << windows.size() << " restore "
+               << g_restore_windows << " last_active " << last_active
+               << " earlier " << RestoreGroup().get();
+  for (ClairBrowserWindow* window : windows) {
+    LOG(WARNING) << "ClairDebug   " << window << " " << ProfileIDOf(window)
+                 << " tabs " << window->browser()->tab_strip_model()->count()
+                 << " group " << Of(window);
+  }
   Restored().clear();
   LastActivatedByRestore() = nullptr;
   g_arrange_posted = false;
@@ -896,13 +907,17 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
         continue;
       }
       if (ClairBrowserWindow* same = group->MemberFor(ProfileIDOf(other))) {
-        if (!other->HandTabsTo(same, nullptr)) {
+        const bool handed = other->HandTabsTo(same, nullptr);
+        LOG(WARNING) << "ClairDebug   hand " << other << " to " << same << " " << handed;
+        if (!handed) {
           other->Close();
         }
       } else {
+        LOG(WARNING) << "ClairDebug   adopt " << other;
         group->Adopt(other);
       }
     }
+    LOG(WARNING) << "ClairDebug   lead " << lead << " group " << group;
     if (group) {
       const std::string space = store->last_space();
       const NSRect frame = lead->ns_window().frame;
@@ -921,6 +936,8 @@ void ClairWindowGroup::ArrangeRestoredWindows() {
                 if (!member) {
                   return;
                 }
+                LOG(WARNING) << "ClairDebug   shows " << member << " "
+                             << ProfileIDOf(member) << " on " << space;
                 group->shown_ = member;
                 [member->ns_window() setFrame:frame display:NO];
                 member->ShowSpaceOnNewTab(space, GURL(), /*command_bar=*/false);
